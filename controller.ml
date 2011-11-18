@@ -321,7 +321,10 @@ let rec rd_data len t =
            lwt more_data = (rd_data (len - nbytes) t) in
            return (Bitstring.concat [ data; more_data ])
 
+let start = ref 0.0
+
 let listen mgr loc init =
+  start := (OS.Clock.time ());
   let controller (remote_addr, remote_port) t =
     let rs = Nettypes.ipv4_addr_to_string remote_addr in
     Log.info "OpenFlow Controller" "+ %s:%d" rs remote_port;
@@ -349,12 +352,18 @@ let listen mgr loc init =
         let dlen = ofh.OP.Header.len - OP.Header.get_len in 
         lwt dbuf = rd_data dlen t in
         let ofp  = OP.parse ofh dbuf in
-        process_of_packet st (remote_addr, remote_port) ofp t 
-        >> echo ()
+        process_of_packet st (remote_addr, remote_port) ofp t;
+	if (((OS.Clock.time ()) -. !start) < 10.0) then (
+	        echo ()
+	) else (
+		Printf.printf "Terminating connection (%f - %f)\n" !start (OS.Clock.time ());
+		Channel.close t;
+		return ();
+	)
       with
         | Nettypes.Closed -> return ()
         | OP.Unparsed (m, bs) -> cp (sp "# unparsed! m=%s" m); echo ()
 
     in echo () 
   in
-  Channel.listen mgr (`TCPv4 (loc, controller))
+  (Channel.listen mgr (`TCPv4 (loc, controller)))
