@@ -153,20 +153,20 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
     let ep = { ip=remote_addr; port=remote_port } in
     match ofp with
       | Hello (h, _) (* Reply to HELLO with a HELLO and a feature request *)
-        -> (cp "HELLO";
+        -> ( (* cp "HELLO"; *)
             Channel.write_bitstring t (Header.build_h h) 
             >> Channel.write_bitstring t (build_features_req 0_l) 
             >> Channel.flush t
         )
 
       | Echo_req (h, bs)  (* Reply to ECHO requests *)
-        -> (cp "ECHO_REQ";
+        -> ((* cp "ECHO_REQ"; *)
             Channel.write_bitstring t (build_echo_resp h bs)
             >> Channel.flush t
         )
 
       | Features_resp (h, sfs) (* Generate a datapath join event *)
-        -> (cp "FEATURES_RESP";
+        -> ((* cp "FEATURES_RESP";*)
             let dpid = sfs.Switch.datapath_id in
             let evt = Event.Datapath_join dpid in
             if not (Hashtbl.mem state.dp_db dpid) then (
@@ -178,9 +178,9 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
         )
 
       | Packet_in (h, p) (* Generate a packet_in event *) 
-        -> (cp (sp "+ %s|%s" 
+        -> ((* cp (sp "+ %s|%s" 
                   (OP.Header.string_of_h h)
-                  (OP.Packet_in.string_of_packet_in p));
+                  (OP.Packet_in.string_of_packet_in p)); *)
             let dpid = Hashtbl.find state.channel_dp ep in
             let evt = Event.Packet_in (
               p.Packet_in.in_port, p.Packet_in.buffer_id,
@@ -191,9 +191,9 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
         )
         
       | Flow_removed (h, p)
-        -> (cp (sp "+ %s|%s" 
+        -> ((* cp (sp "+ %s|%s" 
                   (OP.Header.string_of_h h)
-                  (OP.Flow_removed.string_of_flow_removed p));
+                  (OP.Flow_removed.string_of_flow_removed p)); *)
             let dpid = Hashtbl.find state.channel_dp ep in
             let evt = Event.Flow_removed (
               p.Flow_removed.of_match, p.Flow_removed.reason, 
@@ -205,8 +205,8 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
         )
 
       | Stats_resp(h, resp) 
-        -> (cp (sp "+ %s|%s" (OP.Header.string_of_h h)
-                  (OP.Stats.string_of_stats resp));
+        -> ((* cp (sp "+ %s|%s" (OP.Header.string_of_h h)
+                  (OP.Stats.string_of_stats resp)); *)
             match resp with 
               | OP.Stats.Flow_resp(resp_h, flows) ->
                 (let dpid = Hashtbl.find state.channel_dp ep in
@@ -263,8 +263,8 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
         ) 
 
       | Port_status(h, st) 
-        -> (cp (sp "+ %s|%s" (OP.Header.string_of_h h)
-                  (OP.Port.string_of_status st));
+        -> ( (* cp (sp "+ %s|%s" (OP.Header.string_of_h h)
+                  (OP.Port.string_of_status st)); *)
             let dpid = Hashtbl.find state.channel_dp ep in
             let evt = Event.Port_status (st.Port.reason, st.Port.desc, dpid) 
             in
