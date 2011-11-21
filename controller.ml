@@ -275,40 +275,6 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
       | _ -> OS.Console.log "New packet received"; return () 
   )
 
-  (*
-  (* Handle a single input frame *)
-let packet_to_flow frame = 
-  bitmatch frame with
-  |{dmac:48:string; smac:48:string;
-  0x0806:16;     (* ethertype *)
-  1:16;          (* htype const 1 *)
-  0x0800:16;     (* ptype const, ND used for IPv6 now *)
-  6:8;           (* hlen const 6 *)
-  4:8;           (* plen const, ND used for IPv6 now *)
-  op:16;
-  sha:48:string; spa:32;
-  tha:48:string; tpa:32 } ->
-    let sha = ethernet_mac_of_bytes sha in
-let spa = ipv4_addr_of_uint32 spa in
-let tha = ethernet_mac_of_bytes tha in
-let tpa = ipv4_addr_of_uint32 tpa in
-let op = match op with |1->`Request |2 -> `Reply |n -> `Unknown n in
-let arp = { op; sha; spa; tha; tpa } in
-Arp.input t.arp arp
-
-      |{dmac:48:string; smac:48:string;
-      etype:16; bits:-1:bitstring } -> 
-        let frame = gen_frame dmac smac in
-begin match etype with
-| 0x0800 (* IPv4 *) -> t.ipv4 bits
-| 0x86dd (* IPv6 *) -> return (Printf.printf "Ethif: discarding ipv6\n%!")
-  | etype -> return (Printf.printf "Ethif: unknown frame %x\n%!" etype)
-end
-      |{_} ->
-          return (Printf.printf "Ethif: dropping input\n%!")
-  *)
-
-
 let send_of_data controller dpid data = 
   let t = Hashtbl.find controller.dp_db dpid in
   Channel.write_bitstring t data >> Channel.flush t
@@ -323,12 +289,17 @@ let rec rd_data len t =
 
 let start = ref 0.0
 
+let mem_dbg name =
+  Gc.compact (); 
+  let s = Gc.stat () in
+  Printf.printf "blocks %s: l=%d f=%d \n %!" name s.Gc.live_blocks s.Gc.free_blocks
+
 let listen mgr loc init =
   start := (OS.Clock.time ());
   let controller (remote_addr, remote_port) t =
     let rs = Nettypes.ipv4_addr_to_string remote_addr in
     Log.info "OpenFlow Controller" "+ %s:%d" rs remote_port;
-
+  
     let st = { dp_db                    = Hashtbl.create 0; 
                channel_dp               = Hashtbl.create 0; 
                datapath_join_cb         = []; 
@@ -344,26 +315,26 @@ let listen mgr loc init =
              }
     in 
     init st;    
-
-    let rec echo () =
-      try_lwt
-        lwt hbuf = Channel.read_some ~len:OP.Header.get_len t in
-        let ofh  = OP.Header.parse_h hbuf in
-        let dlen = ofh.OP.Header.len - OP.Header.get_len in 
-        lwt dbuf = rd_data dlen t in
-        let ofp  = OP.parse ofh dbuf in
-        process_of_packet st (remote_addr, remote_port) ofp t;
-	if (((OS.Clock.time ()) -. !start) < 10.0) then (
-	        echo ()
-	) else (
-		Printf.printf "Terminating connection (%f - %f)\n" !start (OS.Clock.time ());
-		Channel.close t;
-		return ();
-	)
-      with
-        | Nettypes.Closed -> return ()
-        | OP.Unparsed (m, bs) -> cp (sp "# unparsed! m=%s" m); echo ()
-
-    in echo () 
+ 
+    let echo () =
+        try_lwt 
+(*         watchdog2(); *)
+          lwt hbuf = Channel.read_some ~len:OP.Header.get_len t in
+          let ofh  = OP.Header.parse_h hbuf in
+          let dlen = ofh.OP.Header.len - OP.Header.get_len in 
+          lwt dbuf = rd_data dlen t in
+          let ofp  = OP.parse ofh dbuf in
+          lwt () = process_of_packet st (remote_addr, remote_port) ofp t in
+          return true
+        with
+          | Nettypes.Closed -> return false;
+          | OP.Unparsed (m, bs) -> cp (sp "# unparsed! m=%s" m); return true
+    in
+    let continue = ref true in
+    while_lwt !continue do
+      lwt x = echo() in
+      continue := x;
+      return ()
+    done
   in
-  (Channel.listen mgr (`TCPv4 (loc, controller)))
+  (Channel.listen mgr (`TCPv4 (loc, controller))) 
