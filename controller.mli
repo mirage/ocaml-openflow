@@ -691,6 +691,8 @@ val process_of_packet :
   Net.Nettypes.ipv4_addr * int -> OP.t -> Net.Channel.t -> unit Lwt.t
 val send_of_data : state -> OP.datapath_id -> Bitstring.t -> unit Lwt.t
 val rd_data : int -> Net.Channel.t -> Bitstring.bitstring Lwt.t
+val terminate : state -> unit
+val mem_dbg : string -> unit
 val listen :
   Net.Manager.t ->
   Net.Nettypes.ipv4_src -> (state -> 'a) -> unit Lwt.t
