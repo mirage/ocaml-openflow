@@ -24,6 +24,8 @@ let cp = OS.Console.log
 
 module OP = Ofpacket
 
+let resolve t = Lwt.on_success t (fun _ -> ())
+
 module Event = struct
   type t = 
     | DATAPATH_JOIN | DATAPATH_LEAVE
@@ -294,37 +296,49 @@ let mem_dbg name =
   let s = Gc.stat () in
   Printf.printf "blocks %s: l=%d f=%d \n %!" name s.Gc.live_blocks s.Gc.free_blocks
 
+let terminate st = 
+  Hashtbl.iter (fun _ ch -> resolve (Channel.close ch) ) st.dp_db;
+  Printf.printf "Terminating controller...\n"
+    
+
 let listen mgr loc init =
   start := (OS.Clock.time ());
-  let controller (remote_addr, remote_port) t =
+  
+  let st = { dp_db                    = Hashtbl.create 0; 
+             channel_dp               = Hashtbl.create 0; 
+             datapath_join_cb         = []; 
+             datapath_leave_cb        = []; 
+             packet_in_cb             = [];
+             flow_removed_cb          = []; 
+             flow_stats_reply_cb      = [];
+             aggr_flow_stats_reply_cb = [];
+             desc_stats_reply_cb      = []; 
+             port_stats_reply_cb      = [];
+             table_stats_reply_cb     = [];
+             port_status_cb           = [];
+           }
+  in 
+   init st;    
+   let controller (remote_addr, remote_port) t =
     let rs = Nettypes.ipv4_addr_to_string remote_addr in
     Log.info "OpenFlow Controller" "+ %s:%d" rs remote_port;
-  
-    let st = { dp_db                    = Hashtbl.create 0; 
-               channel_dp               = Hashtbl.create 0; 
-               datapath_join_cb         = []; 
-               datapath_leave_cb        = []; 
-               packet_in_cb             = [];
-               flow_removed_cb          = []; 
-               flow_stats_reply_cb      = [];
-               aggr_flow_stats_reply_cb = [];
-               desc_stats_reply_cb      = []; 
-               port_stats_reply_cb      = [];
-               table_stats_reply_cb     = [];
-               port_status_cb           = [];
-             }
-    in 
-    init st;    
- 
     let echo () =
         try_lwt 
 (*         watchdog2(); *)
+(*           mem_dbg "before read"; *)
           lwt hbuf = Channel.read_some ~len:OP.Header.get_len t in
+(*           mem_dbg "init read"; *)
           let ofh  = OP.Header.parse_h hbuf in
+(*           mem_dbg "init parse"; *)
           let dlen = ofh.OP.Header.len - OP.Header.get_len in 
           lwt dbuf = rd_data dlen t in
+(*
+          mem_dbg "read";
+*)
           let ofp  = OP.parse ofh dbuf in
+(*           mem_dbg "parse"; *)
           lwt () = process_of_packet st (remote_addr, remote_port) ofp t in
+(*           mem_dbg "process"; *)
           return true
         with
           | Nettypes.Closed -> return false;
