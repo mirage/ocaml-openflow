@@ -22,6 +22,8 @@ let ep = Printf.eprintf
   
 exception Unparsable of string * Bitstring.bitstring
 exception Unparsed of string * Bitstring.bitstring
+
+let resolve t = Lwt.on_success t (fun _ -> ())
     
 let (|>) x f = f x (* pipe *)
 let (>>) f g x = g (f x) (* functor pipe *)
@@ -186,7 +188,7 @@ module Header = struct
   let parse_h bits = 
     (bitmatch bits with
       | { 1:8:int; t:8; len:16; xid:32 }
-        -> { ver=byte 1; ty=msg_code_of_int t; len; xid }
+        -> { ver=byte 1; ty=(msg_code_of_int t); len; xid }
       | { _ } -> raise (Unparsable ("parse_h", bits))
     )
 
@@ -584,7 +586,7 @@ module Switch = struct
                n_tables = (byte n_tables); 
                capabilities = parse_capabilities capabilities;
                actions = parse_actions actions;
-               ports = parse_phys phys;
+               ports = []; (* parse_phys phys; *)
              }
     )
 
@@ -1594,7 +1596,24 @@ let parse h bits =
     | PORT_STATUS -> Port_status(h, (Port.status_of_bitstring bits)) 
     | _ -> raise (Unparsed ("_", bits))
   )
-          (*
+ let new_parse bits = 
+  bitmatch bits with
+  | { 1:8:int; t:8; len:16; xid:32; body:-1:bitstring }
+      -> (
+        (parse (Header.({ ver=byte 1; ty=(msg_code_of_int t); 
+        len; xid;})) body,
+        (Bitstring.dropbits  (len*8) bits) )  
+      )
+      | { _ } -> raise (Unparsable ("parse_h", bits))
+(*
+  in
+  Printf.printf "header %d, Bitstring %d\n" (h.Header.len*8)
+  (Bitstring.bitstring_length bits);
+    ((parse h bits), (Bitstring.dropbits  ((h.Header.len)*8) bits))
+    
+*)
+
+         (*
           (bitmatch bits with  
           | { 1:8; 10:8; len:16; xid:32; buffer_id:32; total_len:16; in_port : 16; reason:8;
           bits:-1:bitstring}  

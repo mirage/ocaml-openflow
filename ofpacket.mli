@@ -553,3 +553,4 @@ type t =
   | Queue_get_config_req of Header.h * Port.t
   | Queue_get_config_resp of Header.h * Port.t * Queue.t array
 val parse : Header.h -> Bitstring.t -> t
+val new_parse : Bitstring.t -> (t * Bitstring.t)
