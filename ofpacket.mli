@@ -285,8 +285,8 @@ module Flow :
       | SET_VLAN_VID
       | SET_VLAN_PCP
       | STRIP_VLAN
-      | SET_DL_SRC
-      | SET_DL_DST
+      | Set_dl_src of eaddr
+      | Set_dl_dst of eaddr
       | SET_NW_SRC
       | SET_NW_DST
       | SET_NW_TOS
@@ -297,6 +297,7 @@ module Flow :
     val action_of_int : int -> action
     val int_of_action : action -> int
     val string_of_action : action -> string
+    val string_of_actions : action list -> string
     val len_of_action : action -> int
     val action_to_bitstring : action -> Bitstring.bitstring
     type reason = IDLE_TIMEOUT | HARD_TIMEOUT | DELETE
@@ -370,7 +371,7 @@ module Flow_mod :
       buffer_id : int32;
       out_port : Port.t;
       flags : flags;
-      actions : Flow.action array;
+      actions : Flow.action list; (* array; *)
     }
     val total_len : int
     val create :
@@ -381,8 +382,10 @@ module Flow_mod :
       ?idle_timeout:uint16 ->
       ?hard_timeout:uint16 ->
       ?buffer_id:int ->
-      ?out_port:Port.t -> ?flags:flags -> Flow.action array -> unit -> t
+      ?out_port:Port.t -> ?flags:flags -> Flow.action list -> unit -> t
     val flow_mod_to_bitstring : t -> Bitstring.bitstring
+    val flow_mod_of_bitstring : Header.h -> Bitstring.bitstring -> t
+
   end
 module Flow_removed :
   sig

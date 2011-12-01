@@ -95,8 +95,8 @@ module Entry = struct
     | SET_VLAN_ID of uint16
     | SET_VLAN_PRIO of uint16
     | STRIP_VLAN_HDR
-    | SET_DL_SRC of eaddr
-    | SET_DL_DST of eaddr
+    | Set_dl_src of eaddr
+    | Set_dl_dst of eaddr
     | SET_NW_SRC of Nettypes.ipv4_addr
     | SET_NW_DST of Nettypes.ipv4_addr
     | SET_NW_TOS of byte
@@ -106,7 +106,7 @@ module Entry = struct
   type t = { 
     (* fields: OP.Match.t list; *)
     counters: flow_counter;
-    actions: action list;
+    actions: OP.Flow.action list;
   }
 
 end
@@ -176,8 +176,8 @@ let forward_frame st tupple port frame =
     | OP.Port.Port(port) -> 
         if Hashtbl.mem st.Switch.int_ports port then
           let out_p = ( Hashtbl.find st.Switch.int_ports port)  in
-            (Net.Manager.send_raw out_p.Switch.mgr out_p.Switch.port_name [frame];
-            return ())
+            Net.Manager.send_raw out_p.Switch.mgr out_p.Switch.port_name [frame];
+            return ()
             else
               return (Printf.printf "Port %d not registered \n" port)
     | OP.Port.No_port -> return ()
@@ -203,15 +203,15 @@ let rec apply_of_actions st tuple actions frame =
     | [] -> return ()
     | head :: actions -> 
         match head with
-          | Entry.FORWARD (port) ->
+          | OP.Flow.Output (port) ->
               forward_frame st tuple port frame; 
               apply_of_actions st tuple actions frame
-          | Entry.SET_DL_SRC(eaddr) ->
+          | OP.Flow.Set_dl_src(eaddr) ->
              (* Printf.printf "setting src mac addr to %s\n" (OP.eaddr_to_string
               * eaddr); *)
               set_frame_bits frame 48 48 (OP.bitstring_of_eaddr eaddr);
               apply_of_actions st tuple actions frame
-          | Entry.SET_DL_DST(eaddr) ->
+          | OP.Flow.Set_dl_dst(eaddr) ->
              (* Printf.printf "setting dst mac addr to %s\n" (OP.eaddr_to_string
               * eaddr); *)
               set_frame_bits frame 0 48 (OP.bitstring_of_eaddr eaddr);
@@ -245,9 +245,9 @@ let process_frame intf_name frame =
             (* st.Switch.stats.Switch.n_missed <-
              * st.Switch.stats.Switch.n_missed + 1;*)
             let addr = "\x11\x11\x11\x11\x11\x11" in 
-              add_flow tupple [(Entry.SET_DL_SRC (addr));
-                               (Entry.SET_DL_DST (addr));
-                               (Entry.FORWARD (OP.Port.port_of_int 2)) ; ]; 
+              add_flow tupple [(OP.Flow.Set_dl_src (addr));
+                               (OP.Flow.Set_dl_dst (addr));
+                               (OP.Flow.Output (OP.Port.port_of_int 2)) ; ]; 
               return ())
 
          else
@@ -304,10 +304,16 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
             Channel.write_bitstring t (OP.Switch.bitstring_of_switch_config 
                                          h.OP.Header.xid resp);
             Channel.flush t
-(*
       | OP.Flow_mod(h,fm) 
-        -> Printf.printf "Flow modification received\n"
- *)
+        -> Printf.printf "Flow modification received\n";
+           let of_match = fm.OP.Flow_mod.of_match in 
+           let of_actions = fm.OP.Flow_mod.actions in
+            (Printf.printf "need to insert rule %s actions %s" 
+               (OP.Match.match_to_string of_match) 
+               (OP.Flow.string_of_actions fm.OP.Flow_mod.actions));
+            add_flow of_match of_actions; 
+             (* if(Hashtbl.mem of_match st.Switch. ) *)
+           return ()
       | _ -> 
           OS.Console.log "New packet received"; 
           incr errornum; 

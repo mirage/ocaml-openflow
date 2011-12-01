@@ -820,19 +820,22 @@ end
 module Flow = struct
   type action = 
     | Output of (Port.t * int)
-    | SET_VLAN_VID | SET_VLAN_PCP | STRIP_VLAN 
-    | SET_DL_SRC | SET_DL_DST 
+    | SET_VLAN_VID 
+    | SET_VLAN_PCP 
+    | STRIP_VLAN 
+    | Set_dl_src of eaddr
+    | Set_dl_dst of eaddr
     | SET_NW_SRC | SET_NW_DST | SET_NW_TOS 
     | SET_TP_SRC | SET_TP_DST
     | ENQUEUE |VENDOR_ACT 
 
   let action_of_int = function
-    |  0 -> Output((Port.port_of_int 0),0)
+    |  0 -> Output((Port.port_of_int 0), 0)
     |  1 -> SET_VLAN_VID
     |  2 -> SET_VLAN_PCP
     |  3 -> STRIP_VLAN 
-    |  4 -> SET_DL_SRC
-    |  5 -> SET_DL_DST 
+    |  4 -> Set_dl_src("\xff\xff\xff\xff\xff\xff")
+    |  5 -> Set_dl_dst("\xff\xff\xff\xff\xff\xff") 
     |  6 -> SET_NW_SRC
     |  7 -> SET_NW_DST
     |  8 -> SET_NW_TOS 
@@ -846,8 +849,8 @@ module Flow = struct
     | SET_VLAN_VID -> 1 
     | SET_VLAN_PCP -> 2
     | STRIP_VLAN -> 3
-    | SET_DL_SRC -> 4
-    | SET_DL_DST -> 5
+    | Set_dl_src(_) -> 4
+    | Set_dl_dst(_) -> 5
     | SET_NW_SRC -> 6
     | SET_NW_DST -> 7
     | SET_NW_TOS -> 8
@@ -861,8 +864,8 @@ module Flow = struct
     | SET_VLAN_VID -> sp "SET_VLAN_VID"
     | SET_VLAN_PCP -> sp "SET_VLAN_PCP"
     | STRIP_VLAN   -> sp "STRIP_VLAN"
-    | SET_DL_SRC   -> sp "SET_DL_SRC"
-    | SET_DL_DST   -> sp "SET_DL_DST"
+    | Set_dl_src(eaddr)   -> (sp "SET_DL_SRC %s" (eaddr_to_string eaddr))
+    | Set_dl_dst(eaddr)   -> (sp "SET_DL_DST %s" (eaddr_to_string eaddr))
     | SET_NW_SRC   -> sp "SET_NW_SRC"
     | SET_NW_DST   -> sp "SET_NW_DST"
     | SET_NW_TOS   -> sp "SET_NW_TOS"
@@ -870,6 +873,10 @@ module Flow = struct
     | SET_TP_DST   -> sp "SET_TP_DST"
     | ENQUEUE      -> sp "ENQUEUE"
     | VENDOR_ACT   -> sp "VENDOR"
+
+  let rec string_of_actions = function 
+    | [] -> ""
+    | head::tail -> (string_of_action head) ^ "," ^ (string_of_actions tail) 
   let len_of_action = function
     | Output (_,_) -> 8
     | _            -> 8   
@@ -1051,7 +1058,7 @@ module Flow_mod = struct
     buffer_id: int32;
     out_port: Port.t;
     flags: flags;
-    actions: Flow.action array;
+    actions: Flow.action list;
   }
 
   let total_len = 24 + (Header.get_len) + (Match.get_len) 
@@ -1062,7 +1069,7 @@ module Flow_mod = struct
       ?(flags ={send_flow_rem=false;emerg=false;overlap=false;}) actions () =
     
     let size = ref (total_len) in 
-    (Array.iter (fun a -> size:= !size + (Flow.len_of_action a)) actions);
+    (List.iter (fun a -> size:= !size + (Flow.len_of_action a)) actions);
     { of_header=(Header.(create FLOW_MOD !size (Int32.of_int 0))); 
       of_match=flow_match; cookie; command=command; 
       idle_timeout; hard_timeout; priority; 
@@ -1082,31 +1089,28 @@ module Flow_mod = struct
     let packet = [(Header.build_h m.of_header); 
                   (Match.match_to_bitstring m.of_match);
                   bs
-                 ] @ (m.actions
-                         |> Array.map (fun a -> (Flow.action_to_bitstring a))
-                         |> Array.to_list)
+                 ] @ ( List.map (fun a -> (Flow.action_to_bitstring a)) m.actions)
     in
     Bitstring.concat packet
 
-(*
   let flow_mod_of_bitstring h bits = 
-    bitmatch h bits with
-      | { match_data:Match.get_len:bitstring;
+    let data = 
+      bitmatch bits with
+      | { match_data:(Match.get_len*8):bitstring;
             cookie:64;command:16;idle_timeout:16;hard_timeout:16; 
           priority:16; buffer_id:32;out_port:16; 0:13; 
           overlap:1; emerg:1;flow_rem:1; bits:-1:bitstring} ->
           {of_header=h; 
-           of_match=(Wildcards.bitstring_to_match match_data);
+           of_match=(Match.bitstring_to_match match_data);
            cookie; 
            command=(command_of_int command); 
            idle_timeout; hard_timeout;
          priority; buffer_id; out_port=(Port.port_of_int out_port); 
          flags={send_flow_rem=flow_rem; emerg; overlap; }; 
-         actions=[||] }
-
- *)
-             
-
+         actions=[] } 
+        | { _ } -> raise (Unparsable ("flow_mod_of_bitstring", bits))
+    in
+      data
 
 end
 
@@ -1590,8 +1594,8 @@ let parse h bits =
     | SET_CONFIG -> raise (Unparsed ("SET_CONFIG", bits))
     | PACKET_IN -> Packet_in (h, Packet_in.parse_packet_in bits)
     | FLOW_REMOVED -> Flow_removed(h, (Flow_removed.flow_removed_of_bitstring bits))
-    | FLOW_MOD -> raise (Unparsed ("GET_CONFIG_RESP", bits))
-(* Flow_mod(h, (Flow_mod.flow_mod_of_bitstring h bits)) *)
+(*     | FLOW_MOD -> raise (Unparsed ("GET_CONFIG_RESP", bits)) *)
+    | FLOW_MOD -> Flow_mod(h, (Flow_mod.flow_mod_of_bitstring h bits)) 
     | STATS_RESP -> Stats_resp (h, (Stats.parse_stats bits))
     | PORT_STATUS -> Port_status(h, (Port.status_of_bitstring bits)) 
     | _ -> raise (Unparsed ("_", bits))

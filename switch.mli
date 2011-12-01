@@ -303,8 +303,8 @@ module OP :
           | SET_VLAN_VID
           | SET_VLAN_PCP
           | STRIP_VLAN
-          | SET_DL_SRC
-          | SET_DL_DST
+          | Set_dl_src of eaddr
+          | Set_dl_dst of eaddr
           | SET_NW_SRC
           | SET_NW_DST
           | SET_NW_TOS
@@ -315,6 +315,7 @@ module OP :
         val action_of_int : int -> action
         val int_of_action : action -> int
         val string_of_action : action -> string
+        val string_of_actions : action  list -> string
         val len_of_action : action -> int
         val action_to_bitstring : action -> Bitstring.bitstring
         type reason =
@@ -407,7 +408,7 @@ module OP :
           buffer_id : int32;
           out_port : Port.t;
           flags : flags;
-          actions : Flow.action array;
+          actions : Flow.action list;
         }
         val total_len : int
         val create :
@@ -418,7 +419,7 @@ module OP :
           ?idle_timeout:uint16 ->
           ?hard_timeout:uint16 ->
           ?buffer_id:int ->
-          ?out_port:Port.t -> ?flags:flags -> Flow.action array -> unit -> t
+          ?out_port:Port.t -> ?flags:flags -> Flow.action list -> unit -> t
         val flow_mod_to_bitstring : t -> Bitstring.bitstring
       end
     module Flow_removed :
@@ -681,8 +682,8 @@ module Entry :
       | SET_VLAN_ID of uint16
       | SET_VLAN_PRIO of uint16
       | STRIP_VLAN_HDR
-      | SET_DL_SRC of eaddr
-      | SET_DL_DST of eaddr
+      | Set_dl_src of eaddr
+      | Set_dl_dst of eaddr
       | SET_NW_SRC of Net.Nettypes.ipv4_addr
       | SET_NW_DST of Net.Nettypes.ipv4_addr
       | SET_NW_TOS of byte
@@ -691,7 +692,7 @@ module Entry :
     type t = {
       (* fields : OP.Match.t list; *)
       counters : flow_counter;
-      actions : action list;
+      actions : OP.Flow.action list;
     }
   end
 module Table :
@@ -717,7 +718,7 @@ module Switch :
       p_sflow : uint32;
     }
   end
-val apply_of_actions: Switch.t -> OP.Match.t -> Entry.action list -> Bitstring.t -> unit Lwt.t
+val apply_of_actions: Switch.t -> OP.Match.t -> OP.Flow.action list -> Bitstring.t -> unit Lwt.t
 val process_frame : string -> string * int * int -> unit Lwt.t
 val process_openflow : 'a -> unit Lwt.t
 val add_port : Switch.t -> Net.Manager.t -> Net.Manager.interface -> unit 
