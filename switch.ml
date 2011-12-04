@@ -25,7 +25,7 @@ let pr = Printf.printf
 let ep = Printf.eprintf
 let cp = OS.Console.log
 
-(* XXX should really standardise these *)
+(* XXX should really stndardise these *)
 type uint16 = OP.uint16
 type uint32 = OP.uint32
 type uint64 = OP.uint64
@@ -87,7 +87,7 @@ module Entry = struct
 
 (*
   type action = 
-    (** Required actions *)
+   (** Required actions *)
     | FORWARD of OP.Port.t
     | DROP
     (** Optional actions *)
@@ -147,7 +147,31 @@ module Switch = struct
     p_sflow: uint32; (** probability for sFlow sampling *)
   }
 
-  let forward_frame st tupple port frame pkt_size =
+end
+
+let st = Switch.(
+  { ports = (Hashtbl.create 0); int_ports = (Hashtbl.create 0);
+    table = Table.({ tid = 0_L; entries = (Hashtbl.create 0) });
+    stats = { n_frags=0_L; n_hits=0_L; n_missed=0_L; n_lost=0_L };
+    p_sflow = 0_l; controllers=[]; port_feat = [];
+  })
+
+let add_flow tuple actions = 
+  if (Hashtbl.mem st.Switch.table.Table.entries tuple) then
+    Printf.printf "Tuple already exists" 
+  else
+    Hashtbl.add st.Switch.table.Table.entries tuple 
+      Entry.({actions; counters=(init_flow_counters ())})
+
+let rec set_frame_bits frame start len bits = 
+  match len with 
+      (*TODO: Make the pattern match more accurate, read the match syntax*)
+    | 0 -> return ()
+    | len ->
+        Bitstring.put frame (start + len - 1) (Bitstring.get bits (len - 1));
+        set_frame_bits frame start (len-1) bits
+
+let forward_frame st tupple port frame pkt_size =
   (* Printf.printf "Outputing frame to port %s\n" (OP.Port.string_of_port
    * port);*)
     match port with 
@@ -250,7 +274,7 @@ let process_frame intf_name frame =
             let addr = "\x11\x11\x11\x11\x11\x11" in 
               add_flow tupple [(OP.Flow.Set_dl_src (addr));
                                (OP.Flow.Set_dl_dst (addr));
-                               (OP.Flow.Output ((OP.Port.port_of_int 2),  2000)) ; ]; 
+                               (OP.Flow.Output((OP.Port.port_of_int 2),1500)) ; ]; 
               return ())
 
          else
