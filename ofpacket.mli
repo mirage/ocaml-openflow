@@ -491,7 +491,8 @@ module Stats :
       | Vendor_resp of resp_hdr
     val parse_table_stats_reply : string * int * int -> table list
     val string_of_table_stats_reply : table list -> string
-    val parse_stats : string * int * int -> resp
+    val parse_stats_resp : string * int * int -> resp
+    val parse_stats_req : string * int * int -> req
     val string_of_flow_stats : Flow.stats list -> string
     val string_of_stats : resp -> string
   end

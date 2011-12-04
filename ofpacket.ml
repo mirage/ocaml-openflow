@@ -547,15 +547,16 @@ module Switch = struct
           [(Port.bitstring_of_phy head)] @ (bitstring_list_of_ports_phy_list tail)
 
   let gen_reply_features req datapath_id ports_phy =
-     let ports_phy_bitstring = (Bitstring.concat (bitstring_list_of_ports_phy_list ports_phy)) in
+    let ports_phy_bitstring = (Bitstring.concat (bitstring_list_of_ports_phy_list ports_phy)) in
     let ports_count = (List.length ports_phy) in    
-    let header = (Header.create  Header.FEATURES_RESP (Header.get_len + 24 + ports_count*Port.phy_len) req.Header.xid) in
+    (* Need to fixc this part in order to return true information for the switch *)
+    let header = (Header.create  Header.FEATURES_RESP (Header.get_len + 24 + ports_count*Port.phy_len) 
+      req.Header.xid) in
      BITSTRING{ (Header.build_h header):(Header.get_len*8):bitstring
        ;datapath_id:64; (Int32.of_int 0):32; 1:8; 0:24; (Int32.of_int 0):32;
-       (Int32.of_int 0):32 
-         ;ports_phy_bitstring:(Bitstring.bitstring_length
-         ports_phy_bitstring):bitstring  
-     } 
+       (Int32.of_int 0):32 ;
+       ports_phy_bitstring:(Bitstring.bitstring_length ports_phy_bitstring):bitstring }
+
 (*       Printf.printf "Sending data %d\n" (Bitstring.bitstring_length data); *)
 
   let parse_features bits = 
@@ -1308,6 +1309,13 @@ module Stats = struct
     | Queue_req of req_hdr * Port.t * queue_id
     | Vendor_req of req_hdr
 
+  let parse_stats_req bits =
+    bitmatch bits with 
+    | { 0:16; flags : 16} -> Desc_req({ty=(int_of_req_type DESC); flags;})
+      | {_} -> raise (Unparsable ("parse_stats_req", bits))
+    
+
+
 
   type resp_hdr = {
     st_ty: stats_type;
@@ -1360,8 +1368,8 @@ module Stats = struct
         (string_of_table_id h.table_id) h.name (Wildcards.string_of_wildcard
                                                   h.wildcards) h.max_entries h.active_count h.lookup_count 
         h.matched_count (string_of_table_stats_reply q) 
-
-  let parse_stats bits =
+  
+  let parse_stats_resp bits =
     ( bitmatch bits with 
       | {0:16; _:15; more_to_follow:1; imfr_desc:256:string;
          hw_desc:256:string; sw_desc:256:string; serial_num:32:string;
@@ -1580,7 +1588,9 @@ type t =
   | Queue_get_config_req of Header.h * Port.t
   | Queue_get_config_resp of Header.h * Port.t * Queue.t array
 
-let parse h bits = 
+let parse h bits =
+  Printf.printf " receiveing header with code %s\n" (Header.string_of_msg_code
+    h.Header.ty); 
   Header.(match (get_ty h) with
     | HELLO -> Hello (h, bits)
     | ERROR -> raise (Unparsed ("ERROR", bits))
@@ -1596,7 +1606,8 @@ let parse h bits =
     | FLOW_REMOVED -> Flow_removed(h, (Flow_removed.flow_removed_of_bitstring bits))
 (*     | FLOW_MOD -> raise (Unparsed ("GET_CONFIG_RESP", bits)) *)
     | FLOW_MOD -> Flow_mod(h, (Flow_mod.flow_mod_of_bitstring h bits)) 
-    | STATS_RESP -> Stats_resp (h, (Stats.parse_stats bits))
+    | STATS_REQ -> Stats_req(h, (Stats.parse_stats_req bits))
+    | STATS_RESP -> Stats_resp (h, (Stats.parse_stats_resp bits))
     | PORT_STATUS -> Port_status(h, (Port.status_of_bitstring bits)) 
     | _ -> raise (Unparsed ("_", bits))
   )

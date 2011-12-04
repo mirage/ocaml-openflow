@@ -560,7 +560,8 @@ module OP :
           | Vendor_resp of resp_hdr
         val parse_table_stats_reply : string * int * int -> table list
         val string_of_table_stats_reply : table list -> string
-        val parse_stats : string * int * int -> resp
+        val parse_stats_resp : string * int * int -> resp
+        val parse_stats_req : string * int * int -> req
         val string_of_flow_stats : Flow.stats list -> string
         val string_of_stats : resp -> string
       end
@@ -675,7 +676,7 @@ module Entry :
       per_port : port_counter list;
       per_queue : queue_counter list;
     }
-    type action =
+(*    type action =
         FORWARD of OP.Port.t
       | DROP
       | ENQUEUE of OP.Queue.h
@@ -688,11 +689,11 @@ module Entry :
       | SET_NW_DST of Net.Nettypes.ipv4_addr
       | SET_NW_TOS of byte
       | SET_TP_SRC of port
-      | SET_TP_DST of port
+      | SET_TP_DST of port*)
     type t = {
       (* fields : OP.Match.t list; *)
       counters : flow_counter;
-      actions : OP.Flow.action list;
+      actions : Ofpacket.Flow.action list;
     }
   end
 module Table :
@@ -717,8 +718,8 @@ module Switch :
       stats : stats;
       p_sflow : uint32;
     }
+    val apply_of_actions: t -> OP.Match.t -> OP.Flow.action list -> Bitstring.t -> unit Lwt.t
   end
-val apply_of_actions: Switch.t -> OP.Match.t -> OP.Flow.action list -> Bitstring.t -> unit Lwt.t
 val process_frame : string -> string * int * int -> unit Lwt.t
 val process_openflow : 'a -> unit Lwt.t
 val add_port : Switch.t -> Net.Manager.t -> Net.Manager.interface -> unit 

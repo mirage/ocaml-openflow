@@ -85,6 +85,7 @@ module Entry = struct
     secs=(Int32.of_int 0);
     nsecs=(Int32.of_int 0);}
 
+(*
   type action = 
     (** Required actions *)
     | FORWARD of OP.Port.t
@@ -102,6 +103,7 @@ module Entry = struct
     | SET_NW_TOS of byte
     | SET_TP_SRC of port
     | SET_TP_DST of port
+*)
 
   type t = { 
     (* fields: OP.Match.t list; *)
@@ -145,47 +147,23 @@ module Switch = struct
     p_sflow: uint32; (** probability for sFlow sampling *)
   }
 
-end
-
-let st = Switch.(
-  { ports = (Hashtbl.create 0); int_ports = (Hashtbl.create 0);
-    table = Table.({ tid = 0_L; entries = (Hashtbl.create 0) });
-    stats = { n_frags=0_L; n_hits=0_L; n_missed=0_L; n_lost=0_L };
-    p_sflow = 0_l; controllers=[]; port_feat = [];
-  })
-
-let add_flow tuple actions = 
-  if (Hashtbl.mem st.Switch.table.Table.entries tuple) then
-    Printf.printf "Tuple already exists" 
-  else
-    Hashtbl.add st.Switch.table.Table.entries tuple 
-      Entry.({actions; counters=(init_flow_counters ())})
-
-let rec set_frame_bits frame start len bits = 
-  match len with 
-      (*TODO: Make the pattern match more accurate, read the match syntax*)
-    | 0 -> return ()
-    | len ->
-        Bitstring.put frame (start + len - 1) (Bitstring.get bits (len - 1));
-        set_frame_bits frame start (len-1) bits
-
-let forward_frame st tupple port frame =
+  let forward_frame st tupple port frame pkt_size =
   (* Printf.printf "Outputing frame to port %s\n" (OP.Port.string_of_port
    * port);*)
-  match port with 
-    | OP.Port.Port(port) -> 
-        if Hashtbl.mem st.Switch.int_ports port then
-          let out_p = ( Hashtbl.find st.Switch.int_ports port)  in
-            Net.Manager.send_raw out_p.Switch.mgr out_p.Switch.port_name [frame];
+    match port with 
+      | OP.Port.Port(port) -> 
+        if Hashtbl.mem st.int_ports port then
+          let out_p = ( Hashtbl.find st.int_ports port)  in
+            Net.Manager.send_raw out_p.mgr out_p.port_name [frame];
             return ()
             else
               return (Printf.printf "Port %d not registered \n" port)
-    | OP.Port.No_port -> return ()
-    | OP.Port.In_port ->
+      | OP.Port.No_port -> return ()
+      | OP.Port.In_port ->
         let port = (OP.Port.int_of_port tupple.OP.Match.in_port) in 
-          if Hashtbl.mem st.Switch.int_ports port then
-            let out_p = ( Hashtbl.find st.Switch.int_ports port)  in
-              (Net.Manager.send_raw out_p.Switch.mgr out_p.Switch.port_name [frame];
+          if Hashtbl.mem st.int_ports port then
+            let out_p = ( Hashtbl.find st.int_ports port)  in
+              (Net.Manager.send_raw out_p.mgr out_p.port_name [frame];
               return ())
               else
                 return (Printf.printf "Port %d not registered \n" port)
@@ -196,15 +174,24 @@ let forward_frame st tupple port frame =
                    *           | Controller -> generate a packet out. 
                    *           | Local -> can I inject this frame to the network
                    *           stack?  *)
-    | _ -> return (Printf.printf "Not implemented output port\n")
+      | _ -> return (Printf.printf "Not implemented output port\n")
 
-let rec apply_of_actions st tuple actions frame = 
-  match actions with 
-    | [] -> return ()
-    | head :: actions -> 
+  let rec set_frame_bits frame start len bits = 
+    match len with 
+        (*TODO: Make the pattern match more accurate, read the match syntax*)
+      | 0 -> return ()
+      | len ->
+        Bitstring.put frame (start + len - 1) (Bitstring.get bits (len - 1));
+        set_frame_bits frame start (len-1) bits
+
+
+   let rec apply_of_actions st tuple actions frame = 
+    match actions with 
+      | [] -> return ()
+      | head :: actions -> 
         match head with
-          | OP.Flow.Output (port) ->
-              forward_frame st tuple port frame; 
+          | OP.Flow.Output (port, pkt_size) ->
+              forward_frame st tuple port frame pkt_size; 
               apply_of_actions st tuple actions frame
           | OP.Flow.Set_dl_src(eaddr) ->
              (* Printf.printf "setting src mac addr to %s\n" (OP.eaddr_to_string
@@ -220,6 +207,22 @@ let rec apply_of_actions st tuple actions frame =
               (Printf.printf "Unsupported action\n");
               apply_of_actions st tuple actions frame
 
+
+end
+
+let st = Switch.(
+  { ports = (Hashtbl.create 0); int_ports = (Hashtbl.create 0);
+    table = Table.({ tid = 0_L; entries = (Hashtbl.create 0) });
+    stats = { n_frags=0_L; n_hits=0_L; n_missed=0_L; n_lost=0_L };
+    p_sflow = 0_l; controllers=[]; port_feat = [];
+  })
+
+let add_flow tuple actions = 
+  if (Hashtbl.mem st.Switch.table.Table.entries tuple) then
+    Printf.printf "Tuple already exists" 
+  else
+    Hashtbl.add st.Switch.table.Table.entries tuple 
+      Entry.({actions; counters=(init_flow_counters ())})
 
 let portnum = ref 0
 
@@ -239,7 +242,7 @@ let process_frame intf_name frame =
         let entry = (Hashtbl.find st.Switch.table.Table.entries tupple) in
           (* st.Switch.stats.Switch.n_hits <- (st.Switch.stats.Switch.n_hits + 
            * (Int64.of_int 1)); *)
-          (apply_of_actions st tupple entry.Entry.actions frame);
+          (Switch.apply_of_actions st tupple entry.Entry.actions frame);
          else
            (Printf.printf "generating Packet_out\n"; 
             (* st.Switch.stats.Switch.n_missed <-
@@ -247,7 +250,7 @@ let process_frame intf_name frame =
             let addr = "\x11\x11\x11\x11\x11\x11" in 
               add_flow tupple [(OP.Flow.Set_dl_src (addr));
                                (OP.Flow.Set_dl_dst (addr));
-                               (OP.Flow.Output (OP.Port.port_of_int 2)) ; ]; 
+                               (OP.Flow.Output ((OP.Port.port_of_int 2),  2000)) ; ]; 
               return ())
 
          else
@@ -279,14 +282,15 @@ type endhost = {
 
 let errornum = ref 1 
 
-let process_of_packet state (remote_addr, remote_port) ofp t = 
+let process_of_packet state (remote_addr, remote_port) ofp t bits = 
     (* let ep = { ip=remote_addr; port=remote_port } in *)
     match ofp with
       | OP.Hello (h, _) (* Reply to HELLO with a HELLO and a feature request *)
         -> (cp "HELLO";
             Channel.write_bitstring t (OP.Header.build_h h) 
             >> Channel.write_bitstring t (OP.build_features_req 0_l) 
-            >> Channel.flush t
+            >> Channel.flush t 
+             >> return (Printf.printf "Reply send \n") 
         )
       | OP.Echo_req (h, bs)  (* Reply to ECHO requests *)
         -> (cp "ECHO_REQ";
@@ -294,15 +298,15 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
             >> Channel.flush t
         )
       | OP.Features_req (h)  
-        -> (cp "FEAT_REQ";
-            let res = (OP.Switch.gen_reply_features h Int64.one st.Switch.port_feat) in 
-                      Channel.write_bitstring t res;
-                      Channel.flush t
+        -> (cp "FEAT_REQ"; 
+          Channel.write_bitstring t 
+           (OP.Switch.gen_reply_features h Int64.one st.Switch.port_feat)
+           >> Channel.flush t
         )
       | OP.Get_config_req(h) 
         -> let resp = OP.Switch.init_switch_config in
             Channel.write_bitstring t (OP.Switch.bitstring_of_switch_config 
-                                         h.OP.Header.xid resp);
+                                         h.OP.Header.xid resp) >>
             Channel.flush t
       | OP.Flow_mod(h,fm) 
         -> Printf.printf "Flow modification received\n";
@@ -316,17 +320,14 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
            return ()
       | _ -> 
           OS.Console.log "New packet received"; 
-          incr errornum; 
-          let err = (BITSTRING{(OP.Header.build_h 
-                                        (OP.Header.create  OP.Header.ERROR 
-                                           (OP.Header.get_len + 4 )  
-                                           (Int32.of_int !errornum))):(OP.Header.get_len*8):bitstring;
-                                            (* OFPET_BAD_REQUEST
-                                            * OFPBRC_BAD_TYPE*)
-                                            1:16; 1:16})  in 
-            Channel.write_bitstring t err;
-            Channel.flush t; 
-            return () 
+          incr errornum;
+          let req_len = ((Bitstring.bitstring_length bits)/8) in 
+          let err = (BITSTRING{(OP.Header.build_h (OP.Header.create  
+                                OP.Header.ERROR  (OP.Header.get_len + 4  +req_len)
+                                (Int32.of_int !errornum))):(OP.Header.get_len*8):bitstring;
+                                1:16; 1:16; bits:(req_len*8):bitstring})  in 
+            Channel.write_bitstring t err>>
+            Channel.flush t
   
 
 let rec rd_data len t = 
@@ -339,19 +340,21 @@ let rec rd_data len t =
 
 
 let listen mgr loc init =
+  init mgr st; 
   let controller (remote_addr, remote_port) t =
     let rs = Nettypes.ipv4_addr_to_string remote_addr in
     Log.info "OpenFlow Controller" "+ %s:%d" rs remote_port; 
-    init mgr st; 
       st.Switch.controllers <- (st.Switch.controllers @ [t]);
     let rec echo () =
       try_lwt
         lwt hbuf = Channel.read_some ~len:OP.Header.get_len t in
+          ((Bitstring.bitstring_length hbuf)/8); 
         let ofh  = OP.Header.parse_h hbuf in
         let dlen = ofh.OP.Header.len - OP.Header.get_len in 
         lwt dbuf = rd_data dlen t in
         let ofp  = OP.parse ofh dbuf in
-        process_of_packet st (remote_addr, remote_port) ofp t  
+        process_of_packet st (remote_addr, remote_port) ofp t
+        (Bitstring.concat [hbuf; dbuf]) 
         >> echo ()
       with
         | Nettypes.Closed -> 
@@ -363,34 +366,3 @@ let listen mgr loc init =
   in
   Channel.listen mgr (`TCPv4 (loc, controller))
 
-
-  (* Switch initialization should be irrelevant to whether the switch is connected to a 
-   * to a controller. *)
-  (*  st <- Switch.(
-   { ports = (Hashtbl.create 0);
-   table = Table.({ tid = 0_L; entries = [] });
-   stats = { n_frags=0_L; n_hits=0_L; n_missed=0_L; n_lost=0_L };
-   p_sflow = 0_l;
-   })
-   in *)
-(* let listen mgr loc init =
-
-  let switch (rip, rpt) t = 
-    let rs = ipv4_addr_to_string rip in
-      Log.info "OpenFlow Switch" "+ %s:%d" rs rpt;
-      return ()  in    
-    Net.Channel.listen mgr (`TCPv4 (loc, switch))*)
-
-  (* having initialised state, now need to 
-   * + install input handler for each device
-   * + wait on any device having input, and process when ready
-   *)
-  (*    
-   let rec input device = 
-   lwt frame = return () in
-   process_frame st frame
-   >> input device
-   in
-   input dummy (* how to handle multiple devices *)
-   <?> process_openflow st *)
- 
