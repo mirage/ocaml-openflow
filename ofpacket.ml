@@ -1100,7 +1100,7 @@ module Flow_mod = struct
       | { match_data:(Match.get_len*8):bitstring;
             cookie:64;command:16;idle_timeout:16;hard_timeout:16; 
           priority:16; buffer_id:32;out_port:16; 0:13; 
-          overlap:1; emerg:1;flow_rem:1; bits:-1:bitstring} ->
+          overlap:1; emerg:1;flow_rem:1; _:-1:bitstring} ->
           {of_header=h; 
            of_match=(Match.bitstring_to_match match_data);
            cookie; 
@@ -1365,8 +1365,9 @@ module Stats = struct
       | [] -> ""
       | h::q -> sp "table_id:%s,name:%s,wildcard:%s,max_entries:%ld,
           active_count:%ld,lookup_count:%Ld,matched_count:%Ld\n%s" 
-        (string_of_table_id h.table_id) h.name (Wildcards.string_of_wildcard
-                                                  h.wildcards) h.max_entries h.active_count h.lookup_count 
+        (string_of_table_id h.table_id) h.name 
+        (Wildcards.string_of_wildcard h.wildcards) 
+        h.max_entries h.active_count h.lookup_count 
         h.matched_count (string_of_table_stats_reply q) 
   
   let parse_stats_resp bits =
@@ -1393,6 +1394,36 @@ module Stats = struct
       | {ty:16; 0:15; more_to_follow:1} -> 
         Vendor_resp({st_ty=(stats_type_of_int ty);
                      more_to_follow;}))
+
+  let resp_get_len = function
+    | Desc_resp(_, _) -> 4 + 256 + 256 + 256 + 32 + 256 
+    | _ -> raise (Unparsed ("STATS_RESP", Bitstring.empty_bitstring))
+
+  let bitstring_of_stats_resp resp =
+    let data =  (String.make 256 (Char.chr 0)) in
+    match resp with 
+    | Desc_resp(resp_hdr, desc) 
+      -> BITSTRING{ (int_of_stats_type resp_hdr.st_ty):16; 0:16;
+        (Printf.sprintf "%s%s" desc.imfr_desc (String.make (256-(String.length desc.imfr_desc)) (Char.chr 0))):256*8:string;
+        (Printf.sprintf "%s%s" desc.hw_desc (String.make (256-(String.length desc.imfr_desc)) (Char.chr 0))):256*8:string;
+        (Printf.sprintf "%s%s" desc.sw_desc (String.make (256-(String.length desc.imfr_desc)) (Char.chr 0))):256*8:string;
+        (Printf.sprintf "%s%s" desc.serial_num (String.make (32-(String.length desc.imfr_desc)) (Char.chr 0))):32*8:string;
+        (Printf.sprintf "%s%s" desc.dp_desc (String.make (256-(String.length desc.imfr_desc)) (Char.chr 0))):256*8:string 
+      }
+
+(*    | Flow_resp(resp_hdr, stats)
+      ->
+    | Aggregate_resp(resp_hdr, aggregate)
+      ->
+    | Table_resp(resp_hdr, tables)
+      ->
+    | Port_resp(resp_hdr, ports) 
+      ->
+    | Queue_resp (resp_hdr, queues)
+      ->
+    | Vendor_resp(resp_hd)
+      -> *)
+    | _  -> raise (Unparsed ("STATS_RESP", Bitstring.empty_bitstring))
 
   let rec string_of_flow_stats flows = 
     match flows with 

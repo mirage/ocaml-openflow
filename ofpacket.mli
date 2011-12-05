@@ -489,7 +489,9 @@ module Stats :
       | Port_resp of resp_hdr * Port.stats list
       | Queue_resp of resp_hdr * queue list
       | Vendor_resp of resp_hdr
+    val resp_get_len : resp -> int
     val parse_table_stats_reply : string * int * int -> table list
+    val bitstring_of_stats_resp : resp -> Bitstring.t 
     val string_of_table_stats_reply : table list -> string
     val parse_stats_resp : string * int * int -> resp
     val parse_stats_req : string * int * int -> req

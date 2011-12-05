@@ -303,6 +303,38 @@ let process_of_packet state (remote_addr, remote_port) ofp t bits =
            (OP.Switch.gen_reply_features h Int64.one st.Switch.port_feat)
            >> Channel.flush t
         )
+      | OP.Stats_req(h, req) 
+        ->
+          (Printf.printf "STATS_REQ\n%!";
+          ( match req with 
+            | OP.Stats.Desc_req(req) ->
+                let resp_det =  OP.Stats.({st_ty=OP.Stats.DESC;  more_to_follow=false;}) in 
+                  Printf.printf "DESC reso_det\n%!";
+                let desc =  OP.Stats.({imfr_desc="Mirage"; hw_desc="Mirage"; sw_desc="Mirage"; 
+                                       serial_num= "0.1"; dp_desc="virtual software switch";}) in
+                  Printf.printf "DESC desc\n%!";
+                let resp = OP.Stats.Desc_resp(resp_det, desc) in  
+                  Printf.printf "DESC resp\n%!";
+                let resp_h = (OP.Header.create OP.Header.STATS_RESP (OP.Header.get_len+(OP.Stats.resp_get_len resp)) 
+                                h.OP.Header.xid) in 
+                  Printf.printf "DESC resp_h\n%!";
+                  let desc_data =  (OP.Stats.bitstring_of_stats_resp resp) in
+                    Printf.printf "DESC desc_data\n%!";
+                  Channel.write_bitstring t 
+                    (Bitstring.concat [(OP.Header.build_h resp_h);desc_data]) >>
+                      Channel.flush t >>
+                      return (Printf.printf "DESC flush \n%!")
+
+            | _ ->  incr errornum;
+                    let req_len = ((Bitstring.bitstring_length bits)/8) in 
+                    let err = (BITSTRING{(OP.Header.build_h (OP.Header.create  
+                               OP.Header.ERROR  (OP.Header.get_len + 4  +req_len)
+                               (Int32.of_int !errornum))):(OP.Header.get_len*8):bitstring;
+                                1:16; 1:16; bits:(req_len*8):bitstring})  in 
+                    Channel.write_bitstring t err>>
+                    Channel.flush t
+          )
+          )
       | OP.Get_config_req(h) 
         -> let resp = OP.Switch.init_switch_config in
             Channel.write_bitstring t (OP.Switch.bitstring_of_switch_config 
@@ -319,7 +351,6 @@ let process_of_packet state (remote_addr, remote_port) ofp t bits =
              (* if(Hashtbl.mem of_match st.Switch. ) *)
            return ()
       | _ -> 
-          OS.Console.log "New packet received"; 
           incr errornum;
           let req_len = ((Bitstring.bitstring_length bits)/8) in 
           let err = (BITSTRING{(OP.Header.build_h (OP.Header.create  
