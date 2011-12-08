@@ -304,18 +304,19 @@ module OP :
         type action =
           Ofpacket.Flow.action =
             Output of (Port.t * int)
-          | SET_VLAN_VID
-          | SET_VLAN_PCP
-          | STRIP_VLAN
-          | Set_dl_src of eaddr
-          | Set_dl_dst of eaddr
-          | SET_NW_SRC
-          | SET_NW_DST
-          | SET_NW_TOS
-          | SET_TP_SRC
-          | SET_TP_DST
-          | ENQUEUE
-          | VENDOR_ACT
+            | Set_vlan_vid of int 
+            | Set_vlan_pcp of int 
+            | STRIP_VLAN 
+            | Set_dl_src of eaddr
+            | Set_dl_dst of eaddr
+            | Set_nw_src of ipv4 
+            | Set_nw_dst of ipv4
+            | Set_nw_tos of byte 
+            | Set_tp_src of int16 
+            | Set_tp_dst of int16
+            | Enqueue of Port.t * uint32
+            | VENDOR_ACT 
+
         val action_of_int : int -> action
         val int_of_action : action -> int
         val string_of_action : action -> string
@@ -602,7 +603,7 @@ module OP :
       | QUEUE_OP_BAD_QUEUE
       | QUEUE_OP_EPERM
     val error_code_of_int : int -> error_code
-    val int_of_error_code : error_code -> int
+    val int_of_error_code : error_code -> uint32
     val string_of_error_code : error_code -> string
     val build_features_req : uint32 -> Bitstring.bitstring
     val build_echo_resp :

@@ -259,6 +259,7 @@ module Match :
     }
     val match_to_bitstring : t -> Bitstring.bitstring
     val bitstring_to_match : string * int * int -> t
+    val flow_match_compare : t -> t -> Wildcards.t -> bool
     val get_len : int
     val get_dl_src : t -> eaddr
     val get_dl_dst : t -> eaddr
@@ -282,24 +283,26 @@ module Flow :
   sig
     type action =
         Output of (Port.t * int)
-      | SET_VLAN_VID
-      | SET_VLAN_PCP
-      | STRIP_VLAN
-      | Set_dl_src of eaddr
-      | Set_dl_dst of eaddr
-      | SET_NW_SRC
-      | SET_NW_DST
-      | SET_NW_TOS
-      | SET_TP_SRC
-      | SET_TP_DST
-      | ENQUEUE
-      | VENDOR_ACT
+    | Set_vlan_vid of int 
+    | Set_vlan_pcp of int 
+    | STRIP_VLAN 
+    | Set_dl_src of eaddr
+    | Set_dl_dst of eaddr
+    | Set_nw_src of ipv4 
+    | Set_nw_dst of ipv4
+    | Set_nw_tos of byte 
+    | Set_tp_src of int16 
+    | Set_tp_dst of int16
+    | Enqueue of Port.t * uint32
+    | VENDOR_ACT 
+    
     val action_of_int : int -> action
     val int_of_action : action -> int
     val string_of_action : action -> string
     val string_of_actions : action list -> string
     val len_of_action : action -> int
     val action_to_bitstring : action -> Bitstring.bitstring
+    val bitstring_of_actions : action list -> Bitstring.bitstring
     type reason = IDLE_TIMEOUT | HARD_TIMEOUT | DELETE
     val reason_of_int : int -> reason
     val int_of_reason : reason -> int
@@ -423,6 +426,7 @@ module Stats :
     val table_id_of_int : int -> table_id
     val int_of_table_id : table_id -> int
     val string_of_table_id : table_id -> string
+    
     type aggregate = {
       packet_count : uint64;
       byte_count : uint64;
@@ -531,8 +535,9 @@ type error_code =
   | QUEUE_OP_BAD_QUEUE
   | QUEUE_OP_EPERM
 val error_code_of_int : int -> error_code
-val int_of_error_code : error_code -> int
+val int_of_error_code : error_code -> uint32
 val string_of_error_code : error_code -> string
+val bitstring_of_error : error_code -> Bitstring.t -> uint32 -> Bitstring.t
 val build_features_req : uint32 -> Bitstring.bitstring
 val build_echo_resp : Header.h -> Bitstring.bitstring -> Bitstring.bitstring
 type t =

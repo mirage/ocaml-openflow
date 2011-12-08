@@ -725,6 +725,49 @@ module Match = struct
              nw_proto=(char_of_int nw_proto); tp_src; tp_dst;} 
     )
 
+    (* Check if the flow object is include in flow_def match *)
+  let flow_match_compare flow flow_def wildcard =
+(*       Printf.printf "%s\n%!" (Wildcards.string_of_wildcard wildcard); *)
+(* Printf.printf "in_port:%s,dl_vlan:%s,dl_src:%s,dl_dst:%s,dl_type:%s,\
+        nw_proto:%s,tp_src:%s,tp_dst:%s,nw_src:%s,nw_dst:%s,\
+        dl_vlan_pcp:%s,nw_tos:%s\n%!" 
+       (string_of_bool ((wildcard.Wildcards.in_port)|| (flow.in_port=flow_def.in_port)) )
+       (string_of_bool ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan)) )
+       (string_of_bool ((wildcard.Wildcards.dl_src)  || (flow.dl_src == flow_def.dl_src)) )
+       (string_of_bool ((wildcard.Wildcards.dl_dst)  || (flow.dl_dst == flow_def.dl_dst)) )
+       (string_of_bool ((wildcard.Wildcards.dl_type) || (flow.dl_type== flow_def.dl_type)) )
+       (string_of_bool ((wildcard.Wildcards.nw_proto)|| (flow.nw_proto==flow_def.nw_proto)) )
+       (string_of_bool ((wildcard.Wildcards.tp_src)  || (flow.tp_src == flow_def.tp_dst)) )
+       (string_of_bool ((wildcard.Wildcards.tp_dst)  || (flow.tp_dst == flow_def.tp_src)) )
+       (string_of_bool ((wildcard.Wildcards.nw_src >= '\x20') || 
+          (Int32.shift_right_logical flow.nw_src (int_of_char wildcard.Wildcards.nw_src)) ==
+          (Int32.shift_right_logical flow_def.nw_src (int_of_char wildcard.Wildcards.nw_src))) )
+       (string_of_bool ((wildcard.Wildcards.nw_src >= '\x20') ||
+          (Int32.shift_right_logical flow.nw_dst (int_of_char wildcard.Wildcards.nw_dst)) ==
+          (Int32.shift_right_logical flow_def.nw_dst (int_of_char wildcard.Wildcards.nw_dst))) )
+      (string_of_bool ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos == flow_def.nw_tos)) )
+      (string_of_bool ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp ==
+              flow_def.dl_vlan_pcp));*)
+
+       (((wildcard.Wildcards.in_port)|| ((Port.int_of_port flow.in_port) == (Port.int_of_port flow_def.in_port))) && 
+        ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan)) &&
+      ((wildcard.Wildcards.dl_src)  || (flow.dl_src = flow_def.dl_src)) &&
+      ((wildcard.Wildcards.dl_dst)  || (flow.dl_dst = flow_def.dl_dst)) &&
+      ((wildcard.Wildcards.dl_type) || (flow.dl_type== flow_def.dl_type)) &&
+      ((wildcard.Wildcards.nw_proto)|| (flow.nw_proto==flow_def.nw_proto)) &&
+      ((wildcard.Wildcards.tp_src)  || (flow.tp_src == flow_def.tp_dst)) &&
+      ((wildcard.Wildcards.tp_dst)  || (flow.tp_dst == flow_def.tp_src)) &&
+      ((wildcard.Wildcards.nw_src >= '\x20') ||
+        (Int32.shift_right_logical flow.nw_src (int_of_char wildcard.Wildcards.nw_src)) =
+        (Int32.shift_right_logical flow_def.nw_src (int_of_char wildcard.Wildcards.nw_src))) &&
+      ((wildcard.Wildcards.nw_dst >= '\x20') ||
+        (Int32.shift_right_logical flow.nw_dst (int_of_char wildcard.Wildcards.nw_dst)) =
+        (Int32.shift_right_logical flow_def.nw_dst (int_of_char wildcard.Wildcards.nw_dst))) &&
+      ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos == flow_def.nw_tos)) &&
+      ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp ==
+              flow_def.dl_vlan_pcp))
+
+
   let get_len = 40 (*4+2+6+6+2+1+1+2+1+1+2+4+4+2+2*)
   let get_dl_src m = m.dl_src
   let get_dl_dst m = m.dl_dst
@@ -797,23 +840,24 @@ module Match = struct
   let match_to_string m = 
     match (m.dl_type, (int_of_char m.nw_proto)) with
       | (0x0800, 17) 
-        -> (sp "dl_src:%s,dl_dst:%s,dl_type:ip,nw_src:%s,nw_dst:%s,\
+        -> (sp "in_port:%s,dl_src:%s,dl_dst:%s,dl_type:ip,nw_src:%s/%d,nw_dst:%s/%d,\
                nw_tos:%d,nw_proto:%d,tp_dst:%d,tp_src:%d" 
-              (eaddr_to_string m.dl_src) (eaddr_to_string m.dl_dst) 
-              (ipv4_to_string m.nw_src) (ipv4_to_string m.nw_dst)
-              (Char.code m.nw_tos) (Char.code m.nw_proto) m.tp_dst 
-              m.tp_src 
+              (Port.string_of_port m.in_port) (eaddr_to_string m.dl_src) 
+              (eaddr_to_string m.dl_dst) (ipv4_to_string m.nw_src) (int_of_char m.wildcards.Wildcards.nw_src)
+              (ipv4_to_string m.nw_dst) (int_of_char m.wildcards.Wildcards.nw_dst) (Char.code m.nw_tos) 
+              (Char.code m.nw_proto) m.tp_dst m.tp_src 
         )
       | (0x0800, _) 
-        -> (sp "dl_src:%s,dl_dst:%s,dl_type:ip,nw_src:%s,\
-                          nw_dst:%s,nw_tos:%d,nw_proto:%d" 
-              (eaddr_to_string m.dl_src) (eaddr_to_string m.dl_dst) 
-              (ipv4_to_string m.nw_src) (ipv4_to_string m.nw_dst)
-              (Char.code m.nw_tos) (Char.code m.nw_proto)
+        -> (sp "in_port:%s,dl_src:%s,dl_dst:%s,dl_type:ip,nw_src:%s/%d,\
+                          nw_dst:%s/%d,nw_tos:%d,nw_proto:%d" 
+              (Port.string_of_port m.in_port) (eaddr_to_string m.dl_src) 
+              (eaddr_to_string m.dl_dst) (ipv4_to_string m.nw_src) (int_of_char m.wildcards.Wildcards.nw_src)
+              (ipv4_to_string m.nw_dst) (int_of_char m.wildcards.Wildcards.nw_dst) (Char.code m.nw_tos) 
+              (Char.code m.nw_proto)
         )
-      | (_, _) -> (sp "dl_src:%s,dl_dst:%s,dl_type:0x%x"
-                     (eaddr_to_string m.dl_src) 
-                     (eaddr_to_string m.dl_dst) m.dl_type  
+      | (_, _) -> (sp "in_port:%s,dl_src:%s,dl_dst:%s,dl_type:0x%x"
+        (Port.string_of_port m.in_port) (eaddr_to_string m.dl_src) 
+        (eaddr_to_string m.dl_dst) m.dl_type  
       )
 
 end
@@ -821,71 +865,104 @@ end
 module Flow = struct
   type action = 
     | Output of (Port.t * int)
-    | SET_VLAN_VID 
-    | SET_VLAN_PCP 
+    | Set_vlan_vid of int 
+    | Set_vlan_pcp of int 
     | STRIP_VLAN 
     | Set_dl_src of eaddr
     | Set_dl_dst of eaddr
-    | SET_NW_SRC | SET_NW_DST | SET_NW_TOS 
-    | SET_TP_SRC | SET_TP_DST
-    | ENQUEUE |VENDOR_ACT 
+    | Set_nw_src of ipv4 
+    | Set_nw_dst of ipv4
+    | Set_nw_tos of byte 
+    | Set_tp_src of int16 
+    | Set_tp_dst of int16
+    | Enqueue of Port.t * uint32
+    | VENDOR_ACT 
 
   let action_of_int = function
     |  0 -> Output((Port.port_of_int 0), 0)
-    |  1 -> SET_VLAN_VID
-    |  2 -> SET_VLAN_PCP
+    |  1 -> Set_vlan_vid(0xffff)
+    |  2 -> Set_vlan_pcp(0)
     |  3 -> STRIP_VLAN 
     |  4 -> Set_dl_src("\xff\xff\xff\xff\xff\xff")
     |  5 -> Set_dl_dst("\xff\xff\xff\xff\xff\xff") 
-    |  6 -> SET_NW_SRC
-    |  7 -> SET_NW_DST
-    |  8 -> SET_NW_TOS 
-    |  9 -> SET_TP_SRC
-    | 10 -> SET_TP_DST
-    | 11 -> ENQUEUE
+    |  6 -> Set_nw_src(0xFFFFFFFFl)
+    |  7 -> Set_nw_dst(0xFFFFFFFFl)
+    |  8 -> Set_nw_tos(char_of_int 0) 
+    |  9 -> Set_tp_src (0)
+    | 10 -> Set_tp_dst (0)
+    | 11 -> Enqueue ((Port.port_of_int 0), 0l)
     | 0xffff -> VENDOR_ACT
     | _ -> invalid_arg "action_of_int"
   and int_of_action = function 
     | Output _     -> 0 
-    | SET_VLAN_VID -> 1 
-    | SET_VLAN_PCP -> 2
+    | Set_vlan_vid _ -> 1 
+    | Set_vlan_pcp _ -> 2
     | STRIP_VLAN -> 3
-    | Set_dl_src(_) -> 4
-    | Set_dl_dst(_) -> 5
-    | SET_NW_SRC -> 6
-    | SET_NW_DST -> 7
-    | SET_NW_TOS -> 8
-    | SET_TP_SRC -> 9
-    | SET_TP_DST -> 10
-    | ENQUEUE -> 11
+    | Set_dl_src _ -> 4
+    | Set_dl_dst _ -> 5
+    | Set_nw_src _ -> 6
+    | Set_nw_dst _ -> 7
+    | Set_nw_tos _ -> 8
+    | Set_tp_src _ -> 9
+    | Set_tp_dst _ -> 10
+    | Enqueue (_,_) -> 11
     | VENDOR_ACT -> 0xffff
   and string_of_action = function
     | Output (port, max_len) 
       -> sp "OUTPUT %d %d " (Port.int_of_port port) max_len
-    | SET_VLAN_VID -> sp "SET_VLAN_VID"
-    | SET_VLAN_PCP -> sp "SET_VLAN_PCP"
+    | Set_vlan_vid vlan -> sp "SET_VLAN_VID %d" vlan
+    | Set_vlan_pcp (pcp) -> sp "SET_VLAN_PCP %d" pcp
     | STRIP_VLAN   -> sp "STRIP_VLAN"
     | Set_dl_src(eaddr)   -> (sp "SET_DL_SRC %s" (eaddr_to_string eaddr))
     | Set_dl_dst(eaddr)   -> (sp "SET_DL_DST %s" (eaddr_to_string eaddr))
-    | SET_NW_SRC   -> sp "SET_NW_SRC"
-    | SET_NW_DST   -> sp "SET_NW_DST"
-    | SET_NW_TOS   -> sp "SET_NW_TOS"
-    | SET_TP_SRC   -> sp "SET_TP_SRC"
-    | SET_TP_DST   -> sp "SET_TP_DST"
-    | ENQUEUE      -> sp "ENQUEUE"
+    | Set_nw_src (ip) -> sp "SET_NW_SRC %s" (ipv4_to_string ip)
+    | Set_nw_dst (ip) -> sp "SET_NW_DST %s" (ipv4_to_string ip)
+    | Set_nw_tos (tos) -> sp "SET_NW_TOS %d" (int_of_char tos)
+    | Set_tp_src (port) -> sp "SET_TP_SRC %d" port
+    | Set_tp_dst (port) -> sp "SET_TP_DST %d" port
+    | Enqueue (port, queue) -> sp "ENQUEUE %s:%ld" (Port.string_of_port port)
+    queue
     | VENDOR_ACT   -> sp "VENDOR"
 
   let rec string_of_actions = function 
     | [] -> ""
     | head::tail -> (string_of_action head) ^ "," ^ (string_of_actions tail) 
   let len_of_action = function
-    | Output (_,_) -> 8
+    | Set_dl_src(_) -> 16
+    | Set_dl_dst(_) -> 16
+    | Enqueue(_, _) -> 16
     | _            -> 8   
   let action_to_bitstring m =
     match m with  
-      | Output (port, max_len)
-        -> (BITSTRING{0:16; 8:16; (Port.int_of_port port):16; max_len:16})
-      | _ -> Bitstring.empty_bitstring 
+    | Output (port, max_len) ->
+            (BITSTRING{(int_of_action m):16; 8:16; (Port.int_of_port port):16; max_len:16})
+    | Set_vlan_vid (vlan) -> 
+            (BITSTRING{(int_of_action m):16; 8:16; vlan:16; 0:16})
+    | Set_vlan_vid (pcp) -> 
+            (BITSTRING{(int_of_action m):16; 8:16; pcp:8; 0:24})
+    | STRIP_VLAN -> 
+            (BITSTRING{(int_of_action m):16; 8:16; 0l:32})
+    | Set_dl_src(eaddr) ->
+            (BITSTRING{(int_of_action m):16; 16:16; eaddr:48:string; 0L:48})
+    | Set_dl_dst(eaddr) ->
+            (BITSTRING{(int_of_action m):16; 16:16; eaddr:48:string; 0L:48})
+    | Set_nw_src (ip) -> (BITSTRING{(int_of_action m):16; 8:16;ip:32})
+    | Set_nw_dst (ip) -> (BITSTRING{(int_of_action m):16; 8:16;ip:32})
+    | Set_nw_tos (tos) -> 
+            (BITSTRING{(int_of_action m):16; 8:16; (int_of_char tos):8;0:24}) 
+    | Set_tp_src (port) -> 
+            (BITSTRING{(int_of_action m):16; 8:16;port:16;0:16})
+    | Set_tp_dst (port) ->
+            (BITSTRING{(int_of_action m):16; 8:16;port:16;0:16})
+    | Enqueue (port, queue) -> 
+            (BITSTRING{(int_of_action m):16; 16:16;(Port.int_of_port port):16;
+            0L:48; queue:32 })
+    | _ -> Bitstring.empty_bitstring 
+
+  let rec bitstring_of_actions = function
+      | [] -> Bitstring.empty_bitstring
+      | head :: tail -> let rest = (bitstring_of_actions tail) in
+        Bitstring.concat [(action_to_bitstring head) ; rest]
 
   type reason = IDLE_TIMEOUT | HARD_TIMEOUT | DELETE
   let reason_of_int = function
@@ -1186,7 +1263,8 @@ module Stats = struct
     | All -> sp "All"
     | Emergency -> sp "Emergency"
     | Table i -> sp "Table (%d)" (int_of_byte i)
-  
+
+ 
   type aggregate = {
     packet_count: uint64;
     byte_count: uint64;
@@ -1311,11 +1389,16 @@ module Stats = struct
 
   let parse_stats_req bits =
     bitmatch bits with 
-    | { 0:16; flags : 16} -> Desc_req({ty=(int_of_req_type DESC); flags;})
-      | {_} -> raise (Unparsable ("parse_stats_req", bits))
-    
-
-
+    | { 0:16; flags : 16} -> Desc_req({ty=0; flags;})
+    | {1:16; flags:16; of_match:Match.get_len*8:bitstring; table_id:8; _:8;
+        out_port:16} -> Flow_req({ty=1;flags;}, (Match.bitstring_to_match of_match), 
+        (table_id_of_int table_id), (Port.port_of_int out_port))
+    | {2:16; flags:16; of_match:Match.get_len*8:bitstring; table_id:8; _:8;
+        out_port:16} ->  Aggregate_req({ty=2;flags;}, (Match.bitstring_to_match of_match), 
+        (table_id_of_int table_id), (Port.port_of_int out_port))
+    | {3:16; flags:16} -> Table_req({ty=3;flags;})
+    | {4:16; flags:16; port:16} -> Port_req({ty=4;flags;}, (Port.port_of_int port))
+    | {_} -> raise (Unparsable ("parse_stats_req", bits))
 
   type resp_hdr = {
     st_ty: stats_type;
@@ -1396,7 +1479,8 @@ module Stats = struct
                      more_to_follow;}))
 
   let resp_get_len = function
-    | Desc_resp(_, _) -> 4 + 256 + 256 + 256 + 32 + 256 
+    | Desc_resp(_, _) -> 4 + 256 + 256 + 256 + 32 + 256
+    | Table_resp (_, tables) -> 4 + (List.length tables) *(1+3+32+4+4+4+8+8)
     | _ -> raise (Unparsed ("STATS_RESP", Bitstring.empty_bitstring))
 
   let bitstring_of_stats_resp resp =
@@ -1414,10 +1498,15 @@ module Stats = struct
 (*    | Flow_resp(resp_hdr, stats)
       ->
     | Aggregate_resp(resp_hdr, aggregate)
-      ->
+      -> *)
     | Table_resp(resp_hdr, tables)
-      ->
-    | Port_resp(resp_hdr, ports) 
+      -> let tbl_bitstring = (List.map (fun tbl -> BITSTRING{ (int_of_table_id tbl.table_id):8; 0:24; 
+          (Printf.sprintf "%s%s" tbl.name (String.make (32-(String.length tbl.name)) (Char.chr 0))):32*8:string;
+            (Wildcards.wildcard_to_bitstring tbl.wildcards):32:bitstring; tbl.max_entries:32;
+            tbl.active_count:32; tbl.lookup_count:64; tbl.matched_count:64}) tables) in 
+      Bitstring.concat ([(BITSTRING{(int_of_stats_type
+      resp_hdr.st_ty):16;0:16});] @ tbl_bitstring)
+(*    | Port_resp(resp_hdr, ports) 
       ->
     | Queue_resp (resp_hdr, queues)
       ->
@@ -1517,37 +1606,37 @@ let error_code_of_int = function
   | 0x00050002 -> QUEUE_OP_EPERM	
   | _ -> invalid_arg "error_code_of_int"
 and int_of_error_code = function
-  | HELLO_INCOMPATIBLE       -> 0x00000000
-  | HELLO_EPERM              -> 0x00000001
-  | REQUEST_BAD_VERSION      -> 0x00010000
-  | REQUEST_BAD_TYPE         -> 0x00010001
-  | REQUEST_BAD_STAT         -> 0x00010002
-  | REQUEST_BAD_VENDOR       -> 0x00010003
-  | REQUEST_BAD_SUBTYPE      -> 0x00010004
-  | REQUEST_REQUEST_EPERM    -> 0x00010005
-  | REQUEST_BAD_LEN          -> 0x00010006
-  | REQUEST_BUFFER_EMPTY     -> 0x00010007
-  | REQUEST_BUFFER_UNKNOWN   -> 0x00010008
-  | ACTION_BAD_TYPE          -> 0x00020000
-  | ACTION_BAD_LEN           -> 0x00020001
-  | ACTION_BAD_VENDOR        -> 0x00020002
-  | ACTION_BAD_VENDOR_TYPE   -> 0x00020003
-  | ACTION_BAD_OUT_PORT      -> 0x00020004
-  | ACTION_BAD_ARGUMENT      -> 0x00020005
-  | ACTION_EPERM             -> 0x00020006
-  | ACTION_TOO_MANY          -> 0x00020007
-  | ACTION_BAD_QUEUE         -> 0x00020008
-  | FLOW_MOD_ALL_TABLES_FULL -> 0x00030000
-  | FLOW_MOD_OVERLAP         -> 0x00030001
-  | FLOW_MOD_EPERM           -> 0x00030002
-  | FLOW_MOD_EMERG_TIMEOUT   -> 0x00030003
-  | FLOW_MOD_BAD_COMMAND     -> 0x00030004
-  | FLOW_MOD_UNSUPPORTED     -> 0x00030005
-  | PORT_MOD_BAD_PORT        -> 0x00040000
-  | PORT_MOD_BAD_HW_ADDR     -> 0x00040001
-  | QUEUE_OP_BAD_PORT        -> 0x00050000
-  | QUEUE_OP_BAD_QUEUE       -> 0x00050001
-  | QUEUE_OP_EPERM           -> 0x00050002
+  | HELLO_INCOMPATIBLE       -> 0x000000000l
+  | HELLO_EPERM              -> 0x000000001l
+  | REQUEST_BAD_VERSION      -> 0x000100000l
+  | REQUEST_BAD_TYPE         -> 0x000100001l
+  | REQUEST_BAD_STAT         -> 0x000100002l
+  | REQUEST_BAD_VENDOR       -> 0x000100003l
+  | REQUEST_BAD_SUBTYPE      -> 0x000100004l
+  | REQUEST_REQUEST_EPERM    -> 0x000100005l
+  | REQUEST_BAD_LEN          -> 0x000100006l
+  | REQUEST_BUFFER_EMPTY     -> 0x000100007l
+  | REQUEST_BUFFER_UNKNOWN   -> 0x000100008l
+  | ACTION_BAD_TYPE          -> 0x000200000l
+  | ACTION_BAD_LEN           -> 0x000200001l
+  | ACTION_BAD_VENDOR        -> 0x000200002l
+  | ACTION_BAD_VENDOR_TYPE   -> 0x000200003l
+  | ACTION_BAD_OUT_PORT      -> 0x000200004l
+  | ACTION_BAD_ARGUMENT      -> 0x000200005l
+  | ACTION_EPERM             -> 0x000200006l
+  | ACTION_TOO_MANY          -> 0x000200007l
+  | ACTION_BAD_QUEUE         -> 0x000200008l
+  | FLOW_MOD_ALL_TABLES_FULL -> 0x000300000l
+  | FLOW_MOD_OVERLAP         -> 0x000300001l
+  | FLOW_MOD_EPERM           -> 0x000300002l
+  | FLOW_MOD_EMERG_TIMEOUT   -> 0x000300003l
+  | FLOW_MOD_BAD_COMMAND     -> 0x000300004l
+  | FLOW_MOD_UNSUPPORTED     -> 0x000300005l
+  | PORT_MOD_BAD_PORT        -> 0x000400000l
+  | PORT_MOD_BAD_HW_ADDR     -> 0x000400001l
+  | QUEUE_OP_BAD_PORT        -> 0x000500000l
+  | QUEUE_OP_BAD_QUEUE       -> 0x000500001l
+  | QUEUE_OP_EPERM           -> 0x000500002l
 and string_of_error_code = function
   | HELLO_INCOMPATIBLE       -> sp "HELLO_INCOMPATIBLE"
   | HELLO_EPERM              -> sp "HELLO_EPERM"
@@ -1580,7 +1669,12 @@ and string_of_error_code = function
   | QUEUE_OP_BAD_PORT        -> sp "QUEUE_OP_BAD_PORT"
   | QUEUE_OP_BAD_QUEUE       -> sp "QUEUE_OP_BAD_QUEUE"
   | QUEUE_OP_EPERM           -> sp "QUEUE_OP_EPERM"
-
+let bitstring_of_error ty bits errornum = 
+    let req_len = ((Bitstring.bitstring_length bits)/8) in
+    let req_h = (Header.create Header.ERROR  
+    (Header.get_len+4+req_len) errornum) in
+    (BITSTRING{(Header.build_h req_h):(Header.get_len*8):bitstring;
+    (int_of_error_code ty):32; bits:(req_len*8):bitstring})  
 
 let build_features_req xid = 
   Header.build_h (Header.(create FEATURES_REQ 8 xid))
@@ -1620,8 +1714,10 @@ type t =
   | Queue_get_config_resp of Header.h * Port.t * Queue.t array
 
 let parse h bits =
+(*
   Printf.printf " receiveing header with code %s\n" (Header.string_of_msg_code
     h.Header.ty); 
+*)
   Header.(match (get_ty h) with
     | HELLO -> Hello (h, bits)
     | ERROR -> raise (Unparsed ("ERROR", bits))
@@ -1634,12 +1730,14 @@ let parse h bits =
     | GET_CONFIG_RESP -> raise (Unparsed ("GET_CONFIG_RESP", bits))
     | SET_CONFIG -> raise (Unparsed ("SET_CONFIG", bits))
     | PACKET_IN -> Packet_in (h, Packet_in.parse_packet_in bits)
+    | PORT_STATUS -> Port_status(h, (Port.status_of_bitstring bits)) 
     | FLOW_REMOVED -> Flow_removed(h, (Flow_removed.flow_removed_of_bitstring bits))
 (*     | FLOW_MOD -> raise (Unparsed ("GET_CONFIG_RESP", bits)) *)
     | FLOW_MOD -> Flow_mod(h, (Flow_mod.flow_mod_of_bitstring h bits)) 
     | STATS_REQ -> Stats_req(h, (Stats.parse_stats_req bits))
     | STATS_RESP -> Stats_resp (h, (Stats.parse_stats_resp bits))
-    | PORT_STATUS -> Port_status(h, (Port.status_of_bitstring bits)) 
+    | BARRIER_REQ -> Barrier_req(h)
+    | BARRIER_RESP -> Barrier_resp(h)
     | _ -> raise (Unparsed ("_", bits))
   )
  let new_parse bits = 
