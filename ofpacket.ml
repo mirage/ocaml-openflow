@@ -938,7 +938,7 @@ module Flow = struct
             (BITSTRING{(int_of_action m):16; 8:16; (Port.int_of_port port):16; max_len:16})
     | Set_vlan_vid (vlan) -> 
             (BITSTRING{(int_of_action m):16; 8:16; vlan:16; 0:16})
-    | Set_vlan_vid (pcp) -> 
+    | Set_vlan_pcp (pcp) -> 
             (BITSTRING{(int_of_action m):16; 8:16; pcp:8; 0:24})
     | STRIP_VLAN -> 
             (BITSTRING{(int_of_action m):16; 8:16; 0l:32})
@@ -963,6 +963,53 @@ module Flow = struct
       | [] -> Bitstring.empty_bitstring
       | head :: tail -> let rest = (bitstring_of_actions tail) in
         Bitstring.concat [(action_to_bitstring head) ; rest]
+
+  let action_of_bitstring bits = 
+      bitmatch bits with 
+      | {0:16; 8:16; port:16; max_len:16} -> 
+              Output((Port.port_of_int port), max_len)
+      | {1:16; 8:16; vid:16} -> Set_vlan_vid(vid)
+      | {2:16; 8:16; pcp:8} -> Set_vlan_vid(pcp)
+      | {3:16; 8:16} -> STRIP_VLAN
+      | {4:16; 16:16; dl_addr:48:string} -> Set_dl_src(dl_addr)
+      | {5:16; 16:16; dl_addr:48:string} -> Set_dl_dst(dl_addr)
+      | {6:16; 8:16; ip:32} -> Set_nw_src(ip)
+      | {7:16; 8:16; ip:32} -> Set_nw_dst(ip)
+      | {8:16; 8:16; tos:8}-> Set_nw_tos((char_of_int tos))
+      | {9:16; 8:16; port:16} -> Set_tp_src(port)
+      | {10:16; 8:16; port:16} -> Set_tp_dst(port)
+      | {11:16; 16:16; port:16; 0L:48; queue:32} ->  
+              Enqueue ((Port.port_of_int port), queue)
+      | {_} -> raise(Unparsable ("action_of_bitstring", bits))
+
+  let rec actions_of_bitstring bits =
+      bitmatch bits with 
+      | {0:16; 8:16; port:16; max_len:16; bits:-1:bitstring} ->
+              [Output((Port.port_of_int port), max_len)]@(actions_of_bitstring bits)
+      | {1:16; 8:16; vid:16; 0:16; bits:-1:bitstring} -> 
+              [Set_vlan_vid(vid)]@(actions_of_bitstring bits)
+      | {2:16; 8:16; pcp:8; 0:24; bits:-1:bitstring} -> 
+              [Set_vlan_vid(pcp)] @ (actions_of_bitstring bits)
+      | {3:16; 8:16; 0l:32; bits:-1:bitstring} -> 
+              [ STRIP_VLAN ] @ (actions_of_bitstring bits)
+      | {4:16; 16:16; dl_addr:48:string; 0L:48; bits:-1:bitstring} -> 
+              [Set_dl_src(dl_addr)] @ (actions_of_bitstring bits)
+      | {5:16; 16:16; dl_addr:48:string; 0L:48; bits:-1:bitstring} -> 
+              [Set_dl_dst(dl_addr)] @ (actions_of_bitstring bits)
+      | {6:16; 8:16; ip:32; bits:-1:bitstring} -> 
+              [Set_nw_src(ip)] @ (actions_of_bitstring bits)
+      | {7:16; 8:16; ip:32; bits:-1:bitstring} -> 
+              [Set_nw_dst(ip)]@(actions_of_bitstring bits)
+      | {8:16; 8:16; tos:8; 0:24; bits:-1:bitstring}-> 
+              [Set_nw_tos((char_of_int tos))] @ (actions_of_bitstring bits)
+      | {9:16; 8:16; port:16; 0:16; bits:-1:bitstring} -> 
+              [Set_tp_src(port)] @ (actions_of_bitstring bits)
+      | {10:16; 8:16; port:16; 0:16; bits:-1:bitstring} -> 
+              [Set_tp_dst(port)] @ (actions_of_bitstring bits)
+      | {11:16; 16:16; port:16; 0L:48; queue:32; bits:-1:bitstring} ->  
+              [Enqueue ((Port.port_of_int port), queue)]@ (actions_of_bitstring
+              bits)
+      | {_} -> []
 
   type reason = IDLE_TIMEOUT | HARD_TIMEOUT | DELETE
   let reason_of_int = function
@@ -1027,17 +1074,17 @@ module Flow = struct
 end
 
 module Packet_in = struct
-  type reason = No_match | Action
+  type reason = NO_MATCH | ACTION
   let reason_of_int = function
-    | 0 -> No_match
-    | 1 -> Action
+    | 0 -> NO_MATCH
+    | 1 -> ACTION
     | _ -> invalid_arg "reason_of_int"
   and int_of_reason = function
-    | No_match -> 0
-    | Action   -> 1
+    | NO_MATCH -> 0
+    | ACTION   -> 1
   and string_of_reason = function
-    | No_match -> sp "NO_MATCH"
-    | Action   -> sp "ACTION"
+    | NO_MATCH -> sp "NO_MATCH"
+    | ACTION   -> sp "ACTION"
 
   type t = {
     buffer_id: uint32;
@@ -1058,39 +1105,58 @@ module Packet_in = struct
   let string_of_packet_in p = 
     sp "Packet_in: buffer_id:%ld in_port:%s reason:%s"
       p.buffer_id (Port.string_of_port p.in_port) (string_of_reason p.reason)
+
+  let bitstring_of_pkt_in ~port ~reason ?(buffer_id=(-1l)) ?(xid=0l) ~bits () =
+      let pkt_in_h = (Header.create Header.PACKET_IN (Header.get_len +
+      10 + ((Bitstring.bitstring_length bits)/8)) xid) in 
+
+      BITSTRING{(Header.build_h pkt_in_h):(Header.get_len*8):bitstring;
+      buffer_id:32; ((Bitstring.bitstring_length bits)/8):16;
+      (Port.int_of_port port):16; (int_of_reason reason):8; 0:8; 
+      bits:(Bitstring.bitstring_length bits):bitstring
+        }
 end
 
 module Packet_out = struct
   type t = {
-    of_header : Header.h;
+(*     of_header : Header.h; *)
     buffer_id: uint32;
     in_port: Port.t;
-    actions: Flow.action array;
+    actions: Flow.action list;
     data : Bitstring.t;
   }
 
-  let get_len = Header.get_len + 8
+  let packet_out_of_bitstring bits = 
+      bitmatch bits with
+      | {buffer_id:32; in_port:16; action_len:16;
+      actions:(action_len*8):bitstring; bits:-1:bitstring} ->
+          {buffer_id; in_port=(Port.port_of_int in_port);
+          actions=(Flow.actions_of_bitstring actions); data=bits;} 
+      |  { _ } -> raise (Unparsable ("packet_out_of_bitstring", bits))
+
+  let get_len  = 8
   let create ?(xid = (Int32.of_int 0)) ?(buffer_id =( Int32.of_int (-1) )) 
-      ?(actions = [| |] ) 
+      ?(actions = [] ) 
       ?(data=Bitstring.empty_bitstring) ~in_port () =
-    let size = ref (get_len + ((Bitstring.bitstring_length data) / 8)) in 
-    (Array.iter (fun a -> size:= !size + (Flow.len_of_action a) ) actions);
-    {of_header=(Header.(create PACKET_OUT (!size) xid)); buffer_id; in_port; 
+(*     let size = ref (get_len + ((Bitstring.bitstring_length data) / 8)) in  *)
+(*     (List.iter (fun a -> size:= !size + (Flow.len_of_action a) ) actions); *)
+(*     {of_header=(Header.(create PACKET_OUT (!size) xid));  *)
+    {buffer_id; in_port; 
      actions; data;} 
 
   let packet_out_to_bitstring m =
-    let action_len = ref (0) in
-    (Array.iter (fun a -> action_len := !action_len + (Flow.len_of_action a)) 
+    let action_len = ref (Header.get_len + 8) in
+    (List.iter (fun a -> action_len := (!action_len) + (Flow.len_of_action a)) 
        m.actions);
-    let packet = ( 
-      [(Header.build_h m.of_header); 
-       (BITSTRING{m.buffer_id:32; 
-                  (Port.int_of_port m.in_port):16; 
-                  (!action_len):16})
-      ] @ (
-        Array.to_list (Array.map (fun a -> (Flow.action_to_bitstring a)) 
-                         m.actions)
-      ) @ [m.data] ) 
+       let of_header=(Header.(create PACKET_OUT (!action_len) 0l)) in 
+       let packet = ( 
+           [(BITSTRING{(Header.build_h of_header):(Header.get_len*8):bitstring;
+               m.buffer_id:32; (Port.int_of_port m.in_port):16; 
+           (!action_len):16})
+      ] @ (((
+          List.map (fun a -> (Flow.action_to_bitstring a)) 
+          m.actions)
+      ) @ [m.data])  )
     in 
     Bitstring.concat packet
 end
@@ -1700,7 +1766,7 @@ type t =
   | Flow_removed of Header.h  * Flow_removed.t
   | Port_status of Header.h  * Port.status
 
-  | Packet_out of Header.h  * Packet_out.t * Bitstring.t
+  | Packet_out of Header.h  * Packet_out.t (* Bitstring.t *)
   | Flow_mod of Header.h  * Flow_mod.t
   | Port_mod of Header.h  * Port_mod.t
 
@@ -1733,6 +1799,7 @@ let parse h bits =
     | PORT_STATUS -> Port_status(h, (Port.status_of_bitstring bits)) 
     | FLOW_REMOVED -> Flow_removed(h, (Flow_removed.flow_removed_of_bitstring bits))
 (*     | FLOW_MOD -> raise (Unparsed ("GET_CONFIG_RESP", bits)) *)
+    | PACKET_OUT -> Packet_out (h, (Packet_out.packet_out_of_bitstring bits) ) 
     | FLOW_MOD -> Flow_mod(h, (Flow_mod.flow_mod_of_bitstring h bits)) 
     | STATS_REQ -> Stats_req(h, (Stats.parse_stats_req bits))
     | STATS_RESP -> Stats_resp (h, (Stats.parse_stats_resp bits))

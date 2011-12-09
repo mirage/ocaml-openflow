@@ -350,7 +350,7 @@ module OP :
       end
     module Packet_in :
       sig
-        type reason = Ofpacket.Packet_in.reason = No_match | Action
+        type reason = Ofpacket.Packet_in.reason = NO_MATCH | ACTION
         val reason_of_int : int -> reason
         val int_of_reason : reason -> int
         val string_of_reason : reason -> string
@@ -363,22 +363,24 @@ module OP :
         }
         val parse_packet_in : string * int * int -> t
         val string_of_packet_in : t -> string
+        val bitstring_of_pkt_in : port:Port.t -> reason:reason -> ?buffer_id:uint32
+        -> ?xid:uint32 -> bits:Bitstring.t -> unit -> Bitstring.t
       end
     module Packet_out :
       sig
         type t =
           Ofpacket.Packet_out.t = {
-          of_header : Header.h;
+(*           of_header : Header.h; *)
           buffer_id : uint32;
           in_port : Port.t;
-          actions : Flow.action array;
+          actions : Flow.action list;
           data : Bitstring.t;
         }
         val get_len : int
         val create :
           ?xid:uint32 ->
           ?buffer_id:uint32 ->
-          ?actions:Flow.action array ->
+              ?actions:Flow.action list ->
           ?data:Bitstring.bitstring -> in_port:Port.t -> unit -> t
         val packet_out_to_bitstring : t -> Bitstring.bitstring
       end
@@ -623,7 +625,7 @@ module OP :
       | Packet_in of Header.h * Packet_in.t
       | Flow_removed of Header.h * Flow_removed.t
       | Port_status of Header.h * Port.status
-      | Packet_out of Header.h * Packet_out.t * Bitstring.t
+      | Packet_out of Header.h * Packet_out.t (* Bitstring.t *)
       | Flow_mod of Header.h * Flow_mod.t
       | Port_mod of Header.h * Port_mod.t
       | Stats_req of Header.h * Stats.req
