@@ -142,7 +142,6 @@ module Switch = struct
     counter: Entry.port_counter;
     (* device: device; *)
     (* port_id: (OS.Netif.id, int) Hashtbl.t; *)
-    
   }
 
   type stats = {
@@ -158,7 +157,7 @@ module Switch = struct
 
       type t = {
         (* Mapping Netif objects to ports *)
-        mutable ports: (OS.Netif.id, port ref) Hashtbl.t;
+          mutable ports: (OS.Netif.id, port ref) Hashtbl.t;
 
         (* Mapping port ids to port numbers *)
         mutable int_ports: (int, port ref) Hashtbl.t;
@@ -197,6 +196,11 @@ module Switch = struct
                    if Hashtbl.mem st.int_ports port then(
                        let out_p = (!( Hashtbl.find st.int_ports port))  in
                        Net.Manager.send_raw out_p.mgr out_p.port_name [frame];
+                       out_p.counter.Entry.tx_packets <- Int64.add
+                       out_p.counter.Entry.tx_packets 1L;
+                       out_p.counter.Entry.tx_bytes <- Int64.add
+                       out_p.counter.Entry.tx_bytes
+                       (Int64.of_int ((Bitstring.bitstring_length frame)/8));
                        return ())
                    else
                     return (Printf.printf "Port %d not registered \n" port)
@@ -207,7 +211,12 @@ module Switch = struct
                            (Printf.printf "Sending packet on %d %d %s bits %d\n%!" port_id
                            (OP.Port.int_of_port in_port) (!port).port_name
                            (Bitstring.bitstring_length frame);
-                           resolve(Net.Manager.send_raw (!port).mgr (!port).port_name
+                           (!port).counter.Entry.tx_packets <- Int64.add
+                           (!port).counter.Entry.tx_packets 1L;
+                           (!port).counter.Entry.tx_bytes <- Int64.add
+                           (!port).counter.Entry.tx_bytes
+                           (Int64.of_int ((Bitstring.bitstring_length frame)/8));                           
+                       resolve(Net.Manager.send_raw (!port).mgr (!port).port_name
                            [frame]))
                    else
                        (Printf.printf "Not sending packet on %d %d\n%!" port_id
@@ -218,7 +227,12 @@ module Switch = struct
                    let port = (OP.Port.int_of_port in_port) in 
                    if Hashtbl.mem st.int_ports port then
                        let out_p = (!(Hashtbl.find st.int_ports port))  in
-                       (Net.Manager.send_raw out_p.mgr out_p.port_name [frame];
+                           out_p.counter.Entry.tx_packets <- Int64.add
+                           out_p.counter.Entry.tx_packets 1L;
+                           out_p.counter.Entry.tx_bytes <- Int64.add
+                           out_p.counter.Entry.tx_bytes
+                           (Int64.of_int ((Bitstring.bitstring_length frame)/8)); 
+                           (Net.Manager.send_raw out_p.mgr out_p.port_name [frame];
                        return ())
                        else
                            return (Printf.printf "Port %d not registered \n" port)
@@ -239,6 +253,9 @@ module Switch = struct
         set_frame_bits frame start (len-1) bits
 
 
+        (* Assumwe that action are valid. I will not get a flow that sets an ip
+         * address unless it defines that the ethType is ip. Need to enforce
+         * these rule in the parsing process of the flow_mod packets *)
    let rec apply_of_actions st in_port actions frame = 
     match actions with 
       | [] -> return ()
@@ -257,8 +274,29 @@ module Switch = struct
               * eaddr); *)
               set_frame_bits frame 0 48 (OP.bitstring_of_eaddr eaddr);
               apply_of_actions st in_port actions frame
+          | OP.Flow.Set_nw_tos(tos) ->
+                   set_frame_bits frame 160 8 (BITSTRING{(int_of_char tos):8}); 
+                   apply_of_actions st in_port actions frame           
+          | OP.Flow.Set_nw_src(ip) ->
+                  set_frame_bits frame 208 32 (BITSTRING{ip:32}); 
+                  apply_of_actions st in_port actions frame
+          | OP.Flow.Set_nw_dst(ip) ->
+                  set_frame_bits frame 240 32 (BITSTRING{ip:32}); 
+                  apply_of_actions st in_port actions frame
+          | OP.Flow.Set_tp_src(port) ->
+                (bitmatch frame with 
+                  {ip_len:4:offset(116)} -> 
+                      set_frame_bits frame (14*8 + (ip_len*32)) 16 (BITSTRING{port:16});
+                      apply_of_actions st in_port actions frame)
+          | OP.Flow.Set_tp_dst(port) ->
+                (bitmatch frame with 
+                  {ip_len:4:offset(116)} ->
+                      set_frame_bits frame (14*8 + (ip_len*32) + 16) 16 (BITSTRING{port:16});
+                      apply_of_actions st in_port actions frame
+                      )
           | _ ->
-              (Printf.printf "Unsupported action\n");
+              (Printf.printf "Unsupported action %s\n" (OP.Flow.string_of_action
+              head));
               apply_of_actions st in_port actions frame
 
    let errornum = ref 1 
@@ -269,6 +307,7 @@ module Switch = struct
             let entry = (Hashtbl.find st.table.Table.cache of_match) in
                 Found(entry) 
         ) else (
+        (* Check the wilcard card table *)
             let ret_lst = ref [] in 
             let lookup_flow flow entry =
                 if (OP.Match.flow_match_compare of_match flow
@@ -289,9 +328,6 @@ module Switch = struct
                     Found(flow_ref)
                 )
         )
-
-        (* Check the wilcard card table *)
- 
 end
 
 let st = Switch.(
@@ -310,6 +346,27 @@ let add_flow tuple actions =
   else
     Hashtbl.add st.Switch.table.Table.entries tuple (ref Entry.({actions; counters=(init_flow_counters ())}))
 
+let del_flow tuple out_port =
+    Printf.printf "delete flow %s\n%!" (OP.Match.match_to_string tuple);
+   
+(*     let remove_match = ref []  in  *)
+    let remove_flow_ref = ref [] in  
+    (* Delete all matching entries from the flow table*)
+    Hashtbl.iter (fun of_match flow -> 
+        if (OP.Match.flow_match_compare of_match tuple
+        tuple.OP.Match.wildcards) then ( 
+            Hashtbl.remove st.Switch.table.Table.entries of_match; 
+            (remove_flow_ref := ((!remove_flow_ref) @ [flow])))
+        else ()) st.Switch.table.Table.entries;
+        
+        (* Delete all entries from cache *)
+        Hashtbl.iter (fun of_match flow -> 
+            if(List.mem flow (!remove_flow_ref) ) then (
+                Hashtbl.remove st.Switch.table.Table.cache of_match)
+            ) st.Switch.table.Table.cache
+
+(*     Hashtbl.add st.Switch.table.Table.entries tuple (ref Entry.({actions;
+ *     counters=(init_flow_counters ())})) *)
 
 let process_frame intf_name frame = 
   (* roughly,
@@ -335,13 +392,16 @@ let process_frame intf_name frame =
             (* Update missed counter *)
             st.Switch.table.Table.missed <- (Int64.add
             st.Switch.table.Table.missed 1L);
-(*
+
             let addr = "\x11\x11\x11\x11\x11\x11" in 
             add_flow tupple [(OP.Flow.Set_dl_src (addr));
             (OP.Flow.Set_dl_dst (addr));
+            (OP.Flow.Set_nw_dst (0xa0a0a0al));
+            (OP.Flow.Set_tp_src (1010));
+            (OP.Flow.Set_tp_dst (1010));
             (OP.Flow.Output ((OP.Port.port_of_int 2),  2000)) ; ];
 
-*)
+
             let pkt_in = (OP.Packet_in.bitstring_of_pkt_in ~port:in_port
             ~reason:OP.Packet_in.NO_MATCH ~bits:frame ()) in 
             return (List.iter (fun t -> (Channel.write_bitstring t pkt_in) >>
@@ -545,9 +605,16 @@ let process_of_packet state (remote_addr, remote_port) ofp t bits =
             (Printf.printf "need to insert rule %s actions %s" 
                (OP.Match.match_to_string of_match) 
                (OP.Flow.string_of_actions fm.OP.Flow_mod.actions));
-            add_flow of_match of_actions; 
-             (* if(Hashtbl.mem of_match st.Switch. ) *)
-           return ()
+               (match (fm.OP.Flow_mod.command) with
+               | OP.Flow_mod.ADD 
+               | OP.Flow_mod.MODIFY 
+               | OP.Flow_mod.MODIFY_STRICT -> 
+                       (add_flow of_match of_actions)
+               | OP.Flow_mod.DELETE 
+               | OP.Flow_mod.DELETE_STRICT ->
+                       (del_flow of_match fm.OP.Flow_mod.out_port)
+                       );
+                       return ()
       | _ -> 
             Channel.write_bitstring t 
             (OP.bitstring_of_error OP.REQUEST_BAD_TYPE bits  1l) >>
