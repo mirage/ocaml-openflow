@@ -299,19 +299,20 @@ module OP :
       sig
         type action =
           Ofpacket.Flow.action =
-            Output of (Port.t * int)
-          | SET_VLAN_VID
-          | SET_VLAN_PCP
-          | STRIP_VLAN
-          | Set_dl_src of eaddr
-          | Set_dl_dst of eaddr
-          | SET_NW_SRC
-          | SET_NW_DST
-          | SET_NW_TOS
-          | SET_TP_SRC
-          | SET_TP_DST
-          | ENQUEUE
-          | VENDOR_ACT
+              Output of (Port.t * int)
+            | Set_vlan_vid of int 
+            | Set_vlan_pcp of int 
+            | STRIP_VLAN 
+            | Set_dl_src of eaddr
+            | Set_dl_dst of eaddr
+            | Set_nw_src of ipv4 
+            | Set_nw_dst of ipv4
+            | Set_nw_tos of byte 
+            | Set_tp_src of int16 
+            | Set_tp_dst of int16
+            | Enqueue of Port.t * uint32
+            | VENDOR_ACT 
+
         val action_of_int : int -> action
         val int_of_action : action -> int
         val string_of_action : action -> string
@@ -346,7 +347,7 @@ module OP :
       end
     module Packet_in :
       sig
-        type reason = Ofpacket.Packet_in.reason = No_match | Action
+        type reason = Ofpacket.Packet_in.reason = NO_MATCH | ACTION
         val reason_of_int : int -> reason
         val int_of_reason : reason -> int
         val string_of_reason : reason -> string
@@ -359,22 +360,24 @@ module OP :
         }
         val parse_packet_in : string * int * int -> t
         val string_of_packet_in : t -> string
+        val bitstring_of_pkt_in : port:Port.t -> reason:reason -> ?buffer_id:uint32
+        -> ?xid:uint32 -> bits:Bitstring.t -> unit -> Bitstring.t
       end
     module Packet_out :
       sig
         type t =
           Ofpacket.Packet_out.t = {
-          of_header : Header.h;
+(*           of_header : Header.h; *)
           buffer_id : uint32;
           in_port : Port.t;
-          actions : Flow.action array;
+          actions : Flow.action list;
           data : Bitstring.t;
         }
         val get_len : int
         val create :
           ?xid:uint32 ->
           ?buffer_id:uint32 ->
-          ?actions:Flow.action array ->
+          ?actions:Flow.action list ->
           ?data:Bitstring.bitstring -> in_port:Port.t -> unit -> t
         val packet_out_to_bitstring : t -> Bitstring.bitstring
       end
@@ -599,8 +602,9 @@ module OP :
       | QUEUE_OP_BAD_QUEUE
       | QUEUE_OP_EPERM
     val error_code_of_int : int -> error_code
-    val int_of_error_code : error_code -> int
+    val int_of_error_code : error_code -> uint32
     val string_of_error_code : error_code -> string
+    val bitstring_of_error : error_code -> Bitstring.t -> uint32 -> Bitstring.t
     val build_features_req : uint32 -> Bitstring.bitstring
     val build_echo_resp :
       Header.h -> Bitstring.bitstring -> Bitstring.bitstring
@@ -619,7 +623,7 @@ module OP :
       | Packet_in of Header.h * Packet_in.t
       | Flow_removed of Header.h * Flow_removed.t
       | Port_status of Header.h * Port.status
-      | Packet_out of Header.h * Packet_out.t * Bitstring.t
+      | Packet_out of Header.h * Packet_out.t (* Bitstring.t *)
       | Flow_mod of Header.h * Flow_mod.t
       | Port_mod of Header.h * Port_mod.t
       | Stats_req of Header.h * Stats.req
@@ -646,29 +650,36 @@ module Entry :
       n_matches : uint64;
     }
     type flow_counter = {
-      n_packets : uint64;
-      n_bytes : uint64;
-      secs : uint32;
-      nsecs : uint32;
+        mutable n_packets: uint64;
+        mutable   n_bytes: uint64;
+
+        mutable priority: uint16;
+        mutable  cookie: int64;
+        mutable insert_secs: uint32;
+        mutable insert_nsecs: uint32;
+        mutable last_secs: uint32;
+        mutable last_nsec: uint32;
+        mutable idle_timeout: int;
+        mutable hard_timeout:int;
     }
     type port_counter = {
-      rx_packets : uint64;
-      tx_packets : uint64;
-      rx_bytes : uint64;
-      tx_bytes : uint64;
-      rx_drops : uint64;
-      tx_drops : uint64;
-      rx_errors : uint64;
-      tx_errors : uint64;
-      rx_alignment_errors : uint64;
-      rx_overrun_errors : uint64;
-      rx_crc_errors : uint64;
-      n_collisions : uint64;
+      mutable rx_packets : uint64;
+      mutable tx_packets : uint64;
+      mutable rx_bytes : uint64;
+      mutable tx_bytes : uint64;
+      mutable rx_drops : uint64;
+      mutable tx_drops : uint64;
+      mutable rx_errors : uint64;
+      mutable tx_errors : uint64;
+      mutable rx_alignment_errors : uint64;
+      mutable rx_overrun_errors : uint64;
+      mutable rx_crc_errors : uint64;
+      mutable n_collisions : uint64;
     }
     type queue_counter = {
-      tx_packets : uint64;
-      tx_bytes : uint64;
-      tx_overrun_errors : uint64;
+      tx_queue_packets : uint64;
+      tx_queue_bytes : uint64;
+      tx_queue_overrun_errors : uint64;
     }
     type counters = {
       per_table : table_counter list;
@@ -676,20 +687,6 @@ module Entry :
       per_port : port_counter list;
       per_queue : queue_counter list;
     }
-(*    type action =
-        FORWARD of OP.Port.t
-      | DROP
-      | ENQUEUE of OP.Queue.h
-      | SET_VLAN_ID of uint16
-      | SET_VLAN_PRIO of uint16
-      | STRIP_VLAN_HDR
-      | Set_dl_src of eaddr
-      | Set_dl_dst of eaddr
-      | SET_NW_SRC of Net.Nettypes.ipv4_addr
-      | SET_NW_DST of Net.Nettypes.ipv4_addr
-      | SET_NW_TOS of byte
-      | SET_TP_SRC of port
-      | SET_TP_DST of port*)
     type t = {
       (* fields : OP.Match.t list; *)
       counters : flow_counter;
@@ -698,11 +695,18 @@ module Entry :
   end
 module Table :
   sig type t = { tid : cookie; 
-                 mutable entries : (OP.Match.t, Entry.t) Hashtbl.t; } end
+                 mutable entries : (OP.Match.t, Entry.t ref) Hashtbl.t; 
+                mutable cache : (OP.Match.t, Entry.t ref) Hashtbl.t;
+                 mutable lookup: uint64; mutable missed: uint64; } end
 module Switch :
   sig
     (* type port = { details : OP.Port.phy; device : device; } *)
-    type port = { port_id: int; port_name : string;mgr: Net.Manager.t; }
+    type port = { 
+        port_id: int; 
+        port_name:string;
+        mgr: Net.Manager.t; 
+        counter: Entry.port_counter;
+    }
     type stats = {
       mutable n_frags : uint64;
       mutable n_hits : uint64;
@@ -710,15 +714,21 @@ module Switch :
       mutable n_lost : uint64;
     }
     type t = {
-      mutable ports : (OS.Netif.id, port) Hashtbl.t; (* port list; *)
-      mutable int_ports : (int, port) Hashtbl.t; 
+        (* Pointer from netif details to specific port *)
+      mutable ports : (OS.Netif.id, port ref) Hashtbl.t;
+      (* Mapping of port id to a specific netif object.
+       * Need to do that so that we don't replicate the port structure*)
+      mutable int_ports : (int, port ref) Hashtbl.t; 
       mutable port_feat : OP.Port.phy list;
       mutable controllers :  (Net.Channel.t) list; 
       table : Table.t;
       stats : stats;
       p_sflow : uint32;
+      mutable errornum : uint32;
+      mutable portnum : int;
     }
-    val apply_of_actions: t -> OP.Match.t -> OP.Flow.action list -> Bitstring.t -> unit Lwt.t
+    val apply_of_actions: t -> OP.Port.t -> OP.Flow.action list -> Bitstring.t -> unit Lwt.t
+    val bitstring_of_port: port -> Bitstring.t
   end
 val process_frame : string -> string * int * int -> unit Lwt.t
 val process_openflow : 'a -> unit Lwt.t

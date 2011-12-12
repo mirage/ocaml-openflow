@@ -259,6 +259,7 @@ module Match :
     }
     val match_to_bitstring : t -> Bitstring.bitstring
     val bitstring_to_match : string * int * int -> t
+    val flow_match_compare : t -> t -> Wildcards.t -> bool
     val get_len : int
     val get_dl_src : t -> eaddr
     val get_dl_dst : t -> eaddr
@@ -282,24 +283,28 @@ module Flow :
   sig
     type action =
         Output of (Port.t * int)
-      | SET_VLAN_VID
-      | SET_VLAN_PCP
-      | STRIP_VLAN
-      | Set_dl_src of eaddr
-      | Set_dl_dst of eaddr
-      | SET_NW_SRC
-      | SET_NW_DST
-      | SET_NW_TOS
-      | SET_TP_SRC
-      | SET_TP_DST
-      | ENQUEUE
-      | VENDOR_ACT
+    | Set_vlan_vid of int 
+    | Set_vlan_pcp of int 
+    | STRIP_VLAN 
+    | Set_dl_src of eaddr
+    | Set_dl_dst of eaddr
+    | Set_nw_src of ipv4 
+    | Set_nw_dst of ipv4
+    | Set_nw_tos of byte 
+    | Set_tp_src of int16 
+    | Set_tp_dst of int16
+    | Enqueue of Port.t * uint32
+    | VENDOR_ACT 
+    
     val action_of_int : int -> action
     val int_of_action : action -> int
     val string_of_action : action -> string
     val string_of_actions : action list -> string
     val len_of_action : action -> int
     val action_to_bitstring : action -> Bitstring.bitstring
+    val bitstring_of_actions : action list -> Bitstring.bitstring
+    val action_of_bitstring: Bitstring.t -> action
+    val actions_of_bitstring: Bitstring.t -> action list
     type reason = IDLE_TIMEOUT | HARD_TIMEOUT | DELETE
     val reason_of_int : int -> reason
     val int_of_reason : reason -> int
@@ -323,7 +328,7 @@ module Flow :
   end
 module Packet_in :
   sig
-    type reason = No_match | Action
+    type reason = NO_MATCH | ACTION
     val reason_of_int : int -> reason
     val int_of_reason : reason -> int
     val string_of_reason : reason -> string
@@ -335,21 +340,24 @@ module Packet_in :
     }
     val parse_packet_in : string * int * int -> t
     val string_of_packet_in : t -> string
+    val bitstring_of_pkt_in : port:Port.t -> reason:reason -> ?buffer_id:uint32
+    -> ?xid:uint32 -> bits:Bitstring.t -> unit -> Bitstring.t
   end
 module Packet_out :
   sig
     type t = {
-      of_header : Header.h;
+(*       of_header : Header.h; *)
       buffer_id : uint32;
       in_port : Port.t;
-      actions : Flow.action array;
+      actions : Flow.action list;
       data : Bitstring.t;
     }
+    val packet_out_of_bitstring : Bitstring.t -> t
     val get_len : int
     val create :
       ?xid:uint32 ->
       ?buffer_id:uint32 ->
-      ?actions:Flow.action array ->
+      ?actions:Flow.action list ->
       ?data:Bitstring.bitstring -> in_port:Port.t -> unit -> t
     val packet_out_to_bitstring : t -> Bitstring.bitstring
   end
@@ -423,6 +431,7 @@ module Stats :
     val table_id_of_int : int -> table_id
     val int_of_table_id : table_id -> int
     val string_of_table_id : table_id -> string
+    
     type aggregate = {
       packet_count : uint64;
       byte_count : uint64;
@@ -489,7 +498,9 @@ module Stats :
       | Port_resp of resp_hdr * Port.stats list
       | Queue_resp of resp_hdr * queue list
       | Vendor_resp of resp_hdr
+    val resp_get_len : resp -> int
     val parse_table_stats_reply : string * int * int -> table list
+    val bitstring_of_stats_resp : resp -> Bitstring.t 
     val string_of_table_stats_reply : table list -> string
     val parse_stats_resp : string * int * int -> resp
     val parse_stats_req : string * int * int -> req
@@ -529,8 +540,9 @@ type error_code =
   | QUEUE_OP_BAD_QUEUE
   | QUEUE_OP_EPERM
 val error_code_of_int : int -> error_code
-val int_of_error_code : error_code -> int
+val int_of_error_code : error_code -> uint32
 val string_of_error_code : error_code -> string
+val bitstring_of_error : error_code -> Bitstring.t -> uint32 -> Bitstring.t
 val build_features_req : uint32 -> Bitstring.bitstring
 val build_echo_resp : Header.h -> Bitstring.bitstring -> Bitstring.bitstring
 type t =
@@ -547,7 +559,7 @@ type t =
   | Packet_in of Header.h * Packet_in.t
   | Flow_removed of Header.h * Flow_removed.t
   | Port_status of Header.h * Port.status
-  | Packet_out of Header.h * Packet_out.t * Bitstring.t
+  | Packet_out of Header.h * Packet_out.t (* Bitstring.t *)
   | Flow_mod of Header.h * Flow_mod.t
   | Port_mod of Header.h * Port_mod.t
   | Stats_req of Header.h * Stats.req

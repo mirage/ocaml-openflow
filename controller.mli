@@ -304,18 +304,19 @@ module OP :
         type action =
           Ofpacket.Flow.action =
             Output of (Port.t * int)
-          | SET_VLAN_VID
-          | SET_VLAN_PCP
-          | STRIP_VLAN
-          | Set_dl_src of eaddr
-          | Set_dl_dst of eaddr
-          | SET_NW_SRC
-          | SET_NW_DST
-          | SET_NW_TOS
-          | SET_TP_SRC
-          | SET_TP_DST
-          | ENQUEUE
-          | VENDOR_ACT
+            | Set_vlan_vid of int 
+            | Set_vlan_pcp of int 
+            | STRIP_VLAN 
+            | Set_dl_src of eaddr
+            | Set_dl_dst of eaddr
+            | Set_nw_src of ipv4 
+            | Set_nw_dst of ipv4
+            | Set_nw_tos of byte 
+            | Set_tp_src of int16 
+            | Set_tp_dst of int16
+            | Enqueue of Port.t * uint32
+            | VENDOR_ACT 
+
         val action_of_int : int -> action
         val int_of_action : action -> int
         val string_of_action : action -> string
@@ -349,7 +350,7 @@ module OP :
       end
     module Packet_in :
       sig
-        type reason = Ofpacket.Packet_in.reason = No_match | Action
+        type reason = Ofpacket.Packet_in.reason = NO_MATCH | ACTION
         val reason_of_int : int -> reason
         val int_of_reason : reason -> int
         val string_of_reason : reason -> string
@@ -362,22 +363,24 @@ module OP :
         }
         val parse_packet_in : string * int * int -> t
         val string_of_packet_in : t -> string
+        val bitstring_of_pkt_in : port:Port.t -> reason:reason -> ?buffer_id:uint32
+        -> ?xid:uint32 -> bits:Bitstring.t -> unit -> Bitstring.t
       end
     module Packet_out :
       sig
         type t =
           Ofpacket.Packet_out.t = {
-          of_header : Header.h;
+(*           of_header : Header.h; *)
           buffer_id : uint32;
           in_port : Port.t;
-          actions : Flow.action array;
+          actions : Flow.action list;
           data : Bitstring.t;
         }
         val get_len : int
         val create :
           ?xid:uint32 ->
           ?buffer_id:uint32 ->
-          ?actions:Flow.action array ->
+              ?actions:Flow.action list ->
           ?data:Bitstring.bitstring -> in_port:Port.t -> unit -> t
         val packet_out_to_bitstring : t -> Bitstring.bitstring
       end
@@ -602,7 +605,7 @@ module OP :
       | QUEUE_OP_BAD_QUEUE
       | QUEUE_OP_EPERM
     val error_code_of_int : int -> error_code
-    val int_of_error_code : error_code -> int
+    val int_of_error_code : error_code -> uint32
     val string_of_error_code : error_code -> string
     val build_features_req : uint32 -> Bitstring.bitstring
     val build_echo_resp :
@@ -622,7 +625,7 @@ module OP :
       | Packet_in of Header.h * Packet_in.t
       | Flow_removed of Header.h * Flow_removed.t
       | Port_status of Header.h * Port.status
-      | Packet_out of Header.h * Packet_out.t * Bitstring.t
+      | Packet_out of Header.h * Packet_out.t (* Bitstring.t *)
       | Flow_mod of Header.h * Flow_mod.t
       | Port_mod of Header.h * Port_mod.t
       | Stats_req of Header.h * Stats.req
