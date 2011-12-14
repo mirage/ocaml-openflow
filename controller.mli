@@ -666,30 +666,33 @@ module Event :
       | Port_status of OP.Port.reason * OP.Port.phy * OP.datapath_id
     val string_of_event : e -> string
   end
+
+    
+type of_socket  = {ch : Net.Channel.t; mutable buf : Bitstring.t;}
 type endhost = { ip : Net.Nettypes.ipv4_addr; port : int; }
 type state = {
-  mutable dp_db : (OP.datapath_id, Net.Channel.t) Hashtbl.t;
+  mutable dp_db : (OP.datapath_id, of_socket) Hashtbl.t;
   mutable channel_dp : (endhost, OP.datapath_id) Hashtbl.t;
   mutable datapath_join_cb :
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable datapath_leave_cb :
-    (state -> OP.datapath_id -> Event.e -> unit) list;
-  mutable packet_in_cb : (state -> OP.datapath_id -> Event.e -> unit) list;
-  mutable flow_removed_cb : (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
+  mutable packet_in_cb : (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
+  mutable flow_removed_cb : (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable flow_stats_reply_cb :
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable aggr_flow_stats_reply_cb :
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable desc_stats_reply_cb :
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable port_stats_reply_cb :
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable table_stats_reply_cb :
-    (state -> OP.datapath_id -> Event.e -> unit) list;
-  mutable port_status_cb : (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
+  mutable port_status_cb : (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
 }
 val register_cb :
-  state -> Event.t -> (state -> OP.datapath_id -> Event.e -> unit) -> unit
+  state -> Event.t -> (state -> OP.datapath_id -> Event.e -> unit  Lwt.t) -> unit
 val process_of_packet :
   state ->
   Net.Nettypes.ipv4_addr * int -> OP.t -> Net.Channel.t -> unit Lwt.t
@@ -700,3 +703,4 @@ val mem_dbg : string -> unit
 val listen :
   Net.Manager.t ->
   Net.Nettypes.ipv4_src -> (state -> 'a) -> unit Lwt.t
+val read_cache_data : Net.Channel.t -> Bitstring.t ref -> int -> Bitstring.t Lwt.t 

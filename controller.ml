@@ -15,8 +15,10 @@
  *)
 
 open Lwt
+open Lwt_list
 open Net
-  
+open Printexc 
+
 let sp = Printf.sprintf
 let pr = Printf.printf
 let ep = Printf.eprintf
@@ -90,30 +92,35 @@ type endhost = {
   port: int;
 }
 
+type of_socket  = {
+    ch : Channel.t;
+    mutable buf : Bitstring.t;
+}
+
 type state = {
-  mutable dp_db: (OP.datapath_id, Channel.t) Hashtbl.t;
+  mutable dp_db: (OP.datapath_id, of_socket) Hashtbl.t;
   mutable channel_dp: (endhost, OP.datapath_id) Hashtbl.t;
 
   mutable datapath_join_cb: 
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable datapath_leave_cb:
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable packet_in_cb:
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable flow_removed_cb:
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable flow_stats_reply_cb:
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable aggr_flow_stats_reply_cb:
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable desc_stats_reply_cb:
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable port_stats_reply_cb:
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable table_stats_reply_cb:
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable port_status_cb:
-    (state -> OP.datapath_id -> Event.e -> unit) list;
+    (state -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
 }
 
 let register_cb controller e cb =
@@ -172,10 +179,11 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
             let dpid = sfs.Switch.datapath_id in
             let evt = Event.Datapath_join dpid in
             if not (Hashtbl.mem state.dp_db dpid) then (
-              Hashtbl.add state.dp_db dpid t;
+                Hashtbl.add state.dp_db dpid {ch=t;
+                buf=Bitstring.empty_bitstring;};
               Hashtbl.add state.channel_dp ep dpid
             );
-            List.iter (fun cb -> cb state dpid evt) state.datapath_join_cb;
+            List.iter (fun cb -> resolve(cb state dpid evt)) state.datapath_join_cb;
             return ()
         )
 
@@ -188,8 +196,9 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
               p.Packet_in.in_port, p.Packet_in.buffer_id,
               p.Packet_in.data, dpid) 
             in
-            List.iter (fun cb -> cb state dpid evt) state.packet_in_cb;
-            return () 
+             iter_s (fun cb -> cb state dpid evt)
+                     state.packet_in_cb
+(*             return ()  *)
         )
         
       | Flow_removed (h, p)
@@ -202,7 +211,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
               p.Flow_removed.duration_sec, p.Flow_removed.duration_nsec, 
               p.Flow_removed.packet_count, p.Flow_removed.byte_count, dpid)
             in
-            List.iter (fun cb -> cb state dpid evt) state.flow_removed_cb;
+            List.iter (fun cb -> resolve(cb state dpid evt)) state.flow_removed_cb;
             return ()
         )
 
@@ -215,7 +224,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
                  let evt = Event.Flow_stats_reply(
                    h.Header.xid, resp_h.Stats.more_to_follow, flows, dpid) 
                  in
-                 List.iter (fun cb -> cb state dpid evt) 
+                 List.iter (fun cb -> resolve(cb state dpid evt)) 
                    state.flow_stats_reply_cb;
                  return ();
                 )
@@ -226,7 +235,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
                    h.Header.xid, aggr.Stats.packet_count, 
                    aggr.Stats.byte_count, aggr.Stats.flow_count, dpid) 
                  in
-                 List.iter (fun cb -> cb state dpid evt) 
+                 List.iter (fun cb -> resolve(cb state dpid evt)) 
                    state.aggr_flow_stats_reply_cb;
                  return ();
                 )
@@ -238,7 +247,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
                    aggr.Stats.sw_desc, aggr.Stats.serial_num, 
                    aggr.Stats.dp_desc, dpid) 
                  in
-                 List.iter (fun cb -> cb state dpid evt) 
+                 List.iter (fun cb -> resolve(cb state dpid evt)) 
                    state.desc_stats_reply_cb;
                  return ();
                 )
@@ -247,7 +256,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
                 (let dpid = Hashtbl.find state.channel_dp ep in
                  let evt = Event.Port_stats_reply(h.Header.xid, ports, dpid) 
                  in
-                 List.iter (fun cb -> cb state dpid evt) 
+                 List.iter (fun cb -> resolve(cb state dpid evt) )
                    state.port_stats_reply_cb;
                  return ();
                 )
@@ -256,7 +265,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
                 (let dpid = Hashtbl.find state.channel_dp ep in
                  let evt = Event.Table_stats_reply(h.Header.xid, tables, dpid)
                  in
-                 List.iter (fun cb -> cb state dpid evt) 
+                 List.iter (fun cb -> resolve(cb state dpid evt) )
                    state.table_stats_reply_cb;
                  return ();
                 )
@@ -270,7 +279,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
             let dpid = Hashtbl.find state.channel_dp ep in
             let evt = Event.Port_status (st.Port.reason, st.Port.desc, dpid) 
             in
-            List.iter (fun cb -> cb state dpid evt) state.port_status_cb;
+            List.iter (fun cb -> resolve(cb state dpid evt)) state.port_status_cb;
             return () 
         )
 
@@ -279,7 +288,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
 
 let send_of_data controller dpid data = 
   let t = Hashtbl.find controller.dp_db dpid in
-  Channel.write_bitstring t data >> Channel.flush t
+  Channel.write_bitstring t.ch data >> Channel.flush t.ch
 
 let rec rd_data len t = 
   match len with
@@ -297,9 +306,49 @@ let mem_dbg name =
   Printf.printf "blocks %s: l=%d f=%d \n %!" name s.Gc.live_blocks s.Gc.free_blocks
 
 let terminate st = 
-  Hashtbl.iter (fun _ ch -> resolve (Channel.close ch) ) st.dp_db;
+  Hashtbl.iter (fun _ ch -> resolve (Channel.close ch.ch) ) st.dp_db;
   Printf.printf "Terminating controller...\n"
-    
+   
+let get_len_data data_cache len = 
+    bitmatch (!data_cache) with
+    | {ret:len*8:bitstring; buff:-1:bitstring} ->
+            (data_cache := buff; 
+(*          Printf.printf "new data after removal %d len\n%!"
+ *          (Bitstring.bitstring_length (!data_cache)); *)
+         return ret)
+
+
+let read_cache_data t data_cache len = 
+(*      Bitstring.hexdump_bitstring stdout (!data_cache); *)
+     if ((Bitstring.bitstring_length (!data_cache)) < (len*8)) then
+(*     while_lwt (true) do *)
+        lwt buf = (Channel.read_some t) in
+(*
+         Printf.printf "not enough %d bytes for %d bytes, reading %d bytes\n%!" 
+         (Bitstring.bitstring_length (!data_cache)) len
+         (Bitstring.bitstring_length buf) ;
+*)
+         data_cache := (Bitstring.concat [(!data_cache);
+         buf; ]);
+(*          Printf.printf "new data len %d len\n%!" (Bitstring.bitstring_length
+ *          (!data_cache)); *)
+        get_len_data data_cache len
+         (*
+         let ret = Bitstring.takebits (len*8) (!data_cache) in 
+            data_cache := Bitstring.dropbits (len*8) (!data_cache); 
+            return ret
+*)
+     else 
+        get_len_data data_cache len
+(*
+         let ret = Bitstring.takebits (len*8) (!data_cache) in 
+            data_cache := Bitstring.dropbits (len*8) (!data_cache); 
+            return ret 
+*)
+
+let check_data_size req ret = 
+    if(req < ret ) then 
+        Printf.printf "req: %d, rep: %d\n" req ret
 
 let listen mgr loc init =
   start := (OS.Clock.time ());
@@ -321,28 +370,41 @@ let listen mgr loc init =
    init st;    
    let controller (remote_addr, remote_port) t =
     let rs = Nettypes.ipv4_addr_to_string remote_addr in
+    let data_cache = ref (Bitstring.empty_bitstring) in 
     Log.info "OpenFlow Controller" "+ %s:%d" rs remote_port;
     let echo () =
         try_lwt 
-(*         watchdog2(); *)
+        (*         watchdog2(); *)
 (*           mem_dbg "before read"; *)
-          lwt hbuf = Channel.read_some ~len:OP.Header.get_len t in
+(*           lwt hbuf = Channel.read_some ~len:OP.Header.get_len t in *)
+            lwt hbuf = read_cache_data t data_cache (OP.Header.get_len ) in
+(*           Bitstring.hexdump_bitstring stdout hbuf;  *)
+            check_data_size OP.Header.get_len ((Bitstring.bitstring_length hbuf)/8); 
 (*           mem_dbg "init read"; *)
           let ofh  = OP.Header.parse_h hbuf in
 (*           mem_dbg "init parse"; *)
           let dlen = ofh.OP.Header.len - OP.Header.get_len in 
-          lwt dbuf = rd_data dlen t in
+          lwt dbuf = read_cache_data t data_cache dlen in 
+(*           Bitstring.hexdump_bitstring stdout dbuf;  *)
+(*           lwt dbuf = rd_data dlen t in *)
 (*
           mem_dbg "read";
 *)
-          let ofp  = OP.parse ofh dbuf in
+            check_data_size dlen ((Bitstring.bitstring_length dbuf)/8);           
+            let ofp  = OP.parse ofh dbuf in
 (*           mem_dbg "parse"; *)
           lwt () = process_of_packet st (remote_addr, remote_port) ofp t in
 (*           mem_dbg "process"; *)
           return true
         with
           | Nettypes.Closed -> return false;
-          | OP.Unparsed (m, bs) -> cp (sp "# unparsed! m=%s" m); return true
+          | OP.Unparsed(m, bs) 
+          | OP.Unparsable(m, bs) -> cp (sp "# unparsed! m=%s" m);
+          Bitstring.hexdump_bitstring stdout bs; 
+          Printf.printf "exception bits size %d\n%!" (Bitstring.bitstring_length
+          bs); return true
+
+          | Not_found ->  Printf.printf "iNot found\n"; return true
     in
     let continue = ref true in
     while_lwt !continue do

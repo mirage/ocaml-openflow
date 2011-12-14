@@ -1145,7 +1145,8 @@ module Packet_out = struct
      actions; data;} 
 
   let packet_out_to_bitstring m =
-    let action_len = ref (Header.get_len + 8) in
+    let action_len = ref (Header.get_len + 8 + ((Bitstring.bitstring_length
+    m.data)/8)) in
     (List.iter (fun a -> action_len := (!action_len) + (Flow.len_of_action a)) 
        m.actions);
        let of_header=(Header.(create PACKET_OUT (!action_len) 0l)) in 
