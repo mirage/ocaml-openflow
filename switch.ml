@@ -188,8 +188,10 @@ module Switch = struct
             port.counter.Entry.n_collisions:64}
 
       let forward_frame st in_port port frame pkt_size =
+(*
       Printf.printf "Outputing frame to port %s\n" (OP.Port.string_of_port
        port);
+ *)
        if (frame == Bitstring.empty_bitstring) then 
            return ()
        else (
@@ -210,9 +212,12 @@ module Switch = struct
            | OP.Port.Flood |OP.Port.All ->
                    return (Hashtbl.iter (fun port_id port -> 
                        if(port_id != (OP.Port.int_of_port in_port)) then
-                           (Printf.printf "Sending packet on %d %d %s bits %d\n%!" port_id
+                        (
+                           (*
+                            Printf.printf "Sending packet on %d %d %s bits %d\n%!" port_id
                            (OP.Port.int_of_port in_port) (!port).port_name
                            (Bitstring.bitstring_length frame);
+ *)
                            (!port).counter.Entry.tx_packets <- Int64.add
                            (!port).counter.Entry.tx_packets 1L;
                            (!port).counter.Entry.tx_bytes <- Int64.add
@@ -220,9 +225,10 @@ module Switch = struct
                            (Int64.of_int ((Bitstring.bitstring_length frame)/8));                           
                        resolve(Net.Manager.send_raw (!port).mgr (!port).port_name
                            [frame]))
-                   else
-                       (Printf.printf "Not sending packet on %d %d\n%!" port_id
+                   else (
+                       (* Printf.printf "Not sending packet on %d %d\n%!" port_id
                        (OP.Port.int_of_port in_port);
+ *)
                        ())
                        ) st.int_ports)
            | OP.Port.In_port ->
@@ -344,7 +350,7 @@ let st = Switch.(
 let add_flow tuple actions =
     Printf.printf "adding flow %s %s\n%!" (OP.Match.match_to_string tuple) (OP.Flow.string_of_actions actions);
   if (Hashtbl.mem st.Switch.table.Table.entries tuple) then
-    Printf.printf "Tuple already exists" 
+     Printf.printf "Tuple already exists\n%! %s" (OP.Match.match_to_string tuple)  
   else
     Hashtbl.add st.Switch.table.Table.entries tuple (ref Entry.({actions; counters=(init_flow_counters ())}))
 
@@ -391,18 +397,18 @@ let process_frame intf_name frame =
     let entry = (Switch.lookup_flow st tupple) in 
     match entry with 
     | Switch.NOT_FOUND ->
-            (* Update missed counter *)
+            Printf.printf "No netry found for match %s\n%!" (OP.Match.match_to_string tupple);
             st.Switch.table.Table.missed <- (Int64.add
             st.Switch.table.Table.missed 1L);
 
-            let addr = "\x11\x11\x11\x11\x11\x11" in 
+(*            let addr = "\x11\x11\x11\x11\x11\x11" in 
             add_flow tupple [(OP.Flow.Set_dl_src (addr));
             (OP.Flow.Set_dl_dst (addr));
             (OP.Flow.Set_nw_dst (0xa0a0a0al));
             (OP.Flow.Set_tp_src (1010));
             (OP.Flow.Set_tp_dst (1010));
             (OP.Flow.Output ((OP.Port.port_of_int 2),  2000)) ; ];
-
+ *)
 
             let pkt_in = (OP.Packet_in.bitstring_of_pkt_in ~port:in_port
             ~reason:OP.Packet_in.NO_MATCH ~bits:frame ()) in 
@@ -600,13 +606,17 @@ let process_of_packet state (remote_addr, remote_port) ofp t bits =
               (OP.Flow.string_of_actions pkt.OP.Packet_out.actions);
               (Switch.apply_of_actions st pkt.OP.Packet_out.in_port
               pkt.OP.Packet_out.actions pkt.OP.Packet_out.data )
-      | OP.Flow_mod(h,fm) 
-        -> Printf.printf "Flow modification received\n";
+      | OP.Flow_mod(h,fm)  ->
+(*
+        Printf.printf "Flow modification received\n";
+ *)
            let of_match = fm.OP.Flow_mod.of_match in 
            let of_actions = fm.OP.Flow_mod.actions in
-            (Printf.printf "need to insert rule %s actions %s" 
+            
+            (*Printf.printf "need to insert rule %s actions %s\n%!" 
                (OP.Match.match_to_string of_match) 
                (OP.Flow.string_of_actions fm.OP.Flow_mod.actions));
+ *)
                (match (fm.OP.Flow_mod.command) with
                | OP.Flow_mod.ADD 
                | OP.Flow_mod.MODIFY 

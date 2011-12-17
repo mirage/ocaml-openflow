@@ -726,46 +726,6 @@ module Match = struct
     )
 
     (* Check if the flow object is include in flow_def match *)
-  let flow_match_compare flow flow_def wildcard =
-(*       Printf.printf "%s\n%!" (Wildcards.string_of_wildcard wildcard); *)
-(* Printf.printf "in_port:%s,dl_vlan:%s,dl_src:%s,dl_dst:%s,dl_type:%s,\
-        nw_proto:%s,tp_src:%s,tp_dst:%s,nw_src:%s,nw_dst:%s,\
-        dl_vlan_pcp:%s,nw_tos:%s\n%!" 
-       (string_of_bool ((wildcard.Wildcards.in_port)|| (flow.in_port=flow_def.in_port)) )
-       (string_of_bool ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan)) )
-       (string_of_bool ((wildcard.Wildcards.dl_src)  || (flow.dl_src == flow_def.dl_src)) )
-       (string_of_bool ((wildcard.Wildcards.dl_dst)  || (flow.dl_dst == flow_def.dl_dst)) )
-       (string_of_bool ((wildcard.Wildcards.dl_type) || (flow.dl_type== flow_def.dl_type)) )
-       (string_of_bool ((wildcard.Wildcards.nw_proto)|| (flow.nw_proto==flow_def.nw_proto)) )
-       (string_of_bool ((wildcard.Wildcards.tp_src)  || (flow.tp_src == flow_def.tp_dst)) )
-       (string_of_bool ((wildcard.Wildcards.tp_dst)  || (flow.tp_dst == flow_def.tp_src)) )
-       (string_of_bool ((wildcard.Wildcards.nw_src >= '\x20') || 
-          (Int32.shift_right_logical flow.nw_src (int_of_char wildcard.Wildcards.nw_src)) ==
-          (Int32.shift_right_logical flow_def.nw_src (int_of_char wildcard.Wildcards.nw_src))) )
-       (string_of_bool ((wildcard.Wildcards.nw_src >= '\x20') ||
-          (Int32.shift_right_logical flow.nw_dst (int_of_char wildcard.Wildcards.nw_dst)) ==
-          (Int32.shift_right_logical flow_def.nw_dst (int_of_char wildcard.Wildcards.nw_dst))) )
-      (string_of_bool ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos == flow_def.nw_tos)) )
-      (string_of_bool ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp ==
-              flow_def.dl_vlan_pcp));*)
-
-       (((wildcard.Wildcards.in_port)|| ((Port.int_of_port flow.in_port) == (Port.int_of_port flow_def.in_port))) && 
-        ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan)) &&
-      ((wildcard.Wildcards.dl_src)  || (flow.dl_src = flow_def.dl_src)) &&
-      ((wildcard.Wildcards.dl_dst)  || (flow.dl_dst = flow_def.dl_dst)) &&
-      ((wildcard.Wildcards.dl_type) || (flow.dl_type== flow_def.dl_type)) &&
-      ((wildcard.Wildcards.nw_proto)|| (flow.nw_proto==flow_def.nw_proto)) &&
-      ((wildcard.Wildcards.tp_src)  || (flow.tp_src == flow_def.tp_dst)) &&
-      ((wildcard.Wildcards.tp_dst)  || (flow.tp_dst == flow_def.tp_src)) &&
-      ((wildcard.Wildcards.nw_src >= '\x20') ||
-        (Int32.shift_right_logical flow.nw_src (int_of_char wildcard.Wildcards.nw_src)) =
-        (Int32.shift_right_logical flow_def.nw_src (int_of_char wildcard.Wildcards.nw_src))) &&
-      ((wildcard.Wildcards.nw_dst >= '\x20') ||
-        (Int32.shift_right_logical flow.nw_dst (int_of_char wildcard.Wildcards.nw_dst)) =
-        (Int32.shift_right_logical flow_def.nw_dst (int_of_char wildcard.Wildcards.nw_dst))) &&
-      ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos == flow_def.nw_tos)) &&
-      ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp ==
-              flow_def.dl_vlan_pcp))
 
 
   let get_len = 40 (*4+2+6+6+2+1+1+2+1+1+2+4+4+2+2*)
@@ -792,7 +752,7 @@ module Match = struct
       (* TCP *)
       | {dmac:48:string; smac:48:string; 0x0800:16; 4:4; ihl:4; tos:8; 
          _:56; 6:8; _:16; 
-         nw_src:32; nw_dst:32; _:(ihl-5)*32:; tp_src:16; tp_dst:16;
+         nw_src:32; nw_dst:32; _:(ihl-5)*32:bitstring; tp_src:16; tp_dst:16;
          _:-1:bitstring }
         -> { wildcards =Wildcards.exact_match; 
              in_port=in_port;dl_src=smac; dl_dst=dmac; dl_vlan=0xffff;
@@ -801,11 +761,22 @@ module Match = struct
              nw_proto=(char_of_int 6); tp_src=tp_src;
              tp_dst=tp_dst
            }
+      (* ICMP *)
+      | {dmac:48:string; smac:48:string; 0x0800:16; 4:4; ihl:4; tos:8; 
+         _:56; 1:8; _:16; nw_src:32; nw_dst:32; _:(ihl-5)*32:bitstring;
+        tp_src:16:littleendian; _:-1:bitstring}
+        ->  { wildcards =Wildcards.exact_match; 
+             in_port=in_port;dl_src=smac; dl_dst=dmac; dl_vlan=0xffff;
+             dl_vlan_pcp=(char_of_int 0);dl_type=0x0800; nw_src=nw_src; 
+             nw_dst=nw_dst; nw_tos=(char_of_int tos); 
+             nw_proto=(char_of_int 1); tp_src=tp_src;
+             tp_dst=0;
+           }
         
       (* UDP *)
       | {dmac:48:string; smac:48:string; 0x0800:16; 4:4; ihl:4; tos:8; 
          _:56; 17:8; _:16; 
-         nw_src:32; nw_dst:32; _:(ihl-5)*32; tp_src:16; tp_dst:16; 
+         nw_src:32; nw_dst:32; _:(ihl-5)*32:bitstring; tp_src:16; tp_dst:16; 
          _:-1:bitstring } 
         -> { wildcards =Wildcards.exact_match; in_port=in_port;
              dl_src=smac; dl_dst=dmac; dl_vlan=0xffff;
@@ -817,7 +788,7 @@ module Match = struct
       (* IP *)
       | {dmac:48:string; smac:48:string; 0x0800:16; 4:4; ihl:4; tos:8; 
          _:56; nw_proto:8; _:16; 
-         nw_src:32; nw_dst:32; _:(ihl-5)*32:bitstring; _:-1:bitstring } 
+         nw_src:32; nw_dst:32; _:-1:bitstring } 
         -> { wildcards =Wildcards.l3_match; in_port=in_port;dl_src=smac; 
              dl_dst=dmac; dl_vlan=0xffff;
              dl_vlan_pcp=(char_of_int 0);dl_type=0x0800; nw_src=nw_src; 
@@ -859,6 +830,49 @@ module Match = struct
         (Port.string_of_port m.in_port) (eaddr_to_string m.dl_src) 
         (eaddr_to_string m.dl_dst) m.dl_type  
       )
+  let flow_match_compare flow flow_def wildcard =
+(*  Printf.printf "comparing flows %s \n%s\n%s \n%!" (Wildcards.string_of_wildcard wildcard) 
+      (match_to_string flow)  (match_to_string flow_def); 
+    Printf.printf "in_port:%s,dl_vlan:%s,dl_src:%s(%d %d),dl_dst:%s,dl_type:%s,\
+        nw_proto:%s,tp_src:%s(%d %d),tp_dst:%s,nw_src:%s,nw_dst:%s,\
+        dl_vlan_pcp:%s,nw_tos:%s\n%!" 
+       (string_of_bool ((wildcard.Wildcards.in_port)|| (flow.in_port=flow_def.in_port)) )
+       (string_of_bool ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan)) )
+       (string_of_bool ((wildcard.Wildcards.dl_src)  || (flow.dl_src = flow_def.dl_src)) )
+        (String.length flow.dl_src) (String.length flow_def.dl_src)
+       (string_of_bool ((wildcard.Wildcards.dl_dst)  || (flow.dl_dst = flow_def.dl_dst)) )
+       (string_of_bool ((wildcard.Wildcards.dl_type) || (flow.dl_type== flow_def.dl_type)) )
+       (string_of_bool ((wildcard.Wildcards.nw_proto)|| (flow.nw_proto==flow_def.nw_proto)) )
+       (string_of_bool ((wildcard.Wildcards.tp_src)  || (flow.tp_src == flow_def.tp_src)) )
+        flow.tp_src flow_def.tp_src
+       (string_of_bool ((wildcard.Wildcards.tp_dst)  || (flow.tp_dst == flow_def.tp_dst)) )
+       (string_of_bool ((wildcard.Wildcards.nw_src >= '\x20') || 
+          (Int32.shift_right_logical flow.nw_src (int_of_char wildcard.Wildcards.nw_src)) =
+          (Int32.shift_right_logical flow_def.nw_src (int_of_char wildcard.Wildcards.nw_src))) )
+       (string_of_bool ((wildcard.Wildcards.nw_src >= '\x20') ||
+          (Int32.shift_right_logical flow.nw_dst (int_of_char wildcard.Wildcards.nw_dst)) =
+          (Int32.shift_right_logical flow_def.nw_dst (int_of_char wildcard.Wildcards.nw_dst))) )
+      (string_of_bool ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos == flow_def.nw_tos)) )
+      (string_of_bool ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp ==
+              flow_def.dl_vlan_pcp));*)
+
+       (((wildcard.Wildcards.in_port)|| ((Port.int_of_port flow.in_port) == (Port.int_of_port flow_def.in_port))) && 
+        ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan)) &&
+      ((wildcard.Wildcards.dl_src)  || (flow.dl_src = flow_def.dl_src)) &&
+      ((wildcard.Wildcards.dl_dst)  || (flow.dl_dst = flow_def.dl_dst)) &&
+      ((wildcard.Wildcards.dl_type) || (flow.dl_type== flow_def.dl_type)) &&
+      ((wildcard.Wildcards.nw_proto)|| (flow.nw_proto==flow_def.nw_proto)) &&
+      ((wildcard.Wildcards.tp_src)  || (flow.tp_src == flow_def.tp_src)) &&
+      ((wildcard.Wildcards.tp_dst)  || (flow.tp_dst == flow_def.tp_dst)) &&
+      ((wildcard.Wildcards.nw_src >= '\x20') ||
+        (Int32.shift_right_logical flow.nw_src (int_of_char wildcard.Wildcards.nw_src)) =
+        (Int32.shift_right_logical flow_def.nw_src (int_of_char wildcard.Wildcards.nw_src))) &&
+      ((wildcard.Wildcards.nw_dst >= '\x20') ||
+        (Int32.shift_right_logical flow.nw_dst (int_of_char wildcard.Wildcards.nw_dst)) =
+        (Int32.shift_right_logical flow_def.nw_dst (int_of_char wildcard.Wildcards.nw_dst))) &&
+      ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos == flow_def.nw_tos)) &&
+      ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp ==
+              flow_def.dl_vlan_pcp))
 
 end
 
@@ -1244,7 +1258,7 @@ module Flow_mod = struct
       | { match_data:(Match.get_len*8):bitstring;
             cookie:64;command:16;idle_timeout:16;hard_timeout:16; 
           priority:16; buffer_id:32;out_port:16; 0:13; 
-          overlap:1; emerg:1;flow_rem:1; _:-1:bitstring} ->
+          overlap:1; emerg:1;flow_rem:1; actions:-1:bitstring} ->
           {of_header=h; 
            of_match=(Match.bitstring_to_match match_data);
            cookie; 
@@ -1252,7 +1266,7 @@ module Flow_mod = struct
            idle_timeout; hard_timeout;
          priority; buffer_id; out_port=(Port.port_of_int out_port); 
          flags={send_flow_rem=flow_rem; emerg; overlap; }; 
-         actions=[] } 
+         actions=(Flow.actions_of_bitstring actions) } 
         | { _ } -> raise (Unparsable ("flow_mod_of_bitstring", bits))
     in
       data
