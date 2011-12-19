@@ -384,6 +384,7 @@ let process_frame intf_name frame =
    *   + if match, update counters, execute actions
    *   + else, forward to controller/drop, depending on config
    *)
+(*   Printf.printf "Packet received by switch on port %s\n%!" intf_name; *)
   if (Hashtbl.mem st.Switch.ports intf_name ) then
     let p = (!(Hashtbl.find st.Switch.ports intf_name)) in
     let in_port = (OP.Port.port_of_int p.Switch.port_id) in (* Hashtbl.find   in *)
@@ -409,6 +410,8 @@ let process_frame intf_name frame =
             (OP.Flow.Set_tp_dst (1010));
             (OP.Flow.Output ((OP.Port.port_of_int 2),  2000)) ; ];
  *)
+            add_flow tupple [(OP.Flow.Output ((OP.Port.port_of_int 2),  2000)) ; ];
+
 
             let pkt_in = (OP.Packet_in.bitstring_of_pkt_in ~port:in_port
             ~reason:OP.Packet_in.NO_MATCH ~bits:frame ()) in 
@@ -425,9 +428,8 @@ let process_frame intf_name frame =
             ((Bitstring.bitstring_length frame)/8)));
             (!entry).Entry.counters.Entry.last_secs = (Int32.of_float (OS.Clock.time ()));
             Switch.apply_of_actions st tupple.OP.Match.in_port (!entry).Entry.actions frame
-  else 
-      return ()
-
+  else
+      return (Printf.printf "Port %s not found\n%!" intf_name) 
 
 let add_port sw mgr intf = 
   Net.Manager.intercept intf process_frame;
@@ -456,7 +458,7 @@ type endhost = {
   port: int;
 }
 
-let process_of_packet state (remote_addr, remote_port) ofp t bits = 
+let process_of_packet state ofp t bits = 
     (* let ep = { ip=remote_addr; port=remote_port } in *)
     match ofp with
       | OP.Hello (h, _) (* Reply to HELLO with a HELLO and a feature request *)
@@ -641,22 +643,19 @@ let rec rd_data len t =
            lwt more_data = (rd_data (len - nbytes) t) in
            return (Bitstring.concat [ data; more_data ])
 
-
-let listen mgr loc init =
-  init mgr st; 
   let controller (remote_addr, remote_port) t =
     let rs = Nettypes.ipv4_addr_to_string remote_addr in
     Log.info "OpenFlow Controller" "+ %s:%d" rs remote_port; 
-      st.Switch.controllers <- (st.Switch.controllers @ [t]);
+    st.Switch.controllers <- (st.Switch.controllers @ [t]);
     let rec echo () =
       try_lwt
-        lwt hbuf = Channel.read_some ~len:OP.Header.get_len t in
+      lwt hbuf = Channel.read_some ~len:OP.Header.get_len t in
           ((Bitstring.bitstring_length hbuf)/8); 
         let ofh  = OP.Header.parse_h hbuf in
         let dlen = ofh.OP.Header.len - OP.Header.get_len in 
         lwt dbuf = rd_data dlen t in
         let ofp  = OP.parse ofh dbuf in
-        process_of_packet st (remote_addr, remote_port) ofp t
+        process_of_packet st ofp t
         (Bitstring.concat [hbuf; dbuf]) 
         >> echo ()
       with
@@ -666,6 +665,33 @@ let listen mgr loc init =
         | OP.Unparsed (m, bs) -> (pr "# unparsed! m=%s\n %!" m); echo ()
 
     in echo () 
-  in
+
+  let controller_connect t =
+    st.Switch.controllers <- (st.Switch.controllers @ [t]);
+    let rec echo () =
+      try_lwt
+      lwt hbuf = Channel.read_some ~len:OP.Header.get_len t in
+          ((Bitstring.bitstring_length hbuf)/8); 
+        let ofh  = OP.Header.parse_h hbuf in
+        let dlen = ofh.OP.Header.len - OP.Header.get_len in 
+        lwt dbuf = rd_data dlen t in
+        let ofp  = OP.parse ofh dbuf in
+        process_of_packet st ofp t
+        (Bitstring.concat [hbuf; dbuf]) 
+        >> echo ()
+      with
+        | Nettypes.Closed -> 
+            (* TODO Need to remove the t from st.Switch.controllers *)
+            return ()
+        | OP.Unparsed (m, bs) -> (pr "# unparsed! m=%s\n %!" m); echo ()
+
+    in echo () 
+   
+let listen mgr loc init =
+  init mgr st; 
   Channel.listen mgr (`TCPv4 (loc, controller))
+
+(* let connect mgr loc init =
+  init mgr st; 
+  Channel.connect mgr (`TCPv4 (loc, controller_connect)) *)
 

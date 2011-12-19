@@ -735,3 +735,6 @@ val process_openflow : 'a -> unit Lwt.t
 val add_port : Switch.t -> Net.Manager.t -> Net.Manager.interface -> unit 
 val listen :
   Net.Manager.t -> Net.Nettypes.ipv4_src -> (Net.Manager.t -> Switch.t -> unit Lwt.t) -> unit Lwt.t
+(* val connect:
+  Net.Manager.t -> Net.Nettypes.ipv4_dst -> (Net.Manager.t -> Switch.t -> unit
+  Lwt.t) -> unit Lwt.t *)
