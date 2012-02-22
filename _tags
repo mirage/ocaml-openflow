@@ -1,5 +1,10 @@
 # OASIS_START
-# DO NOT EDIT (digest: bd7a47c1837c63e0a472dc2f4dba1556)
+# DO NOT EDIT (digest: 55d053cd05c18264f47181977863737a)
+# Executable learning_switch
+"controller/learning_switch.byte": pkg_lwt.unix
+"controller/learning_switch.byte": pkg_lwt.syntax
+"controller/learning_switch.byte": pkg_bitstring.syntax
+"controller/learning_switch.byte": pkg_bitstring
 # Executable of_controller
 "controller/of_controller.byte": pkg_lwt.unix
 "controller/of_controller.byte": pkg_lwt.syntax

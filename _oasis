@@ -18,3 +18,8 @@ Executable of_controller
   Path:       controller
   MainIs:     of_controller.ml
   BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax
+
+Executable learning_switch
+  Path:       controller
+  MainIs:     learning_switch.ml
+  BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax

@@ -302,12 +302,12 @@ lwt () =
   try_lwt 
     let sock = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
     lwt hostinfo = Lwt_unix.gethostbyname "localhost" in
-    lwt () = Lwt_io.printl "Hello world!!!" in 
+    let _ = Printf.printf "Starting switch...\n%!" in 
     let server_address = hostinfo.Lwt_unix.h_addr_list.(0) in
       Lwt_unix.bind sock (Lwt_unix.ADDR_INET (server_address, 6633)); 
       Lwt_unix.listen sock 10; 
       Lwt_unix.setsockopt sock Unix.SO_REUSEADDR true;
-      lwt () = Lwt_io.printl "Socket is ready" in 
+      lwt () = Lwt_io.printl "Waiting for controller..." in 
       while_lwt true do 
         lwt (fd, sockaddr) = Lwt_unix.accept sock in
           match sockaddr with

@@ -1,4 +1,4 @@
-NY: all install build 
+NY: all build reinstall
 all: build doc
 
 NAME=openflow
