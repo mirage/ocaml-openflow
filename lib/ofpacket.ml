@@ -58,6 +58,11 @@ let ipv4_to_string i =
   sp "%ld.%ld.%ld.%ld" 
     ((i &&& 0x0_ff000000_l) >>> 24) ((i &&& 0x0_00ff0000_l) >>> 16)
     ((i &&& 0x0_0000ff00_l) >>>  8) ((i &&& 0x0_000000ff_l)       )
+let ipv4_addr_of_tuple (a,b,c,d) =
+  let (+) = Int32.add in
+     (Int32.shift_left a 24) +
+     (Int32.shift_left b 16) + 
+     (Int32.shift_left c 8) + d
 
 type byte = uint8
 let byte (i:int) : byte = Char.chr i
@@ -1159,11 +1164,13 @@ module Packet_out = struct
      actions; data;} 
 
   let packet_out_to_bitstring m =
-    let action_len = ref (Header.get_len + 8 + ((Bitstring.bitstring_length
-    m.data)/8)) in
+    let action_len = ref 0 in
     (List.iter (fun a -> action_len := (!action_len) + (Flow.len_of_action a)) 
        m.actions);
-       let of_header=(Header.(create PACKET_OUT (!action_len) 0l)) in 
+       let pkt_len = ref (Header.get_len + 8 + ((Bitstring.bitstring_length
+       m.data)/8) + !action_len ) in       
+       let of_header=(Header.(create PACKET_OUT (!pkt_len) 0l)) in 
+
        let packet = ( 
            [(BITSTRING{(Header.build_h of_header):(Header.get_len*8):bitstring;
                m.buffer_id:32; (Port.int_of_port m.in_port):16; 

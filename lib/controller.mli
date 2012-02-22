@@ -636,6 +636,14 @@ module OP :
       | Queue_get_config_resp of Header.h * Port.t * Queue.t array
     val parse : Header.h -> Bitstring.t -> t
   end
+
+module Channel:
+  sig
+      val write_bitstring : Lwt_unix.file_descr -> Bitstring.t -> int Lwt.t
+        val read_some: ?len:int -> Lwt_unix.file_descr -> Bitstring.t Lwt.t
+          val flush : Lwt_unix.file_descr -> unit Lwt.t
+  end
+
 module Event :
   sig
     type t =
@@ -668,8 +676,8 @@ module Event :
   end
 
     
-type of_socket  = {ch : Net.Channel.t; mutable buf : Bitstring.t;}
-type endhost = { ip : Net.Nettypes.ipv4_addr; port : int; }
+type of_socket  = {ch : Lwt_unix.file_descr; mutable buf : Bitstring.t;}
+type endhost = { ip : Nettypes.ipv4_addr; port : int; }
 type state = {
   mutable dp_db : (OP.datapath_id, of_socket) Hashtbl.t;
   mutable channel_dp : (endhost, OP.datapath_id) Hashtbl.t;
@@ -695,12 +703,14 @@ val register_cb :
   state -> Event.t -> (state -> OP.datapath_id -> Event.e -> unit  Lwt.t) -> unit
 val process_of_packet :
   state ->
-  Net.Nettypes.ipv4_addr * int -> OP.t -> Net.Channel.t -> unit Lwt.t
+  Nettypes.ipv4_addr * int -> OP.t -> Lwt_unix.file_descr -> unit Lwt.t
 val send_of_data : state -> OP.datapath_id -> Bitstring.t -> unit Lwt.t
-val rd_data : int -> Net.Channel.t -> Bitstring.bitstring Lwt.t
+val rd_data : int -> Lwt_unix.file_descr -> Bitstring.bitstring Lwt.t
 val terminate : state -> unit
 val mem_dbg : string -> unit
-val listen :
+(* val listen :
   Net.Manager.t ->
-  Net.Nettypes.ipv4_src -> (state -> 'a) -> unit Lwt.t
-val read_cache_data : Net.Channel.t -> Bitstring.t ref -> int -> Bitstring.t Lwt.t 
+  Net.Nettypes.ipv4_src -> (state -> 'a) -> unit Lwt.t *)
+val listen : Lwt_unix.file_descr -> (Nettypes.ipv4_addr * int) ->
+  (state -> 'a) -> unit Lwt.t 
+val read_cache_data : Lwt_unix.file_descr -> Bitstring.t ref -> int -> Bitstring.t Lwt.t 

@@ -16,17 +16,43 @@
 
 open Lwt
 open Lwt_list
-open Net
-open Printexc 
+open Lwt_unix
+open Lwt_io
+open Printexc
+open Bitstring
+open Ofpacket
 
 let sp = Printf.sprintf
 let pr = Printf.printf
 let ep = Printf.eprintf
-let cp = OS.Console.log
+let cp = Printf.printf 
+(*   OS.Console.log *)
 
 module OP = Ofpacket
 
 let resolve t = Lwt.on_success t (fun _ -> ())
+
+module Channel = struct 
+  
+  type t =
+    Lwt_unix.file_descr;
+
+  let write_bitstring t data =
+    (Lwt_unix.send t (Bitstring.string_of_bitstring data) 0 
+      ((Bitstring.bitstring_length data)/8) [])
+
+  let read_some ?(len=1500) t =
+    let data = (String.create len) in 
+    lwt a = (Lwt_unix.recv t data 0 len []) in
+      return  (Bitstring.bitstring_of_string (String.sub data 0 a))
+
+  let flush t =
+    return ()
+  
+  let close t = 
+    Lwt_unix.close t
+end
+
 
 module Event = struct
   type t = 
@@ -93,7 +119,8 @@ type endhost = {
 }
 
 type of_socket  = {
-    ch : Channel.t;
+(*     ch : Channel.t; *)
+    ch : Lwt_unix.file_descr;
     mutable buf : Bitstring.t;
 }
 
@@ -157,7 +184,7 @@ let register_cb controller e cb =
         -> controller.port_status_cb <- controller.port_status_cb @ [cb] 
   )
 
-let process_of_packet state (remote_addr, remote_port) ofp t = 
+let process_of_packet state (remote_addr, remote_port) t ofp = 
   OP.(
     let ep = { ip=remote_addr; port=remote_port } in
     match ofp with
@@ -316,7 +343,7 @@ let get_len_data data_cache len =
 (*          Printf.printf "new data after removal %d len\n%!"
  *          (Bitstring.bitstring_length (!data_cache)); *)
          return ret)
-
+    | { _ } -> raise Nettypes.Closed
 
 let read_cache_data t data_cache len = 
 (*      Bitstring.hexdump_bitstring stdout (!data_cache); *)
@@ -350,7 +377,14 @@ let check_data_size req ret =
     if(req < ret ) then 
         Printf.printf "req: %d, rep: %d\n" req ret
 
-let listen mgr loc init =
+let fetch_pdu fd data_cache =
+  lwt hbuf = read_cache_data fd data_cache (OP.Header.get_len ) in
+  let ofh  = OP.Header.parse_h hbuf in
+  let dlen = ofh.OP.Header.len - OP.Header.get_len in 
+  lwt dbuf = read_cache_data fd data_cache dlen in 
+    return (OP.parse ofh dbuf)
+
+(* let listen mgr loc init =
   start := (OS.Clock.time ());
   
   let st = { dp_db                    = Hashtbl.create 0; 
@@ -413,4 +447,40 @@ let listen mgr loc init =
       return ()
     done
   in
-  (Channel.listen mgr (`TCPv4 (loc, controller))) 
+  (Channel.listen mgr (`TCPv4 (loc, controller))) *)
+
+let listen fd loc init =
+   let st = { dp_db                    = Hashtbl.create 0; 
+              channel_dp               = Hashtbl.create 0; 
+              datapath_join_cb         = []; 
+             datapath_leave_cb        = []; 
+             packet_in_cb             = [];
+             flow_removed_cb          = []; 
+             flow_stats_reply_cb      = [];
+             aggr_flow_stats_reply_cb = [];
+             desc_stats_reply_cb      = []; 
+             port_stats_reply_cb      = [];
+             table_stats_reply_cb     = [];
+             port_status_cb           = [];
+            }
+   in 
+    init st;
+     let data_cache = ref (Bitstring.empty_bitstring) in 
+    
+    let rec echo () =
+    try_lwt
+      while_lwt true do 
+        fetch_pdu fd data_cache  >>=
+        (process_of_packet st loc fd)
+      done
+    with
+      | Nettypes.Closed -> return ();
+      | OP.Unparsed(m, bs) 
+      | OP.Unparsable(m, bs) -> Printf.printf "# unparsed! m=%s\n%!" m;
+          (Printf.printf "exception bits size %d\n%!" 
+             (Bitstring.bitstring_length bs));
+            echo ()
+ 
+          | Not_found ->  Printf.printf "Not found\n%!"; return ()
+     in
+     echo()
