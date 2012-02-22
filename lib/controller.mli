@@ -1,7 +1,7 @@
 val sp : ('a, unit, string) format -> 'a
 val pr : ('a, out_channel, unit) format -> 'a
 val ep : ('a, out_channel, unit) format -> 'a
-val cp : string -> unit
+val cp : ('a, out_channel, unit) format -> 'a
 module OP :
   sig
     val sp : ('a, unit, string) format -> 'a
@@ -703,7 +703,7 @@ val register_cb :
   state -> Event.t -> (state -> OP.datapath_id -> Event.e -> unit  Lwt.t) -> unit
 val process_of_packet :
   state ->
-  Nettypes.ipv4_addr * int -> OP.t -> Lwt_unix.file_descr -> unit Lwt.t
+  Nettypes.ipv4_addr * int -> Lwt_unix.file_descr -> OP.t -> unit Lwt.t
 val send_of_data : state -> OP.datapath_id -> Bitstring.t -> unit Lwt.t
 val rd_data : int -> Lwt_unix.file_descr -> Bitstring.bitstring Lwt.t
 val terminate : state -> unit

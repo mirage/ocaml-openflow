@@ -704,7 +704,7 @@ module Switch :
     type port = { 
         port_id: int; 
         port_name:string;
-        mgr: Net.Manager.t; 
+        mgr: Manager.t; 
         counter: Entry.port_counter;
     }
     type stats = {

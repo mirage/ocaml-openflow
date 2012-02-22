@@ -35,7 +35,7 @@ let resolve t = Lwt.on_success t (fun _ -> ())
 module Channel = struct 
   
   type t =
-    Lwt_unix.file_descr;
+    Lwt_unix.file_descr
 
   let write_bitstring t data =
     (Lwt_unix.send t (Bitstring.string_of_bitstring data) 0 
@@ -65,16 +65,12 @@ module Event = struct
     | Datapath_join of OP.datapath_id
     | Datapath_leave of OP.datapath_id
     | Packet_in of OP.Port.t * int32 * Bitstring.t * OP.datapath_id
-    | Flow_removed of
-        OP.Match.t * OP.Flow_removed.reason * int32 * int32 * int64 * int64
-      * OP.datapath_id 
+    | Flow_removed of OP.Match.t * OP.Flow_removed.reason * int32 * int32 * int64 * int64 * OP.datapath_id 
     | Flow_stats_reply of int32 * bool * OP.Flow.stats list * OP.datapath_id
     | Aggr_flow_stats_reply of int32 * int64 * int64 * int32 * OP.datapath_id
     | Port_stats_reply of int32 * OP.Port.stats list *  OP.datapath_id
     | Table_stats_reply of int32 * OP.Stats.table list * OP.datapath_id 
-    | Desc_stats_reply of
-        string * string * string * string * string
-      * OP.datapath_id
+    | Desc_stats_reply of string * string * string * string * string * OP.datapath_id
     | Port_status of OP.Port.reason * OP.Port.phy * OP.datapath_id
 
   let string_of_event = function
@@ -297,7 +293,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
                  return ();
                 )
 
-              | _ -> OS.Console.log "New stats response received"; return ();
+              | _ -> Printf.printf "New stats response received\n%!"; return ();
         ) 
 
       | Port_status(h, st) 
@@ -310,7 +306,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
             return () 
         )
 
-      | _ -> OS.Console.log "New packet received"; return () 
+      | _ -> Printf.printf  "New packet received\n%!"; return () 
   )
 
 let send_of_data controller dpid data = 
