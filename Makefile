@@ -1,5 +1,4 @@
-NY: all build reinstall
-all: build doc
+all: build
 
 NAME=openflow
 J=4
