@@ -164,7 +164,7 @@ module OP :
         val parse_state : string * int * int -> state
         type phy =
           Ofpacket.Port.phy = {
-          port_no : uint16;
+          port_id : uint16;
           hw_addr : eaddr;
           name : string;
           config : config;

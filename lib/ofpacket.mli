@@ -148,7 +148,7 @@ module Port :
     }
     val parse_state : string * int * int -> state
     type phy = {
-      port_no : uint16;
+      port_id : uint16;
       hw_addr : eaddr;
       name : string;
       config : config;
@@ -158,7 +158,7 @@ module Port :
       supported : features;
       peer : features;
     }
-    val init_port_phy: ?port_no:int -> ?hw_addr:eaddr -> 
+    val init_port_phy: ?port_id:int -> ?hw_addr:eaddr -> 
       ?name:string -> unit -> phy 
     val max_name_len : int
     val phy_len : int
