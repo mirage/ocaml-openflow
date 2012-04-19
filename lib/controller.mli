@@ -164,7 +164,7 @@ module OP :
         val parse_state : string * int * int -> state
         type phy =
           Ofpacket.Port.phy = {
-          port_no : uint16;
+          port_id : uint16;
           hw_addr : eaddr;
           name : string;
           config : config;
@@ -674,7 +674,7 @@ module Event :
       | TABLE_STATS_REPLY
       | PORT_STATUS_CHANGE
     type e =
-        Datapath_join of OP.datapath_id
+        Datapath_join of OP.Port.phy list * OP.datapath_id
       | Datapath_leave of OP.datapath_id
       | Packet_in of OP.Port.t * int32 * Bitstring.t * OP.datapath_id
       | Flow_removed of OP.Match.t * OP.Flow_removed.reason * int32 * 

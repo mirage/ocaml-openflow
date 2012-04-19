@@ -354,7 +354,7 @@ module Port = struct
     stp_block=false; stp_mask=false; }
 
   type phy = {
-    port_no: uint16;
+    port_id: uint16;
     hw_addr: eaddr;
     name: string;
     config: config;  
@@ -368,7 +368,7 @@ module Port = struct
   let phy_len = 48
   let parse_phy bits = 
     (bitmatch bits with
-      | { port_no:16; hw_addr:(6*8):string; 
+      | { port_id:16; hw_addr:(6*8):string; 
           name:(max_name_len*8):string;
           config:32:bitstring;
           state:32:bitstring;
@@ -376,7 +376,7 @@ module Port = struct
           advertised:32:bitstring;
           supported:32:bitstring;
           peer:32:bitstring
-        } -> { port_no; hw_addr; name;
+        } -> { port_id; hw_addr; name;
                config = parse_config config;
                state = parse_state state;
                curr = parse_features curr;
@@ -386,22 +386,22 @@ module Port = struct
              }
     )
 
-  let init_port_phy ?(port_no = 0) ?(hw_addr="\x11\x11\x11\x11\x11\x11") 
+  let init_port_phy ?(port_id = 0) ?(hw_addr="\x11\x11\x11\x11\x11\x11") 
                                   ?(name="") () = 
-    {port_no; hw_addr; name; config=init_port_config; 
+    {port_id; hw_addr; name; config=init_port_config; 
      state=init_port_state; curr=init_port_features; 
     advertised=init_port_features; supported=init_port_features; 
     peer=init_port_features;}
 
    let bitstring_of_phy phy =
-     (BITSTRING{phy.port_no:16; phy.hw_addr:48:string;phy.name:32:string;
+     (BITSTRING{phy.port_id:16; phy.hw_addr:48:string;phy.name:32:string;
                (Int64.of_int 0):64; (Int32.of_int 0):32; 
      (Int32.of_int 0):32; (Int32.of_int 0):32; (Int32.of_int 0):32;  
      (Int32.of_int 0):32; (Int32.of_int 0):32; (Int32.of_int 0):32})
 
   let string_of_phy ph = 
     (sp "port_no:%d,hw_addr:%s,name:%s" 
-       ph.port_no (eaddr_to_string ph.hw_addr) ph.name)
+       ph.port_id (eaddr_to_string ph.hw_addr) ph.name)
 
   type stats = {
     port_no: uint16;
@@ -592,7 +592,7 @@ module Switch = struct
                n_tables = (byte n_tables); 
                capabilities = parse_capabilities capabilities;
                actions = parse_actions actions;
-               ports = []; (* parse_phys phys; *)
+               ports =(parse_phys phys);
              }
     )
 

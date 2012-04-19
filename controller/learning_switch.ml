@@ -54,7 +54,7 @@ let switch_data = { mac_cache = Hashtbl.create 0;
 let datapath_join_cb controller dpid evt =
   let dp = 
     match evt with
-      | OE.Datapath_join c -> c
+      | OE.Datapath_join (_, c) -> c
       | _ -> invalid_arg "bogus datapath_join event match!" 
   in
   switch_data.dpid <- switch_data.dpid @ [dp];
