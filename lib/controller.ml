@@ -206,8 +206,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
                 buf=Bitstring.empty_bitstring;};
               Hashtbl.add state.channel_dp ep dpid
             );
-            Lwt.ignore_result (List.iter (fun cb -> 
-                                            resolve(cb state dpid evt)) 
+            Lwt.ignore_result (iter_s (fun cb -> cb state dpid evt) 
                                  state.datapath_join_cb);
             return ()
         )
@@ -238,7 +237,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
               p.Flow_removed.packet_count, p.Flow_removed.byte_count, dpid)
             in
             Lwt.ignore_result (
-              List.iter (fun cb -> resolve(cb state dpid evt)) state.flow_removed_cb);
+              iter_s (fun cb -> cb state dpid evt) state.flow_removed_cb);
             return ()
         )
 
@@ -251,7 +250,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
                  let evt = Event.Flow_stats_reply(
                    h.Header.xid, resp_h.Stats.more_to_follow, flows, dpid) 
                  in
-                Lwt.ignore_result (List.iter (fun cb -> resolve(cb state dpid evt)) 
+                Lwt.ignore_result (iter_p (fun cb -> cb state dpid evt) 
                    state.flow_stats_reply_cb);
                  return ();
                 )
@@ -262,8 +261,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
                    h.Header.xid, aggr.Stats.packet_count, 
                    aggr.Stats.byte_count, aggr.Stats.flow_count, dpid) 
                  in
-                 Lwt.ignore_result (List.iter 
-                                      (fun cb -> resolve(cb state dpid evt)) 
+                 Lwt.ignore_result (iter_p (fun cb -> cb state dpid evt) 
                                       state.aggr_flow_stats_reply_cb);
                  return ();
                 )
@@ -276,7 +274,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
                    aggr.Stats.dp_desc, dpid) 
                  in
                  Lwt.ignore_result (
-                   List.iter (fun cb -> resolve(cb state dpid evt)) 
+                   iter_p (fun cb -> cb state dpid evt) 
                    state.desc_stats_reply_cb);
                  return ();
                 )
@@ -285,8 +283,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
                 (let dpid = Hashtbl.find state.channel_dp ep in
                  let evt = Event.Port_stats_reply(h.Header.xid, ports, dpid) 
                  in
-                 Lwt.ignore_result (List.iter 
-                                      (fun cb -> resolve(cb state dpid evt) )
+                 Lwt.ignore_result (iter_s (fun cb -> cb state dpid evt)
                                       state.port_stats_reply_cb);
                  return ();
                 )
@@ -296,7 +293,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
                  let evt = Event.Table_stats_reply(h.Header.xid, tables, dpid)
                  in
                  Lwt.ignore_result 
-                   (List.iter (fun cb -> resolve(cb state dpid evt) )
+                   (iter_p (fun cb -> cb state dpid evt)
                       state.table_stats_reply_cb);
                  return ();
                 )
@@ -311,7 +308,7 @@ let process_of_packet state (remote_addr, remote_port) t ofp =
             let evt = Event.Port_status (st.Port.reason, st.Port.desc, dpid) 
             in
             Lwt.ignore_result (
-              List.iter (fun cb -> resolve(cb state dpid evt)) state.port_status_cb);
+              iter_p (fun cb -> cb state dpid evt) state.port_status_cb);
             return () 
         )
 
