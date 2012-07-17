@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 7d0ddd8b6f69b636316706093fbf186a)
+# DO NOT EDIT (digest: 1d08f47c05d13763e3cb261046fccfe2)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -19,6 +19,7 @@
 "lib/packet.cmx": for-pack(Openflow)
 "lib/nettypes.cmx": for-pack(Openflow)
 "lib/checksum.cmx": for-pack(Openflow)
+"lib/tcp.cmx": for-pack(Openflow)
 <lib/*.ml{,i}>: pkg_bitstring
 <lib/*.ml{,i}>: pkg_bitstring.syntax
 # Executable of_controller
