@@ -10,7 +10,7 @@ BuildTools:  ocamlbuild
 Library openflow
   Path:        lib
   Findlibname: openflow
-  Modules:     Controller, Ofpacket, Nettypes, Checksum
+  Modules:     Controller, Packet, Nettypes, Checksum, Switch
   BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax
 
 Executable of_controller

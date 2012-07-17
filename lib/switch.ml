@@ -442,7 +442,7 @@ let add_port sw mgr intf =
     Hashtbl.add sw.Switch.int_ports st.Switch.portnum port; 
     Hashtbl.add sw.Switch.ports (!port).Switch.port_name port;
     sw.Switch.port_feat <- sw.Switch.port_feat @ 
-    [(OP.Port.init_port_phy ~port_no:st.Switch.portnum ~name:((!port).Switch.port_name) () )]
+    [(OP.Port.init_port_phy ~port_id:st.Switch.portnum ~name:((!port).Switch.port_name) () )]
 
 let process_openflow st =
   (* this is processing from a Channel, so roughly
