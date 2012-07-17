@@ -15,12 +15,20 @@ Library openflow
   Modules: Controller, Packet, Nettypes, Checksum
   BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax
 
+Document openflow
+  Title:                OpenFlow docs
+  Type:                 ocamlbuild (0.2)
+  BuildTools+:          ocamldoc
+  XOCamlbuildPath:      lib 
+  XOCamlbuildModules:     
+    Packet, Checksum, Controller
+
 Executable of_controller
   Path:       controller
   MainIs:     of_controller.ml
-  BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax
+  BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax, openflow
 
 Executable learning_switch
   Path:       controller
   MainIs:     learning_switch.ml
-  BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax
+  BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax, openflow
