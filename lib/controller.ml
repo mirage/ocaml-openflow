@@ -20,15 +20,13 @@ open Lwt_unix
 open Lwt_io
 open Printexc
 open Bitstring
-open Ofpacket
 
 let sp = Printf.sprintf
 let pr = Printf.printf
 let ep = Printf.eprintf
 let cp = Printf.printf 
-(*   OS.Console.log *)
 
-module OP = Ofpacket
+module OP = Packet
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 

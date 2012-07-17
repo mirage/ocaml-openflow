@@ -24,7 +24,7 @@ open Gc
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
-module OP = Ofpacket
+module OP = Packet
 module OC = Controller
 module OE = OC.Event
 

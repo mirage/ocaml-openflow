@@ -32,7 +32,7 @@ let pp = Printf.printf
 let sp = Printf.sprintf
 
 module OC = Controller
-module OP = Ofpacket
+module OP = Packet
 module OE = OC.Event
 
 (* TODO this the mapping is incorrect. the datapath must be moved to the key

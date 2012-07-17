@@ -1572,7 +1572,6 @@ module Stats = struct
     | _ -> raise (Unparsed ("STATS_RESP", Bitstring.empty_bitstring))
 
   let bitstring_of_stats_resp resp =
-    let data =  (String.make 256 (Char.chr 0)) in
     match resp with 
     | Desc_resp(resp_hdr, desc) 
       -> BITSTRING{ (int_of_stats_type resp_hdr.st_ty):16; 0:16;
