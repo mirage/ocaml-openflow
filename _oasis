@@ -1,16 +1,18 @@
-OASISFormat: 0.2
+OASISFormat: 0.3
+OCamlVersion: >= 3.12
 Name:        openflow
-Version:     0.1
-Synopsis:    OpenFlow protocol and switch implementations in pure OCaml
+Version:     0.2-dev
 Authors:     Charalampos Rotsos, Richard Mortier, Anil Madhavappedy, Balraj Singh
-License:     GPL-2.0
-Plugins:     META (0.2)
+License:     LGPL-2.0 with OCaml linking exception
+Synopsis:    OpenFlow protocol and switch implementations in pure OCaml
+Plugins:     META (0.3)
 BuildTools:  ocamlbuild
 
 Library openflow
-  Path:        lib
+  Path: lib
   Findlibname: openflow
-  Modules:     Controller, Packet, Nettypes, Checksum, Switch
+  Pack: true
+  Modules: Controller, Packet, Nettypes, Checksum
   BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax
 
 Executable of_controller

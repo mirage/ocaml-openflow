@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: 97c14ad6cab98f0b29948fbe4ebc8ac2)
-version = "0.1"
+# DO NOT EDIT (digest: 315aff89dadcbf79634af79ca2105a79)
+version = "0.2-dev"
 description = "OpenFlow protocol and switch implementations in pure OCaml"
 requires = "bitstring bitstring.syntax lwt.unix lwt.syntax"
 archive(byte) = "openflow.cma"
