@@ -13,7 +13,7 @@ Library openflow
   Findlibname: openflow
   Pack: true
   Modules: Controller, Packet, Nettypes, Checksum, Tcp
-  BuildDepends: bitstring, bitstring.syntax
+  BuildDepends: bitstring, bitstring.syntax, lwt, lwt.unix, lwt.syntax
 
 Document openflow
   Title:                OpenFlow docs
