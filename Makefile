@@ -3,7 +3,6 @@ all: build
 
 NAME=openflow
 J=4
-export OCAMLRUNPARAM=b
 
 -include Makefile.config
 
