@@ -620,7 +620,7 @@ module OP :
       | QUEUE_OP_BAD_PORT
       | QUEUE_OP_BAD_QUEUE
       | QUEUE_OP_EPERM
-    val error_code_of_int : int -> error_code
+    val error_code_of_int32 : int32 -> error_code
     val int_of_error_code : error_code -> uint32
     val string_of_error_code : error_code -> string
     val build_features_req : uint32 -> Bitstring.bitstring

@@ -381,7 +381,7 @@ let fetch_pdu fd data_cache =
   lwt hbuf = read_cache_data fd data_cache (OP.Header.get_len ) in
   let ofh  = OP.Header.parse_h hbuf in
   let dlen = ofh.OP.Header.len - OP.Header.get_len in 
-  lwt dbuf = read_cache_data fd data_cache dlen in 
+  lwt dbuf = read_cache_data fd data_cache dlen in
     return (OP.parse ofh dbuf)
 
 (* let listen mgr loc init =
@@ -470,13 +470,15 @@ let listen fd loc init =
     let rec echo () =
     try_lwt
       while_lwt true do 
-        fetch_pdu fd data_cache  >>=
-        (process_of_packet st loc fd)
+        lwt pkt = fetch_pdu fd data_cache  in 
+        return (Lwt.ignore_result (process_of_packet st loc fd pkt))
       done
     with
       | Nettypes.Closed -> return ();
       | OP.Unparsed(m, bs) 
-      | OP.Unparsable(m, bs) -> Printf.printf "# unparsed! m=%s\n%!" m;
+      | OP.Unparsable(m, bs) -> 
+          Printf.printf "# unparsed! m=%s\n%!" m;
+          Bitstring.hexdump_bitstring Pervasives.stdout bs;
           (Printf.printf "exception bits size %d\n%!" 
              (Bitstring.bitstring_length bs));
             echo ()
