@@ -1659,38 +1659,38 @@ type error_code =
   | QUEUE_OP_BAD_PORT
   | QUEUE_OP_BAD_QUEUE
   | QUEUE_OP_EPERM	
-let error_code_of_int = function
-  | 0x00000000 -> HELLO_INCOMPATIBLE
-  | 0x00000001 -> HELLO_EPERM
-  | 0x00010000 -> REQUEST_BAD_VERSION
-  | 0x00010001 -> REQUEST_BAD_TYPE
-  | 0x00010002 -> REQUEST_BAD_STAT
-  | 0x00010003 -> REQUEST_BAD_VENDOR
-  | 0x00010004 -> REQUEST_BAD_SUBTYPE
-  | 0x00010005 -> REQUEST_REQUEST_EPERM
-  | 0x00010006 -> REQUEST_BAD_LEN
-  | 0x00010007 -> REQUEST_BUFFER_EMPTY
-  | 0x00010008 -> REQUEST_BUFFER_UNKNOWN
-  | 0x00020000 -> ACTION_BAD_TYPE
-  | 0x00020001 -> ACTION_BAD_LEN
-  | 0x00020002 -> ACTION_BAD_VENDOR
-  | 0x00020003 -> ACTION_BAD_VENDOR_TYPE
-  | 0x00020004 -> ACTION_BAD_OUT_PORT
-  | 0x00020005 -> ACTION_BAD_ARGUMENT
-  | 0x00020006 -> ACTION_EPERM
-  | 0x00020007 -> ACTION_TOO_MANY
-  | 0x00020008 -> ACTION_BAD_QUEUE
-  | 0x00030000 -> FLOW_MOD_ALL_TABLES_FULL
-  | 0x00030001 -> FLOW_MOD_OVERLAP
-  | 0x00030002 -> FLOW_MOD_EPERM
-  | 0x00030003 -> FLOW_MOD_EMERG_TIMEOUT
-  | 0x00030004 -> FLOW_MOD_BAD_COMMAND
-  | 0x00030005 -> FLOW_MOD_UNSUPPORTED
-  | 0x00040000 -> PORT_MOD_BAD_PORT
-  | 0x00040001 -> PORT_MOD_BAD_HW_ADDR
-  | 0x00050000 -> QUEUE_OP_BAD_PORT
-  | 0x00050001 -> QUEUE_OP_BAD_QUEUE
-  | 0x00050002 -> QUEUE_OP_EPERM	
+let error_code_of_int32 = function
+  | 0x00000000l -> HELLO_INCOMPATIBLE
+  | 0x00000001l -> HELLO_EPERM
+  | 0x00010000l -> REQUEST_BAD_VERSION
+  | 0x00010001l -> REQUEST_BAD_TYPE
+  | 0x00010002l -> REQUEST_BAD_STAT
+  | 0x00010003l -> REQUEST_BAD_VENDOR
+  | 0x00010004l -> REQUEST_BAD_SUBTYPE
+  | 0x00010005l -> REQUEST_REQUEST_EPERM
+  | 0x00010006l -> REQUEST_BAD_LEN
+  | 0x00010007l -> REQUEST_BUFFER_EMPTY
+  | 0x00010008l -> REQUEST_BUFFER_UNKNOWN
+  | 0x00020000l -> ACTION_BAD_TYPE
+  | 0x00020001l -> ACTION_BAD_LEN
+  | 0x00020002l -> ACTION_BAD_VENDOR
+  | 0x00020003l -> ACTION_BAD_VENDOR_TYPE
+  | 0x00020004l -> ACTION_BAD_OUT_PORT
+  | 0x00020005l -> ACTION_BAD_ARGUMENT
+  | 0x00020006l -> ACTION_EPERM
+  | 0x00020007l -> ACTION_TOO_MANY
+  | 0x00020008l -> ACTION_BAD_QUEUE
+  | 0x00030000l -> FLOW_MOD_ALL_TABLES_FULL
+  | 0x00030001l -> FLOW_MOD_OVERLAP
+  | 0x00030002l -> FLOW_MOD_EPERM
+  | 0x00030003l -> FLOW_MOD_EMERG_TIMEOUT
+  | 0x00030004l -> FLOW_MOD_BAD_COMMAND
+  | 0x00030005l -> FLOW_MOD_UNSUPPORTED
+  | 0x00040000l -> PORT_MOD_BAD_PORT
+  | 0x00040001l -> PORT_MOD_BAD_HW_ADDR
+  | 0x00050000l -> QUEUE_OP_BAD_PORT
+  | 0x00050001l -> QUEUE_OP_BAD_QUEUE
+  | 0x00050002l -> QUEUE_OP_EPERM	
   | _ -> invalid_arg "error_code_of_int"
 and int_of_error_code = function
   | HELLO_INCOMPATIBLE       -> 0x000000000l
@@ -1761,7 +1761,13 @@ let bitstring_of_error ty bits errornum =
     let req_h = (Header.create Header.ERROR  
     (Header.get_len+4+req_len) errornum) in
     (BITSTRING{(Header.build_h req_h):(Header.get_len*8):bitstring;
-    (int_of_error_code ty):32; bits:(req_len*8):bitstring})  
+    (int_of_error_code ty):32; bits:(req_len*8):bitstring}) 
+
+let error_code_of_bitstring bits = 
+  bitmatch bits with
+     | {error_code:32; _:-1:bitstring} -> error_code_of_int32 error_code
+     | { _ } -> raise (Unparsed("Error", bits))
+
 
 let build_features_req xid = 
   Header.build_h (Header.(create FEATURES_REQ 8 xid))
@@ -1807,7 +1813,7 @@ let parse h bits =
 *)
   Header.(match (get_ty h) with
     | HELLO -> Hello (h, bits)
-    | ERROR -> raise (Unparsed ("ERROR", bits))
+    | ERROR -> Error(h, (error_code_of_bitstring bits))
     | ECHO_REQ -> Echo_req (h, bits)
     | ECHO_RESP -> Echo_resp (h, bits)
     | VENDOR -> raise (Unparsed ("VENDOR", bits))
