@@ -655,6 +655,13 @@ module Wildcards = struct
       nw_src=(char_of_int 0);nw_dst=(char_of_int 0);tp_src=true;tp_dst=true;
     }
 
+  let arp_match =                                                             
+        { in_port=false;dl_vlan=false;dl_vlan_pcp=false;dl_src=false;             
+                dl_dst=false;dl_type=false;nw_proto=false;nw_tos=true;                  
+                      nw_src=(char_of_int 32);nw_dst=(char_of_int 32);tp_src=true;tp_dst=true;
+                          }                                                                         
+
+
   let wildcard_to_bitstring m = 
     (BITSTRING {
       0:10; m.nw_tos:1;m.dl_vlan_pcp:1;(int_of_char m.nw_dst):6;
@@ -801,7 +808,13 @@ module Match = struct
              nw_proto=(char_of_int nw_proto); tp_src=0;
              tp_dst=0 
            }
-         
+      | {dl_dst:48:string; dl_src:48:string; 0x0806:16; 1:16; 0x0800:16; 6:8; 4:6;
+          opcode:16; _:48:string; nw_src:32;  _:48:string;  nw_dst:32; _:-1:bitstring} ->
+          {wildcards=Wildcards.arp_match;                  
+          in_port; dl_src; dl_dst; dl_type=0x0806;                
+          dl_vlan=0xffff; dl_vlan_pcp=(char_of_int 0);     
+          nw_src; nw_dst; nw_proto=( char_of_int opcode); 
+          nw_tos=(char_of_int 0); tp_src=0; tp_dst=0}      
       (* Ethernet only *)
       | {dmac:48:string; smac:48:string; etype:16; _:-1:bitstring}
         -> { wildcards=Wildcards.l2_match; 
