@@ -1,19 +1,33 @@
 OASISFormat: 0.3
 OCamlVersion: >= 3.12
 Name:        openflow
-Version:     0.2-dev
+Version:     0.3-dev
 Authors:     Charalampos Rotsos, Richard Mortier, Anil Madhavappedy, Balraj Singh
 License:     LGPL-2.0 with OCaml linking exception
 Synopsis:    OpenFlow protocol and switch implementations in pure OCaml
-Plugins:     META (0.3)
+Plugins:     META (0.2)
 BuildTools:  ocamlbuild
 
-Library openflow
-  Path: lib
-  Findlibname: openflow
+Library openflow_net_lwt
+  Path: lib/net
+  Findlibname: openflow_net_lwt
   Pack: true
-  Modules: Controller, Packet, Nettypes, Checksum, Tcp
-  BuildDepends: bitstring, bitstring.syntax, lwt, lwt.unix, lwt.syntax
+  Modules:  Manager, Nettypes, Channel, Flow
+  BuildDepends: cstruct, cstruct.syntax, lwt, lwt.unix, lwt.syntax
+
+Library openflow_lwt
+  Path: lib
+  Findlibname: openflow_lwt
+  Pack: true
+  Modules: Controller, Packet, Checksum
+  BuildDepends: lwt, lwt.unix, lwt.syntax, cstruct, cstruct.syntax, openflow_net_lwt
+
+(*Library openflow_mirage
+  Path: lib
+  Findlibname: openflow_mirage
+  Pack: true
+  Modules: Controller, Packet, Checksum, Tcp
+  BuildDepends: lwt, lwt.syntax, miragei, mirage-net*)
 
 Document openflow
   Title:                OpenFlow docs
@@ -26,9 +40,9 @@ Document openflow
 Executable of_controller
   Path:       controller
   MainIs:     of_controller.ml
-  BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax, openflow
+  BuildDepends: cstruct, cstruct.syntax, lwt, lwt.syntax, openflow_lwt
 
 Executable learning_switch
   Path:       controller
   MainIs:     learning_switch.ml
-  BuildDepends: bitstring, bitstring.syntax, lwt.unix, lwt.syntax, openflow
+  BuildDepends: cstruct, cstruct.syntax, lwt, lwt.syntax, openflow_lwt

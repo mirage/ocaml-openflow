@@ -13,14 +13,14 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-open Net
+open Openflow_net_lwt
 open Lwt
 exception ReadError
 
 let sp = Printf.sprintf
 let pp = Printf.printf
 let ep = Printf.eprintf
-let cp = OS.Console.log
+let cp = pp "%s\n%!"
 
 type t = {
   sock: Channel.t;
@@ -35,7 +35,7 @@ let rec read_data t len =
     match (len, !(t.data_cache)) with
     | (0, _) -> 
 (*        pp "| (0, _) ->\n%!";  *)
-      return (Cstruct.sub (OS.Io_page.get ()) 0 0 )
+      return (Cstruct.sub (Lwt_bytes.create 10) 0 0 )
     | (_, []) ->
 (*        pp " | (_, []) ->\n%!";  *)
       lwt data = Channel.read_some t.sock in
@@ -45,7 +45,7 @@ let rec read_data t len =
         when ((List.fold_right (fun a b ->b+(Cstruct.len a)) tail (Cstruct.len head))>=len) -> (
 (*           pp "| (_, head::tail) when ((List.fold_right (f a b
  *           ->b+(Cstruct.len b)) tail (Cstruct.len head)) >= len) ->\n%!"; *)
-          let ret = OS.Io_page.get () in 
+          let ret = Lwt_bytes.create 4096 in 
           let ret_len = ref 0 in 
           let rec read_data_inner = function 
             | head::tail when ((!ret_len + (Cstruct.len head)) < len) ->
@@ -83,4 +83,4 @@ let rec read_data t len =
     | (_, _) ->
 (*        pp "| (_, _) ->\n%!";  *)
       Printf.printf "read_data and not match found\n%!";
-      return (Cstruct.sub (OS.Io_page.get ()) 0 0 )
+      return (Cstruct.sub (Lwt_bytes.create 10) 0 0 )

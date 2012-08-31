@@ -24,8 +24,8 @@ open Gc
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
-module OP = Packet
-module OC = Controller
+module OP = Openflow_lwt.Packet
+module OC = Openflow_lwt.Controller
 module OE = OC.Event
 
 let pp = Printf.printf

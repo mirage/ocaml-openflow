@@ -16,15 +16,15 @@
 
 open Lwt
 open Lwt_list
-open Net
+open Openflow_net_lwt
 open Printexc 
 
 let sp = Printf.sprintf
 let pp = Printf.printf
 let ep = Printf.eprintf
-let cp = OS.Console.log
+let cp = Printf.printf "%s\n%!"
 
-module OP = Ofpacket
+module OP = Packet
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
@@ -154,17 +154,17 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
       | Hello (h) (* Reply to HELLO with a HELLO and a feature request *)
         -> ( cp "HELLO"; 
           let bits = OP.marshal_and_sub (Header.marshal_header h)
-          (OS.Io_page.get ()) in 
+          (Lwt_bytes.create 1024) in 
           let _ = Channel.write_buffer t bits in
           let bits = OP.marshal_and_sub (OP.build_features_req 1l)
-          (OS.Io_page.get ()) in 
+          (Lwt_bytes.create 1024) in 
           let _ = Channel.write_buffer t bits in 
             Channel.flush t
         )
 
       | Echo_req (h, bs)  (* Reply to ECHO requests *)
         -> ((* cp "ECHO_REQ"; *)
-          Channel.write_buffer t (build_echo_resp h bs (OS.Io_page.get ()));
+          Channel.write_buffer t (build_echo_resp h bs (Lwt_bytes.create 4096));
           Channel.flush t
         )
 
@@ -256,7 +256,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
                  Lwt_list.iter_p (fun cb -> cb state dpid evt)
                    state.table_stats_reply_cb
                 )
-              | _ -> OS.Console.log "New stats response received"; return ();
+              | _ -> cp "New stats response received"; return ();
         ) 
 
       | Port_status(h, st) 
@@ -268,7 +268,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
             Lwt_list.iter_p (fun cb -> cb state dpid evt) state.port_status_cb
         )
 
-      | _ -> OS.Console.log "New packet received"; return () 
+      | _ -> cp "New packet received"; return () 
   )
 
 let send_of_data controller dpid bits = 
@@ -299,7 +299,7 @@ let terminate st =
 let controller init st (remote_addr, remote_port) t =
   let rs = Nettypes.ipv4_addr_to_string remote_addr in
   let cached_socket = Ofsocket.create_socket t in 
-  Log.info "OpenFlow Controller" "+ %s:%d" rs remote_port;  
+  pp "OpenFlow Controller %s:%d\n%!" rs remote_port;  
   let _ = init st in 
   let echo () =
     try_lwt 
@@ -375,5 +375,5 @@ let connect mgr loc init =
              port_status_cb           = [];
            } 
   in
-    Net.Channel.connect mgr (`TCPv4 (None, loc, 
+    Channel.connect mgr (`TCPv4 (None, loc, 
       (controller init st loc) ))

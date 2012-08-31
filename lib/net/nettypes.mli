@@ -55,25 +55,13 @@ module type FLOW = sig
   type src
   type dst
 
-  val read : t -> OS.Io_page.t option Lwt.t
-  val write : t -> OS.Io_page.t -> unit Lwt.t
-  val writev : t -> OS.Io_page.t list -> unit Lwt.t
+  val read : t -> Cstruct.buf option Lwt.t
+  val write : t -> Cstruct.buf -> unit Lwt.t
+  val writev : t -> Cstruct.buf list -> unit Lwt.t
   val close : t -> unit Lwt.t
 
   val listen : mgr -> src -> (dst -> t -> unit Lwt.t) -> unit Lwt.t
   val connect : mgr -> ?src:src -> dst -> (t -> unit Lwt.t) -> unit Lwt.t
-end
-
-module type DATAGRAM = sig
-  type mgr
-
-  type src
-  type dst
-
-  type msg
-
-  val recv : mgr -> src -> (dst -> msg -> unit Lwt.t) -> unit Lwt.t
-  val send : mgr -> ?src:src -> dst -> msg -> unit Lwt.t
 end
 
 module type CHANNEL = sig
@@ -84,14 +72,14 @@ module type CHANNEL = sig
   type dst
 
   val read_char: t -> char Lwt.t
-  val read_until: t -> char -> (bool * OS.Io_page.t) Lwt.t
-  val read_some: ?len:int -> t -> OS.Io_page.t Lwt.t
-  val read_stream: ?len: int -> t -> OS.Io_page.t Lwt_stream.t
-  val read_line: t -> OS.Io_page.t list Lwt.t
+  val read_until: t -> char -> (bool * Cstruct.buf) Lwt.t
+  val read_some: ?len:int -> t -> Cstruct.buf Lwt.t
+  val read_stream: ?len: int -> t -> Cstruct.buf Lwt_stream.t
+  val read_line: t -> Cstruct.buf list Lwt.t
 
   val write_char : t -> char -> unit
   val write_string : t -> string -> int -> int -> unit
-  val write_buffer : t -> OS.Io_page.t -> unit
+  val write_buffer : t -> Cstruct.buf -> unit
   val write_line : t -> string -> unit
 
   val flush : t -> unit Lwt.t
@@ -99,21 +87,4 @@ module type CHANNEL = sig
 
   val listen : mgr -> src -> (dst -> t -> unit Lwt.t) -> unit Lwt.t
   val connect : mgr -> ?src:src -> dst -> (t -> unit Lwt.t) -> unit Lwt.t
-end
-
-module type RPC = sig
-
-  type tx
-  type rx
-
-  type 'a req
-  type 'a res
-
-  type mgr
-
-  type src
-  type dst
-
-  val request : mgr -> ?src:src -> dst -> tx req -> rx res Lwt.t
-  val respond : mgr -> src -> (dst -> rx req -> tx res Lwt.t) -> unit Lwt.t
 end

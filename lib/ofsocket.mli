@@ -17,5 +17,8 @@
 exception ReadError
 type t
 
-val create_socket: Net.Channel.t -> t
+open Openflow_net_lwt
+(* open Net *)
+
+val create_socket: Channel.t -> t
 val read_data: t -> int -> Cstruct.buf Lwt.t
