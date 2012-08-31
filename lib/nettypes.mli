@@ -16,7 +16,7 @@
 
 type bytes = string
 
-type ethernet_mac
+type ethernet_mac = string
 val ethernet_mac_of_bytes : string -> ethernet_mac
 val ethernet_mac_of_string : string -> ethernet_mac option
 val ethernet_mac_to_bytes : ethernet_mac -> bytes
@@ -55,13 +55,13 @@ module type FLOW = sig
   type src
   type dst
 
-  val read : t -> Bitstring.t option Lwt.t
-  val write : t -> Bitstring.t -> unit Lwt.t
-  val writev : t -> Bitstring.t list -> Bitstring.t Lwt.t
+  val read : t -> OS.Io_page.t option Lwt.t
+  val write : t -> OS.Io_page.t -> unit Lwt.t
+  val writev : t -> OS.Io_page.t list -> unit Lwt.t
   val close : t -> unit Lwt.t
 
   val listen : mgr -> src -> (dst -> t -> unit Lwt.t) -> unit Lwt.t
-  val connect : mgr -> ?src:src -> dst -> (t -> 'a Lwt.t) -> 'a Lwt.t
+  val connect : mgr -> ?src:src -> dst -> (t -> unit Lwt.t) -> unit Lwt.t
 end
 
 module type DATAGRAM = sig
@@ -84,21 +84,21 @@ module type CHANNEL = sig
   type dst
 
   val read_char: t -> char Lwt.t
-  val read_until: t -> char -> (bool * Bitstring.t) Lwt.t
-  val read_some: ?len:int -> t -> Bitstring.t Lwt.t
-  val read_stream: ?len: int -> t -> Bitstring.t Lwt_stream.t
-  val read_crlf: t -> Bitstring.t Lwt.t
+  val read_until: t -> char -> (bool * OS.Io_page.t) Lwt.t
+  val read_some: ?len:int -> t -> OS.Io_page.t Lwt.t
+  val read_stream: ?len: int -> t -> OS.Io_page.t Lwt_stream.t
+  val read_line: t -> OS.Io_page.t list Lwt.t
 
-  val write_char : t -> char -> unit Lwt.t
-  val write_string : t -> string -> unit Lwt.t
-  val write_bitstring : t -> Bitstring.t -> unit Lwt.t
-  val write_line : t -> string -> unit Lwt.t
+  val write_char : t -> char -> unit
+  val write_string : t -> string -> int -> int -> unit
+  val write_buffer : t -> OS.Io_page.t -> unit
+  val write_line : t -> string -> unit
 
   val flush : t -> unit Lwt.t
   val close : t -> unit Lwt.t
 
   val listen : mgr -> src -> (dst -> t -> unit Lwt.t) -> unit Lwt.t
-  val connect : mgr -> ?src:src -> dst -> (t -> 'a Lwt.t) -> 'a Lwt.t
+  val connect : mgr -> ?src:src -> dst -> (t -> unit Lwt.t) -> unit Lwt.t
 end
 
 module type RPC = sig
