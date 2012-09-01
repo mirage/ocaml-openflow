@@ -59,11 +59,11 @@ module TCPv4 = struct
 
   let read t =
     try_lwt
-      let buf = String.create 4096 in 
+      let buf = String.create 4096 in
       lwt len = Lwt_unix.read t.fd buf 0 4096 in 
-      match (len) with
-        | 0 -> return None
-        | len -> return (Some(Lwt_bytes.of_string (String.sub buf 0 len)))
+        match (len) with
+          | 0 -> return None
+          | len -> return (Some(Lwt_bytes.of_string (String.sub buf 0 len)))
     with exn -> 
       fail (Write_error 
               (sprintf "Flow.read error: %s\n%!" (Printexc.to_string exn)))
@@ -109,12 +109,12 @@ module TCPv4 = struct
                       | Some(ip) -> ip
                   in
                   let _ = Lwt_unix.set_blocking fd true in 
-                  let t' = t_of_fd sock in
+                  let t' = t_of_fd fd in
                     return (Lwt.ignore_result (
                       close_on_exit t' 
                         (fun t ->
                            try_lwt
-                             fn (ip, port) t
+                             fn (ip, port) t 
                            with exn ->
                              return (Printf.printf "EXN: %s\n%!" (Printexc.to_string exn))
                         )))

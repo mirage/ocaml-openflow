@@ -332,7 +332,7 @@ let controller init st (remote_addr, remote_port) t =
       | exn -> 
           pp "{OpenFlow-controller} ERROR:%s\n%s\n%!" (Printexc.to_string exn)
             (Printexc.get_backtrace ());
-          return true
+          return false
 
     in
     let continue = ref true in
@@ -344,37 +344,25 @@ let controller init st (remote_addr, remote_port) t =
       return ()
     done
 
+let init_controller () = 
+  { dp_db                    = Hashtbl.create 0; 
+    channel_dp               = Hashtbl.create 0; 
+    datapath_join_cb         = []; 
+    datapath_leave_cb        = []; 
+    packet_in_cb             = [];
+    flow_removed_cb          = []; 
+    flow_stats_reply_cb      = [];
+    aggr_flow_stats_reply_cb = [];
+    desc_stats_reply_cb      = []; 
+    port_stats_reply_cb      = [];
+    table_stats_reply_cb     = [];
+    port_status_cb           = [];}
+
 let listen mgr loc init =
-  let st = { dp_db                    = Hashtbl.create 0; 
-             channel_dp               = Hashtbl.create 0; 
-             datapath_join_cb         = []; 
-             datapath_leave_cb        = []; 
-             packet_in_cb             = [];
-             flow_removed_cb          = []; 
-             flow_stats_reply_cb      = [];
-             aggr_flow_stats_reply_cb = [];
-             desc_stats_reply_cb      = []; 
-             port_stats_reply_cb      = [];
-             table_stats_reply_cb     = [];
-             port_status_cb           = [];
-           } 
-  in
+  let st = init_controller () in
     (Channel.listen mgr (`TCPv4 (loc, (controller init st) ))) 
 
 let connect mgr loc init = 
-  let st = { dp_db                    = Hashtbl.create 0; 
-             channel_dp               = Hashtbl.create 0; 
-             datapath_join_cb         = []; 
-             datapath_leave_cb        = []; 
-             packet_in_cb             = [];
-             flow_removed_cb          = []; 
-             flow_stats_reply_cb      = [];
-             aggr_flow_stats_reply_cb = [];
-             desc_stats_reply_cb      = []; 
-             port_stats_reply_cb      = [];
-             table_stats_reply_cb     = [];
-             port_status_cb           = [];
-           } 
-  in
+  let st = init_controller () in
     Channel.connect mgr (`TCPv4 (None, loc, 
       (controller init st loc) ))
