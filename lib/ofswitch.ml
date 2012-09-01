@@ -224,15 +224,16 @@ end
 
 module Switch = struct
   type port = {
+    mgr: Manager.t;
     port_id: int;
-    ethif: Net.Ethif.t; 
+    ethif: Net.Manager.id; 
     port_name: string;
     counter: OP.Port.stats;
     phy: OP.Port.phy;
   }
-  let init_port port_no ethif = 
-    let name = ethif.Net.Ethif.ethif.OS.Netif.id in 
-    let hw_addr = ethif.Net.Ethif.mac in
+  let init_port mgr port_no ethif = 
+    let name = Manager.get_intf_name mgr ethif (* get_ethif.Net.Ethif.ethif.OS.Netif.id *) in 
+    let hw_addr = Manager.get_intf_mac mgr ethif in
  let counter = OP.Port.(
    { port_id=port_no; rx_packets=0L; tx_packets=0L; rx_bytes=0L; 
    tx_bytes=0L; rx_dropped=0L; tx_dropped=0L; rx_errors=0L; 
@@ -256,7 +257,7 @@ module Switch = struct
       state= port_state; curr=features; advertised=features; 
       supported=features; peer=features;}) in
     
-      {port_id=port_no; port_name=name; counter; ethif;phy;}
+      {port_id=port_no; mgr; port_name=name; counter; ethif;phy;}
 
   type stats = {
     mutable n_frags: uint64;
@@ -271,7 +272,7 @@ module Switch = struct
 
   type t = {
     (* Mapping Netif objects to ports *)
-    mutable dev_to_port: (OS.Netif.id, port ref) Hashtbl.t;
+    mutable dev_to_port: (Net.Manager.id, port ref) Hashtbl.t;
 
     (* Mapping port ids to port numbers *)
     mutable int_to_port: (int, port ref) Hashtbl.t;
@@ -282,8 +283,8 @@ module Switch = struct
     p_sflow: uint32; (** probability for sFlow sampling *)
     mutable errornum : uint32; 
     mutable portnum : int;
-    packet_queue : (Cstruct.buf * Net.Ethif.t) Lwt_stream.t;
-    push_packet : ((Cstruct.buf * Net.Ethif.t) option -> unit);
+    packet_queue : (Cstruct.buf * Net.Manager.id) Lwt_stream.t;
+    push_packet : ((Cstruct.buf * Net.Manager.id) option -> unit);
     (* TODO: add this in the port definition and make also 
      * packet output assyncronous *) 
     mutable queue_len : int;
@@ -320,7 +321,7 @@ module Switch = struct
     | OP.Port.Port(port) -> 
       if Hashtbl.mem st.int_to_port port then(
         let out_p = (!( Hashtbl.find st.int_to_port port))  in
-          Net.Ethif.write out_p.ethif frame )
+          Net.Manager.inject_packet out_p.mgr out_p.ethif frame )
       else
         return (Printf.printf "Port %d not registered \n" port)
     | OP.Port.No_port -> return ()
@@ -330,7 +331,7 @@ module Switch = struct
       (fun port -> 
         if(port.port_id != (OP.Port.int_of_port in_port)) then (
           update_port_tx_stats (Int64.of_int (Cstruct.len frame)) port;
-          Net.Ethif.write port.ethif frame
+          Net.Manager.inject_packet port.mgr port.ethif frame
         ) else
           return ()
       ) st.ports
@@ -339,7 +340,7 @@ module Switch = struct
       if Hashtbl.mem st.int_to_port port then
         let out_p = !(Hashtbl.find st.int_to_port port) in
           update_port_tx_stats (Int64.of_int (Cstruct.len frame)) out_p;
-          Net.Ethif.write out_p.ethif frame
+          Net.Manager.inject_packet out_p.mgr out_p.ethif frame
       else
         return (Printf.printf "Port %d not registered \n" port)
         (*           | Table
@@ -487,9 +488,6 @@ module Switch = struct
      )
 end
 
-let netif_id_of_ethif d = 
-    d.Net.Ethif.ethif.OS.Netif.id
-
 (*********************************************
  * Switch OpenFlow data plane 
  *********************************************)
@@ -499,8 +497,7 @@ let netif_id_of_ethif d =
  * let process_frame_depr intf_name frame =  *)
 let process_frame_inner st intf frame =
   try_lwt 
-      let p = (!(Hashtbl.find st.Switch.dev_to_port (netif_id_of_ethif intf)))
-      in  
+      let p = (!(Hashtbl.find st.Switch.dev_to_port intf)) in  
      let in_port = (OP.Port.port_of_int p.Switch.port_id) in 
      let tupple = (OP.Match.raw_packet_to_match in_port frame ) in
      (* Update port rx statistics *)
@@ -554,7 +551,7 @@ let process_frame_inner st intf frame =
 
 let process_frame st intf_name frame =
   try_lwt 
-    let p = Hashtbl.find st.Switch.dev_to_port (netif_id_of_ethif intf_name) in
+    let p = Hashtbl.find st.Switch.dev_to_port intf_name in
     process_frame_inner st intf_name frame
 (*    if (st.Switch.queue_len < 256) then (
       st.Switch.queue_len <- st.Switch.queue_len + 1;
@@ -566,7 +563,7 @@ let process_frame st intf_name frame =
     ) *)
     with 
     | Not_found -> 
-      return (pr "%03.6f: Invalid port %s\n%!" (OS.Clock.time ()) (netif_id_of_ethif intf_name))
+      return (pr "%03.6f: Invalid port\n%!" (OS.Clock.time ()))
     | Packet_type_unknw ->
       return (pr "%03.6f: received a malformed packet\n%!" (OS.Clock.time ()))
     | exn ->
@@ -850,16 +847,17 @@ let control_channel st (remote_addr, remote_port) t =
 (*
  * Interaface with external applications
  * *)
-let add_port sw ethif = 
+let add_port mgr sw ethif = 
   sw.Switch.portnum <- sw.Switch.portnum + 1;
-  let _ = pr "Adding port %d (%s)\n %!" sw.Switch.portnum (netif_id_of_ethif ethif) in 
-  let port = Switch.init_port sw.Switch.portnum ethif in 
+  let _ = pr "Adding port %d (%s)\n %!" sw.Switch.portnum 
+            (Net.Manager.get_intf_name mgr ethif) in 
+  let port = Switch.init_port mgr sw.Switch.portnum ethif in 
   sw.Switch.ports <- sw.Switch.ports @ [port];
   Hashtbl.add sw.Switch.int_to_port sw.Switch.portnum (ref port); 
-  Hashtbl.add sw.Switch.dev_to_port (netif_id_of_ethif ethif) (ref port);
+  Hashtbl.add sw.Switch.dev_to_port ethif (ref port);
   sw.Switch.features.OP.Switch.ports  <- 
     sw.Switch.features.OP.Switch.ports @ [port.Switch.phy];
-  let _ = Net.Ethif.set_promiscuous ethif (process_frame_inner sw) in
+  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw) in
     ()
 
 let create_switch () = 

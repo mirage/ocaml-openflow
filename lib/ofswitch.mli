@@ -18,7 +18,7 @@ module Switch :
   sig
     type t
   end
-val add_port : Switch.t -> Net.Ethif.t -> unit
-val create_switch : unit -> Switch.t 
+val add_port : Net.Manager.t -> Switch.t -> Net.Manager.id -> unit
+val create_switch : unit -> Switch.t
 val listen : Switch.t -> Net.Manager.t -> Net.Nettypes.ipv4_src -> 
   unit Lwt.t

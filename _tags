@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2343b521b3553543b0dc7f40f38b7941)
+# DO NOT EDIT (digest: e3a6d3b3ab2070883192850db47d6f27)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -13,6 +13,15 @@
 ".git": not_hygienic
 "_darcs": -traverse
 "_darcs": not_hygienic
+# Library openflow
+"lib/openflow.cmxs": use_openflow
+# Library openflow_mirage
+"lib/openflow_mirage.cmxs": use_openflow_mirage
+"lib/controller.cmx": for-pack(Openflow_mirage)
+"lib/packet.cmx": for-pack(Openflow_mirage)
+"lib/ofswitch.cmx": for-pack(Openflow_mirage)
+<lib/*.ml{,i}>: pkg_mirage
+<lib/*.ml{,i}>: pkg_mirage-net
 # Library net
 "lib/net/net.cmxs": use_net
 "lib/net/manager.cmx": for-pack(Net)
