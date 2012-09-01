@@ -15,7 +15,7 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Openflow_net_lwt
+open Net
 (* open Net *)
 
 module Event :

@@ -17,6 +17,8 @@
 open Printf
 open Lwt
 open Int32
+(* open Cstruct  *)
+
 
 let sp = Printf.sprintf
 let pp = Printf.printf
@@ -110,19 +112,19 @@ let contain_exc l v =
 let int_of_bool = function
   | true -> 1
   | false -> 0
-let get_int32_bit f off = (Int32.logand f (shift_left 1l off)) > 0l
+let get_int32_bit f off = (Int32.logand f (Int32.shift_left 1l off)) > 0l
 let set_int32_bit f off v = 
-  logor f (shift_left (Int32.of_int(int_of_bool v)) off)
+  logor f (Int32.shift_left (Int32.of_int(int_of_bool v)) off)
 
 let get_int32_byte f off = 
-  let ret = shift_left (f logand (shift_left 13l off)) off in 
+  let ret = Int32.shift_left (f logand (Int32.shift_left 13l off)) off in 
     char_of_int (0x00ff land (Int32.to_int ret))
 let set_int32_byte f off v = 
   let value = Int32.of_int ((int_of_char v) lsl off) in
     logor f value
 
 let get_int32_nw_mask f off = 
-  let ret = shift_left (logand f (shift_left 13l off)) off in 
+  let ret = Int32.shift_left (logand f (Int32.shift_left 13l off)) off in 
     char_of_int (0x003f land (Int32.to_int ret))  
 let set_int32_nw_mask f off v = 
   let value = Int32.of_int ((0x3f land v) lsl off) in
@@ -184,7 +186,7 @@ module Header = struct
 
   let parse_header bits = 
     match ((get_ofp_header_version bits), 
-      (msg_code_of_int (get_ofp_header_typ bits))) with
+      (int_to_msg_code (get_ofp_header_typ bits))) with
       | (1, Some(ty))
         -> let ret = 
           { ver=(char_of_int (get_ofp_header_version bits)); 
@@ -336,10 +338,10 @@ module Port = struct
   }
 
   let get_link_down f = (logand f 1l) > 0l
-  let get_stp_listen f = (logand f (shift_left 0l 8)) > 0l
-  let get_stp_learn f = (logand f (shift_left 1l 8)) > 0l
-  let get_stp_forward f = (logand f (shift_left 2l 8)) > 0l
-  let get_stp_block f = (logand f (shift_left 3l 8)) > 0l
+  let get_stp_listen f = (logand f (Int32.shift_left 0l 8)) > 0l
+  let get_stp_learn f = (logand f (Int32.shift_left 1l 8)) > 0l
+  let get_stp_forward f = (logand f (Int32.shift_left 2l 8)) > 0l
+  let get_stp_block f = (logand f (Int32.shift_left 3l 8)) > 0l
 
   (*TODO this parsing is incorrect. use get_int32_bit and I think
    * set_stp_forward is a byte *)
@@ -544,7 +546,7 @@ module Port = struct
 
   let parse_status bits =
     let reason = 
-      match (reason_of_int (get_ofp_port_status_reason bits)) with
+      match (int_to_reason (get_ofp_port_status_reason bits)) with
       | Some(reason) -> reason 
       | None -> raise(Unparsable("reason_of_int", bits))
     in
@@ -2029,6 +2031,7 @@ module Stats = struct
 
   let rec parse_table_stats_reply bits =
     match (Cstruct.len bits ) with 
+    | 0 -> []
     | l -> 
       let table_id = table_id_of_int (get_ofp_table_stats_table_id bits) in 
       let name = get_ofp_table_stats_name bits in 
@@ -2043,7 +2046,6 @@ module Stats = struct
                   matched_count;} in
       let _ = Cstruct.shift bits sizeof_ofp_table_stats in 
         [ret] @ (parse_table_stats_reply bits)
-    | 0 -> []
           
   let rec string_of_table_stats_reply tables =
     match tables with

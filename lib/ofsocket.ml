@@ -13,7 +13,8 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-open Openflow_net_lwt
+(* open Openflow_net_lwt *)
+open Net
 open Lwt
 exception ReadError
 

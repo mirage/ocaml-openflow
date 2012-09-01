@@ -85,45 +85,44 @@ module TCPv4 = struct
 
   let listen mgr src fn =
     let addr, port = match src with
-      |None, port -> ipv4_blank, port
-      |Some addr, port -> addr, port 
+      |None, port -> "0.0.0.0", port
+      |Some addr, port -> 
+          (Nettypes.ipv4_addr_to_string addr), port 
     in
-      return ()
-(*  lwt fd = match R.tcpv4_bind (ipv4_addr_to_uint32 addr) port with
-    |R.OK fd -> return fd
-    |R.Err err -> fail (Listen_error err)
-    |R.Retry _ -> assert false in
-  match R.tcpv4_listen fd with
-  |R.OK () ->
-    let rec loop t =
-      with_value id (new_id ()) (fun () ->
-        (match R.tcpv4_accept fd with
-         |R.OK (afd,caddr_i,cport) ->
-           let caddr = ipv4_addr_of_uint32 caddr_i in
-           let t' = t_of_fd afd in
-           (* Be careful to catch an exception here, as otherwise
-              ignore_result may raise it at some other random point *)
-           Lwt.ignore_result (
-             close_on_exit t' (fun t ->
-               try_lwt
-                fn (caddr, cport) t
-               with exn ->
-                return (Printf.printf "EXN: %s\n%!" (Printexc.to_string exn))
-             )
-           );
-           loop t
-         |R.Retry -> Activations.read t.fd >> loop t
-         |R.Err err -> fail (Accept_error err)
-        )
-      ) in
-    let t = t_of_fd fd in
-    let listen_t = close_on_exit t loop in
-    t.abort_t <?> listen_t
-  |R.Err s ->
-    fail (Listen_error s)
-  |R.Retry ->
-    fail (Listen_error "listen retry") (* Listen never blocks *)
-    listen_tcpv4 addr port fn *)
+      try_lwt 
+        let sock = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
+        lwt hostinfo = Lwt_unix.gethostbyname addr in
+        let _ = Printf.printf "Starting switch...\n%!" in 
+        let server_address = hostinfo.Lwt_unix.h_addr_list.(0) in
+        let _ = Lwt_unix.bind sock (Lwt_unix.ADDR_INET (server_address, 6633)) in
+        let _ = Lwt_unix.listen sock 10 in 
+        let _ = Lwt_unix.setsockopt sock Unix.SO_REUSEADDR true in
+          while_lwt true do 
+            lwt (fd, sockaddr) = Lwt_unix.accept sock in
+              match sockaddr with
+                | Unix.ADDR_INET (dst, port) ->
+                  let _ = printf "Received a connection %s:%d"
+                             (Unix.string_of_inet_addr dst) port in
+                  let ip = 
+                    match (Nettypes.ipv4_addr_of_string (Unix.string_of_inet_addr dst)) with
+                      | None -> invalid_arg "dest ip is Invalid"
+                      | Some(ip) -> ip
+                  in
+                  let _ = Lwt_unix.set_blocking fd true in 
+                  let t' = t_of_fd sock in
+                    return (Lwt.ignore_result (
+                      close_on_exit t' 
+                        (fun t ->
+                           try_lwt
+                             fn (ip, port) t
+                           with exn ->
+                             return (Printf.printf "EXN: %s\n%!" (Printexc.to_string exn))
+                        )))
+                | Unix.ADDR_UNIX(_) -> invalid_arg "invalid unix addr"
+          done
+      with
+      | e ->
+          fail (Listen_error (Printexc.to_string e))
 
   let connect mgr ?src ((addr,port):ipv4_dst) (fn: t -> 'a Lwt.t) =
     try_lwt 

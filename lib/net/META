@@ -1,12 +1,12 @@
 # OASIS_START
-# DO NOT EDIT (digest: f319f75607773d413b6614936e7c5643)
+# DO NOT EDIT (digest: 9511413cda9bc9df3fb2a8785acd0d39)
 version = "0.3-dev"
 description = "OpenFlow protocol and switch implementations in pure OCaml"
 requires = "cstruct cstruct.syntax lwt lwt.unix lwt.syntax"
-archive(byte) = "openflow_net_lwt.cma"
-archive(byte, plugin) = "openflow_net_lwt.cma"
-archive(native) = "openflow_net_lwt.cmxa"
-archive(native, plugin) = "openflow_net_lwt.cmxs"
-exists_if = "openflow_net_lwt.cma"
+archive(byte) = "net.cma"
+archive(byte, plugin) = "net.cma"
+archive(native) = "net.cmxa"
+archive(native, plugin) = "net.cmxs"
+exists_if = "net.cma"
 # OASIS_STOP
 

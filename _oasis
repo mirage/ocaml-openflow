@@ -8,10 +8,11 @@ Synopsis:    OpenFlow protocol and switch implementations in pure OCaml
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
 
-Library openflow_net_lwt
+Library net
   Path: lib/net
-  Findlibname: openflow_net_lwt
+  Findlibname: net
   Pack: true
+  Install: false
   Modules:  Manager, Nettypes, Channel, Flow
   BuildDepends: cstruct, cstruct.syntax, lwt, lwt.unix, lwt.syntax
 
@@ -20,29 +21,39 @@ Library openflow_lwt
   Findlibname: openflow_lwt
   Pack: true
   Modules: Controller, Packet, Checksum
-  BuildDepends: lwt, lwt.unix, lwt.syntax, cstruct, cstruct.syntax, openflow_net_lwt
+  BuildDepends: lwt, lwt.unix, lwt.syntax, cstruct, cstruct.syntax, net
 
-(*Library openflow_mirage
-  Path: lib
-  Findlibname: openflow_mirage
-  Pack: true
-  Modules: Controller, Packet, Checksum, Tcp
-  BuildDepends: lwt, lwt.syntax, miragei, mirage-net*)
 
 Document openflow
   Title:                OpenFlow docs
   Type:                 ocamlbuild (0.2)
   BuildTools+:          ocamldoc
   XOCamlbuildPath:      lib 
-  XOCamlbuildModules:     
-    Packet, Checksum, Controller
+  XOCamlbuildModules:   Packet, Checksum, Controller
 
-Executable of_controller
-  Path:       controller
-  MainIs:     of_controller.ml
-  BuildDepends: cstruct, cstruct.syntax, lwt, lwt.syntax, openflow_lwt
 
 Executable learning_switch
   Path:       controller
+  Custom:             true
+  CompiledObject:     best
+  Install:            true
   MainIs:     learning_switch.ml
   BuildDepends: cstruct, cstruct.syntax, lwt, lwt.syntax, openflow_lwt
+
+
+(* 
+Executable of_controller
+  Path:       controller
+  Custom:             true
+  CompiledObject:     best
+  Install:            true
+  MainIs:     of_controller.ml
+  BuildDepends: cstruct, cstruct.syntax, lwt, lwt.syntax, openflow_lwt
+
+Library openflow_mirage
+  Path: lib
+  Findlibname: openflow_mirage
+  Pack: true
+  Modules: Controller, Packet, Checksum, Tcp
+  BuildDepends: lwt, lwt.syntax, miragei, mirage-net *)
+

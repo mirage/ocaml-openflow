@@ -24,9 +24,9 @@ open Gc
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
-module OP = Openflow_lwt.Packet
-module OC = Openflow_lwt.Controller
-module OE = OC.Event
+module OP = Packet
+module OC = Controller
+module OE = Controller.Event
 
 let pp = Printf.printf
 let sp = Printf.sprintf
@@ -42,19 +42,19 @@ type switch_state = {
 (*   mutable mac_cache: (mac_switch, OP.Port.t) Hashtbl.t; *)
   mutable mac_cache: (OP.eaddr, OP.Port.t) Hashtbl.t; 
   mutable dpid: OP.datapath_id list;
-  mutable of_ctrl: OC.state list; 
+  mutable of_ctrl: OC.t list; 
+  req_count: int ref; 
 }
 
-let switch_data = { mac_cache = Hashtbl.create 0;
-                    dpid = []; 
-                    of_ctrl = [];
-                  } 
+let switch_data = 
+  { mac_cache = Hashtbl.create 0;dpid = []; 
+    of_ctrl = []; req_count=(ref 0);} 
 
 
 let datapath_join_cb controller dpid evt =
   let dp = 
     match evt with
-      | OE.Datapath_join (_, c) -> c
+      | OE.Datapath_join (c) -> c
       | _ -> invalid_arg "bogus datapath_join event match!" 
   in
   switch_data.dpid <- switch_data.dpid @ [dp];
@@ -69,72 +69,60 @@ let add_entry_in_hashtbl mac_cache ix in_port =
       Hashtbl.replace mac_cache ix in_port 
 
 let packet_in_cb controller dpid evt =
-incr req_count;
+  incr switch_data.req_count;
   let (in_port, buffer_id, data, dp) = 
     match evt with
       | OE.Packet_in (inp, buf, dat, dp) -> (inp, buf, dat, dp)
       | _ -> invalid_arg "bogus datapath_join event match!"
   in
   (* Parse Ethernet header *)
-  let m = OP.Match.parse_from_raw_packet in_port data in 
+  let m = OP.Match.raw_packet_to_match in_port data in 
 
-(*
-  let pkt = OP.Packet_out.create
-  ~buffer_id:buffer_id ~actions:[ OP.(Flow.Output(Port.All , 2000))] 
-  ~data:data ~in_port:in_port () 
-  in
-  let bs = OP.Packet_out.packet_out_to_bitstring pkt in 
-  OC.send_of_data controller dpid bs
-*)
-    (* save src mac address *)
-(*   let ix = {addr= m.OP.Match.dl_src; switch=dpid;} in *)
-
-(*
+  (* Store src mac address and incoming port *)
   let ix = m.OP.Match.dl_src in
-  add_entry_in_hashtbl switch_data.mac_cache ix in_port;
+  let _ = Hashtbl.replace switch_data.mac_cache ix in_port in
  
-*)
   (* check if I know the output port in order to define what type of message
    * we need to send *)
-(*   let ix = {addr= (OP.Match.get_dl_dst m); switch=dpid;} in *)
-
-
- let ix = m.OP.Match.dl_dst in
-  if ( (OP.eaddr_is_broadcast ix)
+  let broadcast = String.make 6 '\255' in
+  let ix = m.OP.Match.dl_dst in
+  if ( (ix = broadcast)
        || (not (Hashtbl.mem switch_data.mac_cache ix)) ) 
   then (
-    let pkt = OP.Packet_out.create
-      ~buffer_id:buffer_id ~actions:[ OP.(Flow.Output(Port.All , 2000))] 
-      ~data:data ~in_port:in_port () 
-    in
-    let bs = OP.Packet_out.packet_out_to_bitstring pkt in 
+    let bs = 
+      OP.marshal_and_sub 
+      ( OP.Packet_out.marshal_packet_out  
+          (OP.Packet_out.create
+             ~buffer_id:buffer_id 
+             ~actions:[ OP.(Flow.Output(Port.All , 2000))] 
+           ~data:data ~in_port:in_port () )) (Lwt_bytes.create 4096) in   
         OC.send_of_data controller dpid bs
-(*     Printf.fprintf switch_data.log "%d %f\n" (!req_count) (((OS.Clock.time ()) -. ts)*.1000000.0) *)
   ) else (
     let out_port = (Hashtbl.find switch_data.mac_cache ix) in
-    let actions = [OP.Flow.Output(out_port, 2000)] in
-    let pkt = OP.Flow_mod.create m 0_L OP.Flow_mod.ADD 
-                ~buffer_id:(Int32.to_int buffer_id)
-                actions () in 
-    let bs = OP.Flow_mod.flow_mod_to_bitstring pkt in
-    OC.send_of_data controller dpid bs
+    let flags = OP.Flow_mod.({send_flow_rem=true; emerg=false; overlap=false;}) in 
+    lwt _ = 
+      if (buffer_id = -1l) then
+        (* Need to send also the packet in cache the packet is not cached *)
+        let bs = 
+          OP.marshal_and_sub 
+            ( OP.Packet_out.marshal_packet_out  
+                (OP.Packet_out.create
+                   ~buffer_id:buffer_id    
+                   ~actions:[ OP.(Flow.Output(out_port, 2000))] 
+                   ~data:data ~in_port:in_port () )) (Lwt_bytes.create 4096) in   
+          OC.send_of_data controller dpid bs      
+      else
+        return ()
+    in
+    let pkt = 
+      OP.marshal_and_sub 
+        ( OP.Flow_mod.marshal_flow_mod 
+            (OP.Flow_mod.create m 0_L OP.Flow_mod.ADD ~hard_timeout:0 
+                 ~idle_timeout:0 ~buffer_id:(Int32.to_int buffer_id)  ~flags
+                 [OP.Flow.Output(out_port, 2000)] ()))
+        (Lwt_bytes.create 4096) in
+      OC.send_of_data controller dpid pkt
  )
-
-
-(*let memory_debug () = 
-   while_lwt true do
-     (OS.Time.sleep 1.0)  >> 
-     return (OC.mem_dbg "memory usage")
-   done *)
-
-(*let terminate_controller controller =
-  while_lwt true do
-    (OS.Time.sleep 60.0)  >>
-    exit(1) *)
-(*    return (List.iter (fun ctrl -> Printf.printf "terminating\n%!";
- *    (OC.terminate ctrl))  *)
-(*  switch_data.of_ctrl)  *)
-(*   done *)
 
 let init controller = 
   if (not (List.mem controller switch_data.of_ctrl)) then
@@ -144,39 +132,11 @@ let init controller =
   pp "test controller register packet_in cb\n";
   OC.register_cb controller OE.PACKET_IN packet_in_cb
 
-let ip = Nettypes.(
-    (ipv4_addr_of_tuple (10l,0l,0l,1l),
-    ipv4_addr_of_tuple (255l,255l,255l,0l),
-    [ ipv4_addr_of_tuple (10l,0l,0l,2l) ]
-    ))
+let port = 6633 
 
 lwt () =
-  try_lwt 
-    let sock = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
-    lwt hostinfo = Lwt_unix.gethostbyname "localhost" in
-    let _ = Printf.printf "Starting switch...\n%!" in 
-    let server_address = hostinfo.Lwt_unix.h_addr_list.(0) in
-      Lwt_unix.bind sock (Lwt_unix.ADDR_INET (server_address, 6633)); 
-      Lwt_unix.listen sock 10; 
-      Lwt_unix.setsockopt sock Unix.SO_REUSEADDR true;
-      lwt () = Lwt_io.printl "Waiting for controller..." in 
-      while_lwt true do 
-        lwt (fd, sockaddr) = Lwt_unix.accept sock in
-          match sockaddr with
-            | ADDR_INET (dst, port) ->
-              lwt () = Lwt_io.printl (Printf.sprintf 
-                                        "Received a connection %s:%d"
-                                      (Unix.string_of_inet_addr dst) port ) in
-                let ip = 
-                  match (Nettypes.ipv4_addr_of_string (Unix.string_of_inet_addr dst)) with
-                    | None -> invalid_arg "dest ip is Invalid"
-                    | Some(ip) -> ip
-                in
-                  Lwt_unix.set_blocking fd true;
-                  Controller.listen fd (ip, port) init
-            | ADDR_UNIX(_) -> invalid_arg "invalid unix addr"
-
-      done
-    with
-      | e ->
-          return (Printf.eprintf "Unexpected exception : %s" (Printexc.to_string e))
+  try_lwt
+    Controller.listen "" (None, port) init
+  with
+    | e ->
+        return (Printf.eprintf "Unexpected exception : %s" (Printexc.to_string e))

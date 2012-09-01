@@ -16,7 +16,8 @@
 
 open Lwt
 open Lwt_list
-open Openflow_net_lwt
+(* open Openflow_net_lwt *)
+open Net
 open Printexc 
 
 let sp = Printf.sprintf
