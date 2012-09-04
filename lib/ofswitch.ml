@@ -488,6 +488,8 @@ module Switch = struct
      )
 end
 
+type t = Switch.t
+
 (*********************************************
  * Switch OpenFlow data plane 
  *********************************************)
