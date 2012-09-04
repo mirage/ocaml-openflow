@@ -1,5 +1,5 @@
-(* 
- * Copyright (c) 2012 Charalampos Rotsos <cr409@cl.cam.ac.uk>
+(*
+ * Copyright (c) 2012 Haris Rotsos <cr409@cl.cam.ac.uk>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,23 +14,11 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Cstruct 
+exception ReadError
+type t
 
-let ones_complement data = 
-  let rec add data =
-    match data with
-      | data when ((Cstruct.len data) > 2) ->
-          let value = Cstruct.LE.get_uint16 data 0 in 
-          let data = Cstruct.shift data 2 in 
-          (value + (add data)) 
-      | data when ((Cstruct.len data) = 2) -> 
-          let value = Cstruct.get_uint8 data 0 in 
-          ((value lsl 8) land 0xff00)
-      | _ -> 0
-  in 
-  let res = add data in 
-    if (res > 0xffff) then 
-      ((lnot ((res land 0xffff) + (res lsr 16))) land 0xffff)
-    else
-        ((lnot res) land 0xffff)
+(* open Openflow_net_lwt *)
+open Net 
 
+val create_socket: Channel.t -> t
+val read_data: t -> int -> Cstruct.buf Lwt.t

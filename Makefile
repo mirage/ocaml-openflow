@@ -1,29 +1,42 @@
+.PHONY: all clean distclean setup build doc install test 
 all: build
 
 NAME=openflow
 J=4
-
 export OCAMLRUNPARAM=b
 
-setup.data: setup.ml
-	ocaml setup.ml -configure
+-include Makefile.config
 
-build: setup.data setup.ml
-	 ocaml setup.ml -build -j $(J)
+clean: setup.data
+	./setup.bin -clean $(OFLAGS)
 
-doc: setup.data setup.ml
-	ocaml setup.ml -doc -j $(J)
+distclean: setup.data
+	./setup.bin -distclean $(OFLAGS)
+	$(RM) setup.bin
 
-install: setup.data setup.ml
-	ocaml setup.ml -install
+setup: setup.data
 
-test: setup.ml build
-	ocaml setup.ml -test
+build: setup.data $(wildcard lib/*.ml)
+	./setup.bin -build -j $(J) $(OFLAGS)
 
-reinstall: setup.ml
-	ocamlfind remove $(NAME) || true
-	ocaml setup.ml -reinstall
+doc: setup.data setup.bin
+	./setup.bin -doc -j $(J) $(OFLAGS)
 
-clean:
-	ocamlbuild -clean
-	rm -f setup.data setup.log
+install: 
+	ocamlfind remove $(NAME)
+	./setup.bin -install $(OFLAGS)
+
+test: build
+	./setup.bin -test
+
+##
+
+setup.ml: _oasis
+	oasis setup
+
+setup.bin: setup.ml
+	ocamlopt.opt -o $@ $< || ocamlopt -o $@ $< || ocamlc -o $@ $<
+	$(RM) setup.cmx setup.cmi setup.o setup.cmo
+
+setup.data: setup.bin
+	./setup.bin -configure

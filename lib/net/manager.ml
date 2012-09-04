@@ -1,5 +1,5 @@
-(* 
- * Copyright (c) 2012 Charalampos Rotsos <cr409@cl.cam.ac.uk>
+(*
+ * Copyright (c) 2011 Anil Madhavapeddy <anil@recoil.org>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,23 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Cstruct 
+(* The manager process binds application ports to interfaces, and
+   will eventually deal with load balancing and route determination
+   (e.g. if a remote target is on the same host, swap to shared memory *)
 
-let ones_complement data = 
-  let rec add data =
-    match data with
-      | data when ((Cstruct.len data) > 2) ->
-          let value = Cstruct.LE.get_uint16 data 0 in 
-          let data = Cstruct.shift data 2 in 
-          (value + (add data)) 
-      | data when ((Cstruct.len data) = 2) -> 
-          let value = Cstruct.get_uint8 data 0 in 
-          ((value lsl 8) land 0xff00)
-      | _ -> 0
-  in 
-  let res = add data in 
-    if (res > 0xffff) then 
-      ((lnot ((res land 0xffff) + (res lsr 16))) land 0xffff)
-    else
-        ((lnot res) land 0xffff)
+open Lwt
+open Nettypes
+open Printf
 
+type t = string
