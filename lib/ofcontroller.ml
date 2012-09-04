@@ -25,7 +25,7 @@ let pp = Printf.printf
 let ep = Printf.eprintf
 let cp = Printf.printf "%s\n%!"
 
-module OP = Packet
+module OP = Ofpacket
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 

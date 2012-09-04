@@ -16,10 +16,10 @@
  *)
 
 open Net
-(* open Net *)
 
-module Event :
-  sig
+module Event : sig
+    open Ofpacket
+
     type t =
         DATAPATH_JOIN
       | DATAPATH_LEAVE
@@ -31,32 +31,25 @@ module Event :
       | PORT_STATS_REPLY
       | TABLE_STATS_REPLY
       | PORT_STATUS_CHANGE
+
     type e =
-        Datapath_join of Packet.datapath_id
-      | Datapath_leave of Packet.datapath_id
-      | Packet_in of Packet.Port.t * int32 * Cstruct.buf * 
-          Packet.datapath_id
-      | Flow_removed of Packet.Match.t * Packet.Flow_removed.reason * 
-          int32 * int32 * int64 * int64 * Packet.datapath_id
-      | Flow_stats_reply of int32 * bool * Packet.Flow.stats list *
-          Packet.datapath_id
-      | Aggr_flow_stats_reply of int32 * int64 * int64 * int32 *
-          Packet.datapath_id
-      | Port_stats_reply of int32 * Packet.Port.stats list * 
-          Packet.datapath_id
-      | Table_stats_reply of int32 * Packet.Stats.table list * 
-          Packet.datapath_id
-      | Desc_stats_reply of string * string * string * string * string *
-          Packet.datapath_id
-      | Port_status of Packet.Port.reason * Packet.Port.phy * 
-          Packet.datapath_id
+        Datapath_join of datapath_id
+      | Datapath_leave of datapath_id
+      | Packet_in of Port.t * int32 * Cstruct.buf * datapath_id
+      | Flow_removed of Match.t * Flow_removed.reason * 
+          int32 * int32 * int64 * int64 * datapath_id
+      | Flow_stats_reply of int32 * bool * Flow.stats list * datapath_id
+      | Aggr_flow_stats_reply of int32 * int64 * int64 * int32 * datapath_id
+      | Port_stats_reply of int32 * Port.stats list * datapath_id
+      | Table_stats_reply of int32 * Stats.table list * datapath_id
+      | Desc_stats_reply of string * string * string * string * string * datapath_id
+      | Port_status of Port.reason * Port.phy * datapath_id
     val string_of_event : e -> string
   end
 
 type t 
-val register_cb : t -> Event.t -> 
-  (t -> Packet.datapath_id -> Event.e -> unit  Lwt.t) -> unit
-val send_of_data : t -> Packet.datapath_id -> Cstruct.buf  -> unit Lwt.t
+val register_cb : t -> Event.t -> (t -> Ofpacket.datapath_id -> Event.e -> unit  Lwt.t) -> unit
+val send_of_data : t -> Ofpacket.datapath_id -> Cstruct.buf  -> unit Lwt.t
 val terminate : t -> unit
 val mem_dbg : string -> unit
 val listen : Manager.t -> Nettypes.ipv4_src -> 

@@ -18,15 +18,13 @@
    with echo request on every packet_in event *)
 
 open Lwt
-open Lwt_unix
 open Printf
-open Gc
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
-module OP = Packet
-module OC = Controller
-module OE = Controller.Event
+module OP = Ofpacket
+module OC = Ofcontroller
+module OE = Ofcontroller.Event
 
 let pp = Printf.printf
 let sp = Printf.sprintf
@@ -137,7 +135,7 @@ let port = 6633
 lwt () =
   Net.Manager.create (fun mgr interface id ->
     try_lwt
-      Controller.listen mgr (None, port) init
+      OC.listen mgr (None, port) init
     with | e ->
       return (Printf.eprintf "Unexpected exception : %s" (Printexc.to_string e))
   )

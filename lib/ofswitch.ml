@@ -19,7 +19,7 @@ open Lwt
 open Net
 open Nettypes
 
-module OP = Packet
+module OP = Ofpacket
 
 exception Packet_type_unknw
 
