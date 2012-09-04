@@ -22,7 +22,6 @@ Document openflow
   XOCamlbuildPath:      lib 
   XOCamlbuildModules:   Packet, Checksum, Controller
 
-
 Executable learning_switch
   Path:       controller
   Custom:             true
@@ -30,16 +29,3 @@ Executable learning_switch
   Install:            true
   MainIs:     learning_switch.ml
   BuildDepends: cstruct, cstruct.syntax, openflow
-
-
-(* 
-Executable of_controller
-  Path:       controller
-  Custom:             true
-  CompiledObject:     best
-  Install:            true
-  MainIs:     of_controller.ml
-  BuildDepends: cstruct, cstruct.syntax, lwt, lwt.syntax, openflow_lwt
-
- *)
-
