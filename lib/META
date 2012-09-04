@@ -1,44 +1,12 @@
 # OASIS_START
-# DO NOT EDIT (digest: f347bcf85a4e549c0b057ccf17eeefcb)
-version = "0.3-dev"
+# DO NOT EDIT (digest: eefb97242d1caa280ee03612ac2332e9)
+version = "0.3.0"
 description = "OpenFlow protocol and switch implementations in pure OCaml"
-requires = "lwt lwt.syntax cstruct cstruct.syntax"
+requires = "lwt lwt.syntax cstruct cstruct.syntax mirage-net"
 archive(byte) = "openflow.cma"
 archive(byte, plugin) = "openflow.cma"
 archive(native) = "openflow.cmxa"
 archive(native, plugin) = "openflow.cmxs"
 exists_if = "openflow.cma"
-package "openflow_mirage" (
- version = "0.3-dev"
- description = "OpenFlow protocol and switch implementations in pure OCaml"
- requires = "cstruct cstruct.syntax lwt lwt.syntax mirage mirage-net"
- archive(byte) = "openflow_mirage.cma"
- archive(byte, plugin) = "openflow_mirage.cma"
- archive(native) = "openflow_mirage.cmxa"
- archive(native, plugin) = "openflow_mirage.cmxs"
- exists_if = "openflow_mirage.cma"
-)
-
-package "openflow_lwt" (
- version = "0.3-dev"
- description = "OpenFlow protocol and switch implementations in pure OCaml"
- requires = "lwt lwt.unix lwt.syntax cstruct cstruct.syntax openflow.net"
- archive(byte) = "openflow_lwt.cma"
- archive(byte, plugin) = "openflow_lwt.cma"
- archive(native) = "openflow_lwt.cmxa"
- archive(native, plugin) = "openflow_lwt.cmxs"
- exists_if = "openflow_lwt.cma"
-)
-
-package "net" (
- version = "0.3-dev"
- description = "OpenFlow protocol and switch implementations in pure OCaml"
- requires = "cstruct cstruct.syntax lwt lwt.unix lwt.syntax"
- archive(byte) = "net.cma"
- archive(byte, plugin) = "net.cma"
- archive(native) = "net.cmxa"
- archive(native, plugin) = "net.cmxs"
- exists_if = "net.cma"
-)
 # OASIS_STOP
 

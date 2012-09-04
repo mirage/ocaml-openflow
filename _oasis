@@ -1,9 +1,9 @@
 OASISFormat: 0.3
 OCamlVersion: >= 3.12
 Name:        openflow
-Version:     0.3-dev
+Version:     0.3.0
 Authors:     Charalampos Rotsos, Richard Mortier, Anil Madhavappedy, Balraj Singh
-License:     LGPL-2.0 with OCaml linking exception
+License:     ISC
 Synopsis:    OpenFlow protocol and switch implementations in pure OCaml
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
@@ -13,32 +13,7 @@ Library openflow
   Findlibname: openflow
   Pack: false
   Modules: Controller, Packet, Checksum
-  BuildDepends: lwt,lwt.syntax, cstruct, cstruct.syntax
-
-Library openflow_lwt
-  Path: lib
-  Findlibname: openflow_lwt
-  FindlibParent: openflow
-  Pack: true
-  Modules: Controller, Packet, Checksum
-  BuildDepends: lwt, lwt.unix, lwt.syntax, cstruct, cstruct.syntax, openflow.net
-
-Library openflow_mirage
-  Path: lib
-  Findlibname: openflow_mirage
-  FindlibParent: openflow
-  Pack: true
-  Modules: Controller, Packet, Ofswitch
-  BuildDepends: cstruct, cstruct.syntax, lwt, lwt.syntax, mirage, mirage-net
-
-Library net
-  Path: lib/net
-  Findlibname: net
-  FindlibParent: openflow
-  Pack: true
-  Install: false
-  Modules:  Manager, Nettypes, Channel, Flow
-  BuildDepends: cstruct, cstruct.syntax, lwt, lwt.unix, lwt.syntax
+  BuildDepends: lwt,lwt.syntax, cstruct, cstruct.syntax, mirage-net
 
 Document openflow
   Title:                OpenFlow docs
@@ -47,6 +22,7 @@ Document openflow
   XOCamlbuildPath:      lib 
   XOCamlbuildModules:   Packet, Checksum, Controller
 
+(* 
 
 Executable learning_switch
   Path:       controller
@@ -57,7 +33,6 @@ Executable learning_switch
   BuildDepends: cstruct, cstruct.syntax, lwt, lwt.syntax, openflow.openflow_lwt, openflow.net
 
 
-(* 
 Executable of_controller
   Path:       controller
   Custom:             true

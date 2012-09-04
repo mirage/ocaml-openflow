@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: e3a6d3b3ab2070883192850db47d6f27)
+# DO NOT EDIT (digest: 3a49fafdbcd834406cb261ec751f9783)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -15,51 +15,11 @@
 "_darcs": not_hygienic
 # Library openflow
 "lib/openflow.cmxs": use_openflow
-# Library openflow_mirage
-"lib/openflow_mirage.cmxs": use_openflow_mirage
-"lib/controller.cmx": for-pack(Openflow_mirage)
-"lib/packet.cmx": for-pack(Openflow_mirage)
-"lib/ofswitch.cmx": for-pack(Openflow_mirage)
-<lib/*.ml{,i}>: pkg_mirage
-<lib/*.ml{,i}>: pkg_mirage-net
-# Library net
-"lib/net/net.cmxs": use_net
-"lib/net/manager.cmx": for-pack(Net)
-"lib/net/nettypes.cmx": for-pack(Net)
-"lib/net/channel.cmx": for-pack(Net)
-"lib/net/flow.cmx": for-pack(Net)
-<lib/net/*.ml{,i}>: pkg_cstruct
-<lib/net/*.ml{,i}>: pkg_cstruct.syntax
-<lib/net/*.ml{,i}>: pkg_lwt
-<lib/net/*.ml{,i}>: pkg_lwt.syntax
-<lib/net/*.ml{,i}>: pkg_lwt.unix
-# Library openflow_lwt
-"lib/openflow_lwt.cmxs": use_openflow_lwt
-"lib/controller.cmx": for-pack(Openflow_lwt)
-"lib/packet.cmx": for-pack(Openflow_lwt)
-"lib/checksum.cmx": for-pack(Openflow_lwt)
-<lib/*.ml{,i}>: use_net
-<lib/*.ml{,i}>: pkg_cstruct
-<lib/*.ml{,i}>: pkg_cstruct.syntax
 <lib/*.ml{,i}>: pkg_lwt
 <lib/*.ml{,i}>: pkg_lwt.syntax
-<lib/*.ml{,i}>: pkg_lwt.unix
-# Executable learning_switch
-<controller/learning_switch.{native,byte}>: use_openflow_lwt
-<controller/learning_switch.{native,byte}>: use_net
-<controller/learning_switch.{native,byte}>: pkg_cstruct
-<controller/learning_switch.{native,byte}>: pkg_cstruct.syntax
-<controller/learning_switch.{native,byte}>: pkg_lwt
-<controller/learning_switch.{native,byte}>: pkg_lwt.syntax
-<controller/learning_switch.{native,byte}>: pkg_lwt.unix
-<controller/*.ml{,i}>: use_openflow_lwt
-<controller/*.ml{,i}>: use_net
-<controller/*.ml{,i}>: pkg_cstruct
-<controller/*.ml{,i}>: pkg_cstruct.syntax
-<controller/*.ml{,i}>: pkg_lwt
-<controller/*.ml{,i}>: pkg_lwt.syntax
-<controller/*.ml{,i}>: pkg_lwt.unix
-<controller/learning_switch.{native,byte}>: custom
+<lib/*.ml{,i}>: pkg_cstruct
+<lib/*.ml{,i}>: pkg_cstruct.syntax
+<lib/*.ml{,i}>: pkg_mirage-net
 # OASIS_STOP
 true: annot
 <lib/*>: syntax_camlp4o
