@@ -19,7 +19,7 @@ open Lwt
 open Net
 open Nettypes
 
-module OP = Ofpacket
+module OP = Packet
 
 exception Packet_type_unknw
 
@@ -813,7 +813,7 @@ let process_openflow st t bits =  function
 
 let control_channel st (remote_addr, remote_port) t =
   let rs = Nettypes.ipv4_addr_to_string remote_addr in
-  Log.info "OpenFlow Switch: controller " "+ %s:%d" rs remote_port; 
+  Printf.eprintf "OpenFlow Switch: controller %s:%d" rs remote_port; 
   st.Switch.controllers <- (st.Switch.controllers @ [t]);
 
   (* Trigger the dance between the 2 nodes *)

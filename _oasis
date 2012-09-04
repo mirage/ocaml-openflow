@@ -11,8 +11,7 @@ BuildTools:  ocamlbuild
 Library openflow
   Path: lib
   Findlibname: openflow
-  Pack: false
-  Modules: Controller, Packet, Checksum
+  Modules: Controller, Packet, Ofswitch
   BuildDepends: cstruct, cstruct.syntax, mirage-net
 
 Document openflow
