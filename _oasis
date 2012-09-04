@@ -11,7 +11,7 @@ BuildTools:  ocamlbuild
 Library openflow
   Path: lib
   Findlibname: openflow
-  Modules: Controller, Packet, Ofswitch
+  Modules: Ofcontroller, Ofpacket, Ofswitch
   BuildDepends: cstruct, cstruct.syntax, mirage-net
 
 Document openflow
@@ -19,12 +19,12 @@ Document openflow
   Type:                 ocamlbuild (0.2)
   BuildTools+:          ocamldoc
   XOCamlbuildPath:      lib 
-  XOCamlbuildModules:   Packet, Checksum, Controller
+  XOCamlbuildModules:   Ofpacket, Ofcontroller, Ofswitch
 
 Executable learning_switch
-  Path:       controller
-  Custom:             true
-  CompiledObject:     best
-  Install:            true
-  MainIs:     learning_switch.ml
-  BuildDepends: cstruct, cstruct.syntax, openflow
+  Path:                 controller
+  Custom:               true
+  CompiledObject:       best
+  Install:              true
+  MainIs:               learning_switch.ml
+  BuildDepends:         cstruct, cstruct.syntax, openflow

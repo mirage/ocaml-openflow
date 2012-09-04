@@ -1,6 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: f6ac2927bf4b2c6ddbe66abc5913001c)
-Packet
-Checksum
-Controller
+# DO NOT EDIT (digest: 169e106a3d54b9d1a37dc1f99698ecbb)
+Ofpacket
+Ofcontroller
+Ofswitch
 # OASIS_STOP
