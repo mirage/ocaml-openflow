@@ -13,7 +13,7 @@ Library openflow
   Findlibname: openflow
   Pack: false
   Modules: Controller, Packet, Checksum
-  BuildDepends: lwt,lwt.syntax, cstruct, cstruct.syntax, mirage-net
+  BuildDepends: cstruct, cstruct.syntax, mirage-net
 
 Document openflow
   Title:                OpenFlow docs
@@ -22,7 +22,6 @@ Document openflow
   XOCamlbuildPath:      lib 
   XOCamlbuildModules:   Packet, Checksum, Controller
 
-(* 
 
 Executable learning_switch
   Path:       controller
@@ -30,9 +29,10 @@ Executable learning_switch
   CompiledObject:     best
   Install:            true
   MainIs:     learning_switch.ml
-  BuildDepends: cstruct, cstruct.syntax, lwt, lwt.syntax, openflow.openflow_lwt, openflow.net
+  BuildDepends: cstruct, cstruct.syntax, openflow
 
 
+(* 
 Executable of_controller
   Path:       controller
   Custom:             true

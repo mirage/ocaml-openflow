@@ -135,8 +135,9 @@ let init controller =
 let port = 6633 
 
 lwt () =
-  try_lwt
-    Controller.listen "" (None, port) init
-  with
-    | e ->
-        return (Printf.eprintf "Unexpected exception : %s" (Printexc.to_string e))
+  Net.Manager.create (fun mgr interface id ->
+    try_lwt
+      Controller.listen mgr (None, port) init
+    with | e ->
+      return (Printf.eprintf "Unexpected exception : %s" (Printexc.to_string e))
+  )
