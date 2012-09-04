@@ -12,7 +12,7 @@ Library openflow
   Path: lib
   Findlibname: openflow
   Modules: Ofcontroller, Ofpacket, Ofswitch
-  BuildDepends: cstruct, cstruct.syntax, mirage-net
+  BuildDepends: cstruct, cstruct.syntax, mirage-net (>= 0.3.0)
 
 Document openflow
   Title:                OpenFlow docs
