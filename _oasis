@@ -28,3 +28,11 @@ Executable learning_switch
   Install:              true
   MainIs:               learning_switch.ml
   BuildDepends:         cstruct, cstruct.syntax, openflow
+
+Executable basic_switch
+  Path:                 switch
+  Custom:               true
+  CompiledObject:       best
+  Install:              true
+  MainIs:               basic_switch.ml
+  BuildDepends:         openflow

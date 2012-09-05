@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: bbbe5029c6983bf30c57985d7948ec03)
+# DO NOT EDIT (digest: 2367740259d14322c442b4e641985428)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -28,6 +28,16 @@
 <controller/*.ml{,i}>: pkg_cstruct.syntax
 <controller/*.ml{,i}>: pkg_mirage-net
 <controller/learning_switch.{native,byte}>: custom
+# Executable basic_switch
+<switch/basic_switch.{native,byte}>: use_openflow
+<switch/basic_switch.{native,byte}>: pkg_cstruct
+<switch/basic_switch.{native,byte}>: pkg_cstruct.syntax
+<switch/basic_switch.{native,byte}>: pkg_mirage-net
+<switch/*.ml{,i}>: use_openflow
+<switch/*.ml{,i}>: pkg_cstruct
+<switch/*.ml{,i}>: pkg_cstruct.syntax
+<switch/*.ml{,i}>: pkg_mirage-net
+<switch/basic_switch.{native,byte}>: custom
 # OASIS_STOP
 true: annot
 <lib/*>: syntax_camlp4o
@@ -36,3 +46,5 @@ true: annot
 <lib/net/*>: pkg_lwt.syntax
 <controller/*>: syntax_camlp4o
 <controller/*>: pkg_lwt.syntax
+<switch/*>: syntax_camlp4o
+<switch/*>: pkg_lwt.syntax
