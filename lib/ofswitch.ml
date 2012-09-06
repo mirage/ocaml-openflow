@@ -232,8 +232,9 @@ module Switch = struct
     phy: OP.Port.phy;
   }
   let init_port mgr port_no ethif = 
-    let name = Manager.get_intf_name mgr ethif (* get_ethif.Net.Ethif.ethif.OS.Netif.id *) in 
-    let hw_addr = Manager.get_intf_mac mgr ethif in
+    let name = Manager.get_intf_name mgr ethif in 
+    let hw_addr = Nettypes.ethernet_mac_to_bytes 
+                    (Manager.get_intf_mac mgr ethif) in
  let counter = OP.Port.(
    { port_id=port_no; rx_packets=0L; tx_packets=0L; rx_bytes=0L; 
    tx_bytes=0L; rx_dropped=0L; tx_dropped=0L; rx_errors=0L; 
@@ -359,8 +360,8 @@ module Switch = struct
   cstruct arphdr {
     uint16_t ar_hrd;         
     uint16_t ar_pro;         
-    uint16_t ar_hln;              
-    uint16_t ar_pln;              
+    uint8_t ar_hln;              
+    uint8_t ar_pln;              
     uint16_t ar_op;          
     uint8_t ar_sha[6];  
     uint32_t nw_src;
@@ -402,8 +403,8 @@ module Switch = struct
     | 0x0806 ->
       Some(sizeof_dl_header + sizeof_arphdr)
     | _ ->
-      let _ = ep "Cannot determine size of ethtype %x\n%!" dl_type in
-      let _ = Cstruct.hexdump bits in 
+      let _ = ep "dropping packet of ethtype %x\n%!" dl_type in
+(*      let _ = Cstruct.hexdump bits in *)
         None
 
   (* Assumwe that action are valid. I will not get a flow that sets an ip
@@ -509,7 +510,10 @@ let process_frame_inner st intf frame =
      * process it *)
     let frame = 
       match (Switch.size_of_raw_packet frame) with
-      | Some(len) -> Cstruct.sub_buffer frame 0 len
+      | Some(len) -> 
+          let _ = pr "received packet of size %d (buf len %d)\n%!" 
+                    (Cstruct.len frame) len in
+            Cstruct.sub_buffer frame 0 len
       | None -> raise Packet_type_unknw
     in 
      (* Lookup packet flow to existing flows in table *)
@@ -546,8 +550,9 @@ let process_frame_inner st intf frame =
        let _ = Entry.update_flow (Int64.of_int (Cstruct.len frame)) !entry in
         Switch.apply_of_actions st tupple.OP.Match.in_port 
           frame (!entry).Entry.actions
-    with Not_found ->
-      pr "bt: %s\n%!" (Printexc.get_backtrace ());
+    with exn ->
+      pp "control channel error: %s\nbt: %s\n%!" 
+        (Printexc.to_string exn) (Printexc.get_backtrace ());
       return ()
      | Packet_type_unknw -> return ()
 
@@ -874,6 +879,5 @@ let create_switch () =
 let listen st mgr loc =
   Channel.listen mgr (`TCPv4 (loc, (control_channel st))) <&> (data_plane st ())
 
-let connect st mgr loc init =
-  init mgr st; 
-  Channel.listen mgr (`TCPv4 (loc, (control_channel st))) <&> (data_plane st ())
+let connect st mgr loc  =
+  Channel.connect mgr (`TCPv4 (None, loc, (control_channel st loc))) <&> (data_plane st ())

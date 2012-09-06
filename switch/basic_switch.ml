@@ -18,7 +18,7 @@ open Lwt
 open Unix
 open Printf
 open Net
-
+open Net.Nettypes
 
 (****************************************************************
  * OpenFlow Switch configuration 
@@ -26,22 +26,22 @@ open Net
 
 let print_time () =
   while_lwt true do
-    Lwt_unix.sleep 1.0 >>
+    Lwt_unix.sleep 10.0 >>
     return (printf "%03.6f: process running..\n%!" (Unix.gettimeofday ()))
   done
 
 lwt () = 
   let sw = Ofswitch.create_switch () in
   try_lwt 
-    Manager.create 
+    Manager.create ~devs:3 
     (fun mgr interface id ->
        match (Manager.get_intf_name mgr id) with 
-         | "0" ->
+         | "tap0" ->
              let ip = 
-               Nettypes.(
                  (ipv4_addr_of_tuple (10l,0l,0l,1l),
-                  ipv4_addr_of_tuple (255l,255l,255l,0l), [])) in  
+                  ipv4_addr_of_tuple (255l,255l,255l,0l), []) in  
                lwt _ = Manager.configure interface (`IPv4 ip) in
+               let dst_ip = ipv4_addr_of_tuple (10l,0l,0l,2l) in
                lwt _ = (Ofswitch.listen sw mgr (None, 6633) <&> 
                        (print_time ())) in 
                 return ()
