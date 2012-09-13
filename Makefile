@@ -4,14 +4,22 @@ all: build
 NAME=openflow
 J=4
 
+LWT ?= $(shell if ocamlfind query lwt.ssl >/dev/null 2>&1; then echo --enable-lwt; fi)
+ASYNC ?= $(shell if ocamlfind query async_core >/dev/null 2>&1; then echo --enable-async; fi)
+MIRAGE ?= $(shell if ocamlfind query mirage-net >/dev/null 2>&1; then echo --enable-mirage; fi)
+ifneq ($(MIRAGE_OS),xen)
+TESTS ?= --enable-tests
+endif
+
 -include Makefile.config
 
 clean: setup.data
 	./setup.bin -clean $(OFLAGS)
+	rm -f setup.data setup.log setup.bin
 
 distclean: setup.data
 	./setup.bin -distclean $(OFLAGS)
-	$(RM) setup.bin
+	rm -f setup.data setup.log setup.bin
 
 setup: setup.data
 
@@ -30,6 +38,10 @@ test: build
 
 ##
 
+setup.bin: setup.ml
+	ocamlopt.opt -o $@ $< || ocamlopt -o $@ $< || ocamlc -o $@ $<
+	rm -f setup.cmx setup.cmi setup.o setup.cmo
+
 setup.ml: _oasis
 	oasis setup
 
@@ -38,4 +50,4 @@ setup.bin: setup.ml
 	$(RM) setup.cmx setup.cmi setup.o setup.cmo
 
 setup.data: setup.bin
-	./setup.bin -configure
+	./setup.bin -configure $(LWT) $(ASYNC) $(MIRAGE) $(TESTS) $(NETTESTS)

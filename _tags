@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2367740259d14322c442b4e641985428)
+# DO NOT EDIT (digest: 1790da9bc8f70d70b92ff9a71d1a8f1b)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -15,29 +15,51 @@
 "_darcs": not_hygienic
 # Library openflow
 "lib/openflow.cmxs": use_openflow
+"lib/ofpacket.cmx": for-pack(Openflow)
+"lib/ofcontroller.cmx": for-pack(Openflow)
+"lib/ofswitch.cmx": for-pack(Openflow)
 <lib/*.ml{,i}>: pkg_cstruct
 <lib/*.ml{,i}>: pkg_cstruct.syntax
+<lib/*.ml{,i}>: pkg_mirage
 <lib/*.ml{,i}>: pkg_mirage-net
-# Executable learning_switch
-<controller/learning_switch.{native,byte}>: use_openflow
-<controller/learning_switch.{native,byte}>: pkg_cstruct
-<controller/learning_switch.{native,byte}>: pkg_cstruct.syntax
-<controller/learning_switch.{native,byte}>: pkg_mirage-net
+# Executable learning_switch_lwt
+<controller/learning_switch.{native,byte,nobj.o}>: use_openflow
+<controller/learning_switch.{native,byte,nobj.o}>: pkg_cstruct
+<controller/learning_switch.{native,byte,nobj.o}>: pkg_cstruct.syntax
+<controller/learning_switch.{native,byte,nobj.o}>: pkg_mirage
+<controller/learning_switch.{native,byte,nobj.o}>: pkg_mirage-net
+<controller/learning_switch.{native,byte,nobj.o}>: custom
+# Executable basic_switch_lwt
+<switch/basic_switch.{native,byte,nobj.o}>: use_openflow
+<switch/basic_switch.{native,byte,nobj.o}>: pkg_cstruct
+<switch/basic_switch.{native,byte,nobj.o}>: pkg_cstruct.syntax
+<switch/basic_switch.{native,byte,nobj.o}>: pkg_mirage
+<switch/basic_switch.{native,byte,nobj.o}>: pkg_mirage-net
+<switch/basic_switch.{native,byte,nobj.o}>: custom
+# Executable learning_switch_mirage
+<controller/learning_switch.{native,nobj.o}>: use_openflow
+<controller/learning_switch.{native,nobj.o}>: pkg_cstruct
+<controller/learning_switch.{native,nobj.o}>: pkg_cstruct.syntax
+<controller/learning_switch.{native,nobj.o}>: pkg_mirage
+<controller/learning_switch.{native,nobj.o}>: pkg_mirage-net
 <controller/*.ml{,i}>: use_openflow
 <controller/*.ml{,i}>: pkg_cstruct
 <controller/*.ml{,i}>: pkg_cstruct.syntax
+<controller/*.ml{,i}>: pkg_mirage
 <controller/*.ml{,i}>: pkg_mirage-net
-<controller/learning_switch.{native,byte}>: custom
-# Executable basic_switch
-<switch/basic_switch.{native,byte}>: use_openflow
-<switch/basic_switch.{native,byte}>: pkg_cstruct
-<switch/basic_switch.{native,byte}>: pkg_cstruct.syntax
-<switch/basic_switch.{native,byte}>: pkg_mirage-net
+<controller/learning_switch.{native,nobj.o}>: custom
+# Executable basic_switch_mirage
+<switch/basic_switch.{native,nobj.o}>: use_openflow
+<switch/basic_switch.{native,nobj.o}>: pkg_cstruct
+<switch/basic_switch.{native,nobj.o}>: pkg_cstruct.syntax
+<switch/basic_switch.{native,nobj.o}>: pkg_mirage
+<switch/basic_switch.{native,nobj.o}>: pkg_mirage-net
 <switch/*.ml{,i}>: use_openflow
 <switch/*.ml{,i}>: pkg_cstruct
 <switch/*.ml{,i}>: pkg_cstruct.syntax
+<switch/*.ml{,i}>: pkg_mirage
 <switch/*.ml{,i}>: pkg_mirage-net
-<switch/basic_switch.{native,byte}>: custom
+<switch/basic_switch.{native,nobj.o}>: custom
 # OASIS_STOP
 true: annot
 <lib/*>: syntax_camlp4o

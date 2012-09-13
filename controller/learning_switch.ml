@@ -95,7 +95,7 @@ let packet_in_cb controller dpid evt =
           (OP.Packet_out.create
              ~buffer_id:buffer_id 
              ~actions:[ OP.(Flow.Output(Port.All , 2000))] 
-           ~data:data ~in_port:in_port () )) (Lwt_bytes.create 4096) in   
+           ~data:data ~in_port:in_port () )) (OS.Io_page.get ()) in   
         OC.send_of_data controller dpid bs
   ) else (
     let out_port = (Hashtbl.find switch_data.mac_cache ix) in
@@ -109,7 +109,7 @@ let packet_in_cb controller dpid evt =
                 (OP.Packet_out.create
                    ~buffer_id:buffer_id    
                    ~actions:[ OP.(Flow.Output(out_port, 2000))] 
-                   ~data:data ~in_port:in_port () )) (Lwt_bytes.create 4096) in   
+                   ~data:data ~in_port:in_port () )) (OS.Io_page.get ()) in   
           OC.send_of_data controller dpid bs      
       else
         return ()
@@ -120,7 +120,7 @@ let packet_in_cb controller dpid evt =
             (OP.Flow_mod.create m 0_L OP.Flow_mod.ADD ~hard_timeout:0 
                  ~idle_timeout:0 ~buffer_id:(Int32.to_int buffer_id)  ~flags
                  [OP.Flow.Output(out_port, 2000)] ()))
-        (Lwt_bytes.create 4096) in
+        (OS.Io_page.get ()) in
       OC.send_of_data controller dpid pkt
  )
 
@@ -134,7 +134,7 @@ let init controller =
 
 let port = 6633 
 
-lwt () =
+let run () =
   Net.Manager.create (fun mgr interface id ->
     try_lwt
       let ip = 
@@ -145,3 +145,5 @@ lwt () =
     with | e ->
       return (Printf.eprintf "Unexpected exception : %s" (Printexc.to_string e))
   )
+
+let _ = OS.Main.run (run ())

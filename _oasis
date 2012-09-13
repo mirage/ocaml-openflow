@@ -8,11 +8,29 @@ Synopsis:    OpenFlow protocol and switch implementations in pure OCaml
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
 
+Flag lwt
+  Description: build the Lwt library
+  Default: false
+
+Flag async
+  Description: build the Core/Async library
+  Default: false
+
+Flag mirage
+  Description: build the Mirage library
+  Default: false
+
+Flag nettests
+  Description: run the internet-using tests
+  Default: false
+
+
 Library openflow
-  Path: lib
-  Findlibname: openflow
-  Modules: Ofcontroller, Ofpacket, Ofswitch
-  BuildDepends: cstruct, cstruct.syntax, mirage-net (>= 0.3.0)
+  Path:                 lib
+  Findlibname:          openflow
+  Modules:              Ofpacket,  Ofcontroller, Ofswitch 
+  Pack:                 True
+  BuildDepends:         cstruct, cstruct.syntax, mirage, mirage-net (>= 0.3.0)
 
 Document openflow
   Title:                OpenFlow docs
@@ -21,18 +39,40 @@ Document openflow
   XOCamlbuildPath:      lib 
   XOCamlbuildModules:   Ofpacket, Ofcontroller, Ofswitch
 
-Executable learning_switch
+Executable learning_switch_lwt
   Path:                 controller
+  MainIs:               learning_switch.ml
+  Build$:               flag(lwt)
   Custom:               true
   CompiledObject:       best
-  Install:              true
-  MainIs:               learning_switch.ml
+  Install:              false
   BuildDepends:         cstruct, cstruct.syntax, openflow
 
-Executable basic_switch
+Executable basic_switch_lwt
   Path:                 switch
+  MainIs:               basic_switch.ml
+  Build$:               flag(lwt)
   Custom:               true
   CompiledObject:       best
-  Install:              true
+  Install:              false
+  BuildDepends:         openflow
+
+Executable learning_switch_mirage
+  Path:                 controller
+  MainIs:               learning_switch.ml
+  Build$:               flag(mirage)
+  Custom:               true
+  CompiledObject:       native
+  Target:               xen
+  Install:              false
+  BuildDepends:         cstruct, cstruct.syntax, openflow
+
+Executable basic_switch_mirage
+  Path:                 switch
   MainIs:               basic_switch.ml
+  Build$:               flag(mirage)
+  Custom:               true
+  CompiledObject:       native
+  Target:               xen
+  Install:              false
   BuildDepends:         openflow

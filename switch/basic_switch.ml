@@ -15,7 +15,6 @@
  *)
 
 open Lwt
-open Unix
 open Printf
 open Net
 open Net.Nettypes
@@ -26,11 +25,11 @@ open Net.Nettypes
 
 let print_time () =
   while_lwt true do
-    Lwt_unix.sleep 10.0 >>
-    return (printf "%03.6f: process running..\n%!" (Unix.gettimeofday ()))
+    OS.Time.sleep 10.0 >>
+    return (printf "%03.6f: process running..\n%!" (OS.Clock.time ()))
   done
 
-lwt () = 
+let switch_run () = 
   let sw = Ofswitch.create_switch () in
   try_lwt 
     Manager.create ~devs:3 
@@ -52,3 +51,5 @@ lwt () =
     Printf.eprintf "Error: %s" (Printexc.to_string e); 
     return ()
 
+
+let _ = OS.Main.run(switch_run ())

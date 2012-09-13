@@ -155,17 +155,17 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
       | Hello (h) (* Reply to HELLO with a HELLO and a feature request *)
         -> ( cp "HELLO"; 
           let bits = OP.marshal_and_sub (Header.marshal_header h)
-          (Lwt_bytes.create 1024) in 
+          (OS.Io_page.get ()) in 
           let _ = Channel.write_buffer t bits in
           let bits = OP.marshal_and_sub (OP.build_features_req 1l)
-          (Lwt_bytes.create 1024) in 
+          (OS.Io_page.get ()) in 
           let _ = Channel.write_buffer t bits in 
             Channel.flush t
         )
 
       | Echo_req (h, bs)  (* Reply to ECHO requests *)
         -> ((* cp "ECHO_REQ"; *)
-          Channel.write_buffer t (build_echo_resp h bs (Lwt_bytes.create 4096));
+          Channel.write_buffer t (build_echo_resp h bs (OS.Io_page.get ()));
           Channel.flush t
         )
 

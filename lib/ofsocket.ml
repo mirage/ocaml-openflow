@@ -36,7 +36,7 @@ let rec read_data t len =
     match (len, !(t.data_cache)) with
     | (0, _) -> 
 (*        pp "| (0, _) ->\n%!";  *)
-      return (Cstruct.sub (Lwt_bytes.create 10) 0 0 )
+      return (Cstruct.sub (OS.Io_page.get ()) 0 0 )
     | (_, []) ->
 (*        pp " | (_, []) ->\n%!";  *)
       lwt data = Channel.read_some t.sock in
@@ -46,7 +46,7 @@ let rec read_data t len =
         when ((List.fold_right (fun a b ->b+(Cstruct.len a)) tail (Cstruct.len head))>=len) -> (
 (*           pp "| (_, head::tail) when ((List.fold_right (f a b
  *           ->b+(Cstruct.len b)) tail (Cstruct.len head)) >= len) ->\n%!"; *)
-          let ret = Lwt_bytes.create 4096 in 
+          let ret = OS.Io_page.get () in 
           let ret_len = ref 0 in 
           let rec read_data_inner = function 
             | head::tail when ((!ret_len + (Cstruct.len head)) < len) ->
@@ -84,4 +84,4 @@ let rec read_data t len =
     | (_, _) ->
 (*        pp "| (_, _) ->\n%!";  *)
       Printf.printf "read_data and not match found\n%!";
-      return (Cstruct.sub (Lwt_bytes.create 10) 0 0 )
+      return (Cstruct.sub (OS.Io_page.get ()) 0 0 )
