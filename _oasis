@@ -30,7 +30,7 @@ Library openflow
   Findlibname:          openflow
   Modules:              Ofpacket,  Ofcontroller, Ofswitch 
   Pack:                 True
-  BuildDepends:         cstruct, cstruct.syntax, mirage, mirage-net (>= 0.3.0)
+  BuildDepends:         cstruct, cstruct.syntax, mirage, mirage-net (>= 0.4.0)
 
 Document openflow
   Title:                OpenFlow docs
