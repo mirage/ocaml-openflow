@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 1790da9bc8f70d70b92ff9a71d1a8f1b)
+# DO NOT EDIT (digest: e6423545a758a97078de25025cc8648e)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -36,6 +36,8 @@
 <switch/basic_switch.{native,byte,nobj.o}>: pkg_mirage
 <switch/basic_switch.{native,byte,nobj.o}>: pkg_mirage-net
 <switch/basic_switch.{native,byte,nobj.o}>: custom
+# Executable learning_switch_mirage_unix
+# Executable basic_switch_mirage_unix
 # Executable learning_switch_mirage
 <controller/learning_switch.{native,nobj.o}>: use_openflow
 <controller/learning_switch.{native,nobj.o}>: pkg_cstruct

@@ -12,8 +12,8 @@ Flag lwt
   Description: build the Lwt library
   Default: false
 
-Flag async
-  Description: build the Core/Async library
+Flag xen
+  Description: build the Xen tests
   Default: false
 
 Flag mirage
@@ -57,10 +57,28 @@ Executable basic_switch_lwt
   Install:              false
   BuildDepends:         openflow
 
-Executable learning_switch_mirage
+Executable learning_switch_mirage_unix
   Path:                 controller
   MainIs:               learning_switch.ml
   Build$:               flag(mirage)
+  Custom:               true
+  CompiledObject:       native
+  Install:              false
+  BuildDepends:         cstruct, cstruct.syntax, openflow
+
+Executable basic_switch_mirage_unix
+  Path:                 switch
+  MainIs:               basic_switch.ml
+  Build$:               flag(mirage)
+  Custom:               true
+  CompiledObject:       native
+  Install:              false
+  BuildDepends:         openflow
+
+Executable learning_switch_mirage
+  Path:                 controller
+  MainIs:               learning_switch.ml
+  Build$:               flag(mirage) && flag(xen)
   Custom:               true
   CompiledObject:       native
   Target:               xen
@@ -70,7 +88,7 @@ Executable learning_switch_mirage
 Executable basic_switch_mirage
   Path:                 switch
   MainIs:               basic_switch.ml
-  Build$:               flag(mirage)
+  Build$:               flag(mirage) && flag(xen)
   Custom:               true
   CompiledObject:       native
   Target:               xen
