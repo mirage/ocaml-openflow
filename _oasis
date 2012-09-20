@@ -44,7 +44,7 @@ Executable learning_switch_lwt
   MainIs:               learning_switch.ml
   Build$:               flag(lwt)
   Custom:               true
-  CompiledObject:       best
+  CompiledObject:       native
   Install:              false
   BuildDepends:         cstruct, cstruct.syntax, openflow
 
@@ -53,7 +53,7 @@ Executable basic_switch_lwt
   MainIs:               basic_switch.ml
   Build$:               flag(lwt)
   Custom:               true
-  CompiledObject:       best
+  CompiledObject:       native
   Install:              false
   BuildDepends:         openflow
 
