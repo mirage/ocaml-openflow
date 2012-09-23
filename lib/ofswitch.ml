@@ -18,6 +18,7 @@
 open Lwt
 open Net
 open Nettypes
+open Ofswitch_config
 
 module OP = Ofpacket
 
@@ -499,7 +500,7 @@ type t = Switch.t
 (* 
  * let process_frame_depr intf_name frame =  *)
 let process_frame_inner st intf frame =
-  try_lwt 
+  try_lwt
       let p = (!(Hashtbl.find st.Switch.dev_to_port intf)) in  
      let in_port = (OP.Port.port_of_int p.Switch.port_id) in 
      let tupple = (OP.Match.raw_packet_to_match in_port frame ) in
@@ -510,10 +511,7 @@ let process_frame_inner st intf frame =
      * process it *)
     let frame = 
       match (Switch.size_of_raw_packet frame) with
-      | Some(len) -> 
-          let _ = pr "received packet of size %d (buf len %d)\n%!" 
-                    (Cstruct.len frame) len in
-            Cstruct.sub_buffer frame 0 len
+      | Some(len) -> Cstruct.sub_buffer frame 0 len
       | None -> raise Packet_type_unknw
     in 
      (* Lookup packet flow to existing flows in table *)
@@ -752,7 +750,9 @@ let process_openflow st t bits =  function
                        (OS.Io_page.get ()) in 
             let _ = Channel.write_buffer t bs in 
               Channel.flush t 
-        | Some(pkt_in) -> 
+        | Some(pkt_in) ->
+            let _ = pr "Sending as packet_out data %d\n%!" 
+                      (Cstruct.len pkt_in.OP.Packet_in.data) in 
             Switch.apply_of_actions st pkt_in.OP.Packet_in.in_port
               pkt_in.OP.Packet_in.data pkt.OP.Packet_out.actions
     end 
@@ -865,7 +865,41 @@ let add_port mgr sw ethif =
   sw.Switch.features.OP.Switch.ports  <- 
     sw.Switch.features.OP.Switch.ports @ [port.Switch.phy];
   let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw) in
+  let port_status = OP.Port.create_port_status OP.Port.ADD port.Switch.phy in 
+  let bits = OP.marshal_and_sub (OP.Port.marshal_port_status port_status)
+               (Lwt_bytes.create 2048) in 
+  lwt _ = Lwt_list.iter_p 
+            (fun t -> 
+               let _ = Net.Channel.write_buffer t bits in
+                 Net.Channel.flush t
+            )
+            sw.Switch.controllers in 
+    return ()
+
+let add_port_local mgr sw ethif = 
+  let _ = pr "Adding port 0 (%s)\n %!" 
+            (Net.Manager.get_intf_name mgr ethif) in 
+  (*TODO Find first if a port is already registered as port 0 
+  * as port 0 and disable it *)
+  let port = Switch.init_port mgr 0 ethif in 
+  sw.Switch.ports <- 
+  (List.filter (fun a -> (a.Switch.port_id <> 0)) sw.Switch.ports) 
+  @ [port];
+  Hashtbl.replace sw.Switch.int_to_port 0 (ref port); 
+  Hashtbl.iter 
+    (fun a b -> 
+       if (!b.Switch.port_id = 0) then 
+         Hashtbl.remove sw.Switch.dev_to_port a
+    ) sw.Switch.dev_to_port;
+  Hashtbl.add sw.Switch.dev_to_port ethif (ref port);
+  (*TODO Need to filter out any 0 port *)
+  sw.Switch.features.OP.Switch.ports <- 
+  (List.filter (fun a -> (a.OP.Port.port_no <> 0)) 
+                           sw.Switch.features.OP.Switch.ports )
+   @ [port.Switch.phy];
+  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw) in
     ()
+
 
 let create_switch () = 
   let (packet_queue, push_packet) = Lwt_stream.create () in
@@ -877,7 +911,11 @@ let create_switch () =
     packet_buffer=[]; packet_buffer_id=0l};)
 
 let listen st mgr loc =
-  Channel.listen mgr (`TCPv4 (loc, (control_channel st))) <&> (data_plane st ())
+  Channel.listen mgr (`TCPv4 (loc, (control_channel st))) <&>
+    (Ofswitch_config.listen_t mgr 6634) <&>
+    (data_plane st ())
 
 let connect st mgr loc  =
-  Channel.connect mgr (`TCPv4 (None, loc, (control_channel st loc))) <&> (data_plane st ())
+  Channel.connect mgr (`TCPv4 (None, loc, (control_channel st loc))) <&> 
+    (Ofswitch_config.listen_t mgr 6634) <&>
+       (data_plane st ())

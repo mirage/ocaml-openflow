@@ -148,6 +148,8 @@ module Port :
     val reason_to_string: reason -> string
     type status = { reason : reason; desc : phy; }
     val string_of_status : status -> string
+    val create_port_status: reason -> phy -> status
+    val marshal_port_status: ?xid:int32 -> status ->  Cstruct.buf -> int
   end
 module Switch :
   sig

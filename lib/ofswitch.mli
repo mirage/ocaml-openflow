@@ -16,7 +16,8 @@
  *)
 
 type t
-val add_port : Net.Manager.t -> t -> Net.Manager.id -> unit
+val add_port : Net.Manager.t -> t -> Net.Manager.id -> unit Lwt.t
+val add_port_local : Net.Manager.t -> t -> Net.Manager.id -> unit
 val create_switch : unit -> t
 val listen : t -> Net.Manager.t -> Net.Nettypes.ipv4_src -> 
   unit Lwt.t 

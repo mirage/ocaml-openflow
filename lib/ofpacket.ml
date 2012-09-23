@@ -552,7 +552,17 @@ module Port = struct
     in
     let _ = Cstruct.shift_left bits sizeof_ofp_port_status in
       {reason; desc=(parse_phy bits)}
+  let create_port_status reason desc =
+    {reason; desc;}
 
+  let marshal_port_status ?(xid=0l) status bits =
+    let len = Header.get_len + sizeof_ofp_port_status + phy_len in 
+    let header = Header.create Header.PORT_STATUS len xid in
+    let (_, bits) = marshal_and_shift (Header.marshal_header header) bits in
+    let _ = set_ofp_port_status_reason bits (reason_to_int status.reason) in 
+    let bits = Cstruct.shift bits sizeof_ofp_port_status in
+    let _ = marshal_phy status.desc bits in 
+      len
 end
 
 module Switch = struct

@@ -32,20 +32,22 @@ let print_time () =
 let switch_run () = 
   let sw = Ofswitch.create_switch () in
   try_lwt 
-    Manager.create ~devs:3 
+    Manager.create ~devs:2 (*~attached:(["vboxnet0"]) *)
     (fun mgr interface id ->
        match (Manager.get_intf_name mgr id) with 
-         | "tap0" ->
+         | "tap0" 
+         | "0" ->
              let ip = 
-                 (ipv4_addr_of_tuple (10l,0l,0l,1l),
+                 (ipv4_addr_of_tuple (10l,0l,0l,2l),
                   ipv4_addr_of_tuple (255l,255l,255l,0l), []) in  
                lwt _ = Manager.configure interface (`IPv4 ip) in
-               let dst_ip = ipv4_addr_of_tuple (10l,0l,0l,2l) in
-               lwt _ = (Ofswitch.listen sw mgr (None, 6633) <&> 
-                       (print_time ())) in 
+               let dst_ip = ipv4_addr_of_tuple (10l,0l,0l,1l) in
+               let _ = printf "connecting switch...\n%!" in 
+               lwt _ = Ofswitch.connect sw mgr (dst_ip, 6633) in 
+               let _ = printf "connect returned...\n%!" in 
                 return ()
-      | _ -> 
-          return (Ofswitch.add_port mgr sw id)
+      | "1" -> return (Ofswitch.add_port_local mgr sw id) 
+      | _ ->  Ofswitch.add_port mgr sw id
     )
   with e ->
     Printf.eprintf "Error: %s" (Printexc.to_string e); 
