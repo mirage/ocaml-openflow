@@ -5,25 +5,21 @@ NAME=openflow
 J=4
 
 LWT ?= $(shell if ocamlfind query lwt.ssl >/dev/null 2>&1; then echo --enable-lwt; fi)
-ASYNC ?= $(shell if ocamlfind query async_core >/dev/null 2>&1; then echo --enable-async; fi)
 MIRAGE ?= $(shell if ocamlfind query mirage-net >/dev/null 2>&1; then echo --enable-mirage; fi)
-ifneq ($(MIRAGE_OS),xen)
-TESTS ?= --enable-tests
-endif
 
 -include Makefile.config
 
-clean: setup.data
+clean: setup.data setup.bin
 	./setup.bin -clean $(OFLAGS)
 	rm -f setup.data setup.log setup.bin
 
-distclean: setup.data
+distclean: setup.data setup.bin
 	./setup.bin -distclean $(OFLAGS)
 	rm -f setup.data setup.log setup.bin
 
-setup: setup.data
+setup: setup.data setup.bin
 
-build: setup.data $(wildcard lib/*.ml)
+build: setup.data setup.bin $(wildcard lib/*.ml)
 	./setup.bin -build -j $(J) $(OFLAGS)
 
 doc: setup.data setup.bin
@@ -50,4 +46,4 @@ setup.bin: setup.ml
 	$(RM) setup.cmx setup.cmi setup.o setup.cmo
 
 setup.data: setup.bin
-	./setup.bin -configure $(LWT) $(ASYNC) $(MIRAGE) $(TESTS) $(NETTESTS)
+	./setup.bin -configure $(LWT) --disable-mirage 

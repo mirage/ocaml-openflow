@@ -28,9 +28,9 @@ Flag nettests
 Library openflow
   Path:                 lib
   Findlibname:          openflow
-  Modules:              Ofpacket,  Ofcontroller, Ofswitch 
+  Modules:              Ofpacket,  Ofcontroller, Ofswitch_config, Ofswitch
   Pack:                 True
-  BuildDepends:         cstruct, cstruct.syntax, mirage, mirage-net (>= 0.3.0)
+  BuildDepends:         cstruct, cstruct.syntax, rpc, mirage, mirage-net (>= 0.3.0)
 
 Document openflow
   Title:                OpenFlow docs
@@ -38,6 +38,16 @@ Document openflow
   BuildTools+:          ocamldoc
   XOCamlbuildPath:      lib 
   XOCamlbuildModules:   Ofpacket, Ofcontroller, Ofswitch
+
+Executable ofswitch_ctrl
+  Path:                 lib
+  MainIs:               ofswitch_ctrl.ml
+  Build$:               flag(lwt)
+  Custom:               true
+  CompiledObject:       native
+  Install:              false
+  BuildDepends:         openflow
+
 
 Executable learning_switch_lwt
   Path:                 controller
@@ -57,7 +67,7 @@ Executable basic_switch_lwt
   Install:              false
   BuildDepends:         openflow
 
-Executable learning_switch_mirage
+(*Executable learning_switch_mirage
   Path:                 controller
   MainIs:               learning_switch.ml
   Build$:               flag(mirage)
@@ -75,4 +85,4 @@ Executable basic_switch_mirage
   CompiledObject:       native
   Target:               xen
   Install:              false
-  BuildDepends:         openflow
+  BuildDepends:         openflow*)
