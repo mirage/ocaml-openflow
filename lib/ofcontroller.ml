@@ -38,7 +38,7 @@ module Event = struct
     | PORT_STATS_REPLY | TABLE_STATS_REPLY | PORT_STATUS_CHANGE 
 
   type e = 
-    | Datapath_join of OP.datapath_id
+    | Datapath_join of OP.datapath_id * OP.Port.phy list
     | Datapath_leave of OP.datapath_id
     | Packet_in of OP.Port.t * int32 * Cstruct.buf * OP.datapath_id
     | Flow_removed of
@@ -54,7 +54,7 @@ module Event = struct
     | Port_status of OP.Port.reason * OP.Port.phy * OP.datapath_id
 
   let string_of_event = function
-    | Datapath_join dpid -> sp "Datapath_join: dpid:0x%012Lx" dpid
+    | Datapath_join(dpid, _) -> sp "Datapath_join: dpid:0x%012Lx" dpid
     | Datapath_leave dpid -> sp "Datapath_leave: dpid:0x%012Lx" dpid
     | Packet_in (port, buffer_id, bs, dpid) 
       -> (sp "Packet_in: port:%s ... dpid:0x%012Lx buffer_id:%ld" 
@@ -172,7 +172,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
       | Features_resp (h, sfs) (* Generate a datapath join event *)
         -> ((* cp "FEATURES_RESP";*)
             let dpid = sfs.Switch.datapath_id in
-            let evt = Event.Datapath_join dpid in
+            let evt = Event.Datapath_join(dpid, sfs.OP.Switch.ports) in
             if (Hashtbl.mem state.dp_db dpid) then (
               Printf.printf "Deleting old state \n%!";
               Hashtbl.remove state.dp_db dpid;

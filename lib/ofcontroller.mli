@@ -33,7 +33,7 @@ module Event : sig
       | PORT_STATUS_CHANGE
 
     type e =
-        Datapath_join of datapath_id
+        Datapath_join of datapath_id * Ofpacket.Port.phy list
       | Datapath_leave of datapath_id
       | Packet_in of Port.t * int32 * Cstruct.buf * datapath_id
       | Flow_removed of Match.t * Flow_removed.reason * 

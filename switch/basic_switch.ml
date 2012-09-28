@@ -32,7 +32,7 @@ let print_time () =
 let switch_run () = 
   let sw = Ofswitch.create_switch () in
   try_lwt 
-    Manager.create ~devs:2 (*~attached:(["vboxnet0"]) *)
+    Manager.create ~devs:2 ~attached:(["vboxnet0"]) 
     (fun mgr interface id ->
        match (Manager.get_intf_name mgr id) with 
          | "tap0" 
