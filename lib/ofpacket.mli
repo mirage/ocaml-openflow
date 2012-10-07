@@ -147,9 +147,9 @@ module Port :
     type reason = ADD | DEL | MOD
     val reason_to_string: reason -> string
     type status = { reason : reason; desc : phy; }
+    val create_port_status : reason -> phy -> status
     val string_of_status : status -> string
-    val create_port_status: reason -> phy -> status
-    val marshal_port_status: ?xid:int32 -> status ->  Cstruct.buf -> int
+    val marshal_port_status : ?xid:int32 -> status -> Cstruct.buf -> int
   end
 module Switch :
   sig
@@ -243,6 +243,7 @@ module Match :
       ?nw_proto:byte ->
       ?nw_src:uint32 ->
       ?nw_dst:uint32 -> ?tp_src:uint16 -> ?tp_dst:uint16 -> unit -> t
+    val translate_port : t -> Port.t -> t
     val raw_packet_to_match : Port.t -> Cstruct.buf -> t
     val match_to_string : t -> string
   end
@@ -426,18 +427,18 @@ module Stats :
     val create_flow_stat_req :
       Match.t ->
       ?table_id:int ->
-      ?out_port:Port.t -> ?xid:Int32.t -> Cstruct.buf -> Cstruct.buf 
+      ?out_port:Port.t -> ?xid:Int32.t -> Cstruct.buf -> int 
     val create_aggr_flow_stat_req :
       Match.t ->
       ?table_id:int ->
-      ?out_port:Port.t -> ?xid:Int32.t -> Cstruct.buf -> Cstruct.buf
+      ?out_port:Port.t -> ?xid:Int32.t -> Cstruct.buf -> int
 (*     val create_vendor_stat_req : ?xid:Int32.t -> Cstruct.buf -> unit *)
-    val create_table_stat_req : ?xid:Int32.t -> Cstruct.buf -> Cstruct.buf
+    val create_table_stat_req : ?xid:Int32.t -> Cstruct.buf -> int
     val create_queue_stat_req :
       ?xid:Int32.t ->
-      ?queue_id:int32 -> ?port:Port.t -> Cstruct.buf -> Cstruct.buf
+      ?queue_id:int32 -> ?port:Port.t -> Cstruct.buf -> int
     val create_port_stat_req :
-      ?xid:Int32.t -> ?port:Port.t -> Cstruct.buf -> Cstruct.buf
+      ?xid:Int32.t -> ?port:Port.t -> Cstruct.buf -> int
     type req =
         Desc_req of req_hdr
       | Flow_req of req_hdr * Match.t * table_id * Port.t

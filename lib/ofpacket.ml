@@ -17,8 +17,6 @@
 open Printf
 open Lwt
 open Int32
-(* open Cstruct  *)
-
 
 let sp = Printf.sprintf
 let pp = Printf.printf
@@ -112,19 +110,19 @@ let contain_exc l v =
 let int_of_bool = function
   | true -> 1
   | false -> 0
-let get_int32_bit f off = (Int32.logand f (Int32.shift_left 1l off)) > 0l
+let get_int32_bit f off = (Int32.logand f (shift_left 1l off)) > 0l
 let set_int32_bit f off v = 
-  logor f (Int32.shift_left (Int32.of_int(int_of_bool v)) off)
+  logor f (shift_left (Int32.of_int(int_of_bool v)) off)
 
 let get_int32_byte f off = 
-  let ret = Int32.shift_left (f logand (Int32.shift_left 13l off)) off in 
+  let ret = shift_left (f logand (shift_left 13l off)) off in 
     char_of_int (0x00ff land (Int32.to_int ret))
 let set_int32_byte f off v = 
   let value = Int32.of_int ((int_of_char v) lsl off) in
     logor f value
 
 let get_int32_nw_mask f off = 
-  let ret = Int32.shift_left (logand f (Int32.shift_left 13l off)) off in 
+  let ret = shift_left (logand f (shift_left 13l off)) off in 
     char_of_int (0x003f land (Int32.to_int ret))  
 let set_int32_nw_mask f off v = 
   let value = Int32.of_int ((0x3f land v) lsl off) in
@@ -150,7 +148,7 @@ module Header = struct
     uint32_t xid
   } as big_endian
 
-  cenum msg_code {
+  (*cenum msg_code {
     HELLO                 =  0;
     ERROR                 =  1;
     ECHO_REQ              =  2;
@@ -173,8 +171,107 @@ module Header = struct
     BARRIER_RESP          = 19;
     QUEUE_GET_CONFIG_REQ  = 20;
     QUEUE_GET_CONFIG_RESP = 21
-  } as uint8_t
-
+  } as uint8_t *)
+    type msg_code =
+      HELLO
+      | ERROR
+      | ECHO_REQ
+      | ECHO_RESP
+      | VENDOR
+      | FEATURES_REQ
+      | FEATURES_RESP
+      | GET_CONFIG_REQ
+      | GET_CONFIG_RESP
+      | SET_CONFIG
+      | PACKET_IN
+      | FLOW_REMOVED
+      | PORT_STATUS
+      | PACKET_OUT
+      | FLOW_MOD
+      | PORT_MOD
+      | STATS_REQ
+      | STATS_RESP
+      | BARRIER_REQ
+      | BARRIER_RESP
+      | QUEUE_GET_CONFIG_REQ
+      | QUEUE_GET_CONFIG_RESP
+    
+    let msg_code_of_int =
+      function
+      | 0 -> Some HELLO
+      | 1 -> Some ERROR
+      | 2 -> Some ECHO_REQ
+      | 3 -> Some ECHO_RESP
+      | 4 -> Some VENDOR
+      | 5 -> Some FEATURES_REQ
+      | 6 -> Some FEATURES_RESP
+      | 7 -> Some GET_CONFIG_REQ
+      | 8 -> Some GET_CONFIG_RESP
+      | 9 -> Some SET_CONFIG
+      | 10 -> Some PACKET_IN
+      | 11 -> Some FLOW_REMOVED
+      | 12 -> Some PORT_STATUS
+      | 13 -> Some PACKET_OUT
+      | 14 -> Some FLOW_MOD
+      | 15 -> Some PORT_MOD
+      | 16 -> Some STATS_REQ
+      | 17 -> Some STATS_RESP
+      | 18 -> Some BARRIER_REQ
+      | 19 -> Some BARRIER_RESP
+      | 20 -> Some QUEUE_GET_CONFIG_REQ
+      | 21 -> Some QUEUE_GET_CONFIG_RESP
+      | _ -> None
+      
+    let msg_code_to_int =
+      function
+      | HELLO -> 0
+      | ERROR -> 1
+      | ECHO_REQ -> 2
+      | ECHO_RESP -> 3
+      | VENDOR -> 4
+      | FEATURES_REQ -> 5
+      | FEATURES_RESP -> 6
+      | GET_CONFIG_REQ -> 7
+      | GET_CONFIG_RESP -> 8
+      | SET_CONFIG -> 9
+      | PACKET_IN -> 10
+      | FLOW_REMOVED -> 11
+      | PORT_STATUS -> 12
+      | PACKET_OUT -> 13
+      | FLOW_MOD -> 14
+      | PORT_MOD -> 15
+      | STATS_REQ -> 16
+      | STATS_RESP -> 17
+      | BARRIER_REQ -> 18
+      | BARRIER_RESP -> 19
+      | QUEUE_GET_CONFIG_REQ -> 20
+      | QUEUE_GET_CONFIG_RESP -> 21
+      
+    let msg_code_to_string =
+      function
+      | HELLO -> "HELLO"
+      | ERROR -> "ERROR"
+      | ECHO_REQ -> "ECHO_REQ"
+      | ECHO_RESP -> "ECHO_RESP"
+      | VENDOR -> "VENDOR"
+      | FEATURES_REQ -> "FEATURES_REQ"
+      | FEATURES_RESP -> "FEATURES_RESP"
+      | GET_CONFIG_REQ -> "GET_CONFIG_REQ"
+      | GET_CONFIG_RESP -> "GET_CONFIG_RESP"
+      | SET_CONFIG -> "SET_CONFIG"
+      | PACKET_IN -> "PACKET_IN"
+      | FLOW_REMOVED -> "FLOW_REMOVED"
+      | PORT_STATUS -> "PORT_STATUS"
+      | PACKET_OUT -> "PACKET_OUT"
+      | FLOW_MOD -> "FLOW_MOD"
+      | PORT_MOD -> "PORT_MOD"
+      | STATS_REQ -> "STATS_REQ"
+      | STATS_RESP -> "STATS_RESP"
+      | BARRIER_REQ -> "BARRIER_REQ"
+      | BARRIER_RESP -> "BARRIER_RESP"
+      | QUEUE_GET_CONFIG_REQ -> "QUEUE_GET_CONFIG_REQ"
+      | QUEUE_GET_CONFIG_RESP -> "QUEUE_GET_CONFIG_RESP"
+ 
   type h = {
     ver: uint8;
     ty: msg_code;
@@ -186,7 +283,7 @@ module Header = struct
 
   let parse_header bits = 
     match ((get_ofp_header_version bits), 
-      (int_to_msg_code (get_ofp_header_typ bits))) with
+      (msg_code_of_int (get_ofp_header_typ bits))) with
       | (1, Some(ty))
         -> let ret = 
           { ver=(char_of_int (get_ofp_header_version bits)); 
@@ -338,10 +435,10 @@ module Port = struct
   }
 
   let get_link_down f = (logand f 1l) > 0l
-  let get_stp_listen f = (logand f (Int32.shift_left 0l 8)) > 0l
-  let get_stp_learn f = (logand f (Int32.shift_left 1l 8)) > 0l
-  let get_stp_forward f = (logand f (Int32.shift_left 2l 8)) > 0l
-  let get_stp_block f = (logand f (Int32.shift_left 3l 8)) > 0l
+  let get_stp_listen f = (logand f (shift_left 0l 8)) > 0l
+  let get_stp_learn f = (logand f (shift_left 1l 8)) > 0l
+  let get_stp_forward f = (logand f (shift_left 2l 8)) > 0l
+  let get_stp_block f = (logand f (shift_left 3l 8)) > 0l
 
   (*TODO this parsing is incorrect. use get_int32_bit and I think
    * set_stp_forward is a byte *)
@@ -509,12 +606,23 @@ module Port = struct
           h.rx_frame_err h.rx_over_err h.rx_crc_err h.collisions
           (string_of_port_stats_reply q))
 
-  cenum reason {
+(*  cenum reason {
     ADD = 0;
     DEL = 1;
     MOD = 2
-  } as uint8_t
+  } as uint8_t*)
 
+    type reason = ADD | DEL | MOD
+    
+    let reason_of_int =
+      function | 0 -> Some ADD | 1 -> Some DEL | 2 -> Some MOD | _ -> None
+      
+    let reason_to_int = function | ADD -> 0 | DEL -> 1 | MOD -> 2
+      
+    let reason_to_string =
+      function | ADD -> "ADD" | DEL -> "DEL" | MOD -> "MOD"
+      
+ 
 (*  type reason = ADD | DEL | MOD
   let reason_of_int = function
     | 0 -> ADD
@@ -540,21 +648,21 @@ module Port = struct
     uint8_t pad[7]          
   } as big_endian 
 
+  let create_port_status reason desc =
+    {reason; desc;}
+
   let string_of_status st = 
     (sp "Port status,reason:%s,%s" (reason_to_string st.reason)
        (string_of_phy st.desc) )
 
   let parse_status bits =
     let reason = 
-      match (int_to_reason (get_ofp_port_status_reason bits)) with
+      match (reason_of_int (get_ofp_port_status_reason bits)) with
       | Some(reason) -> reason 
       | None -> raise(Unparsable("reason_of_int", bits))
     in
     let _ = Cstruct.shift_left bits sizeof_ofp_port_status in
       {reason; desc=(parse_phy bits)}
-  let create_port_status reason desc =
-    {reason; desc;}
-
   let marshal_port_status ?(xid=0l) status bits =
     let len = Header.get_len + sizeof_ofp_port_status + phy_len in 
     let header = Header.create Header.PORT_STATUS len xid in
@@ -894,6 +1002,12 @@ module Match = struct
       dl_src; dl_dst; dl_vlan; dl_vlan_pcp; dl_type; 
       nw_src; nw_dst; nw_tos; nw_proto; tp_src; tp_dst; 
     }
+
+  let translate_port m p = 
+    {wildcards=m.wildcards; in_port=p; dl_src=m.dl_src; dl_dst=m.dl_dst;
+     dl_vlan=m.dl_vlan; dl_vlan_pcp=m.dl_vlan_pcp; dl_type=m.dl_type; 
+     nw_tos=m.nw_tos; nw_proto=m.nw_proto; nw_src=m.nw_src; nw_dst=m.nw_dst;
+     tp_src=m.tp_src; tp_dst=m.tp_dst;} 
 
   cstruct dl_header {
     uint8_t   dl_dst[6];
@@ -1879,14 +1993,17 @@ module Stats = struct
                       Match.sizeof_ofp_match +
                       sizeof_ofp_flow_stats_request ) 
                      xid in 
-    let _ = Header.marshal_header header bits in 
+    let _ = Header.marshal_header header bits in
+    let bits = Cstruct.shift bits Header.sizeof_ofp_header in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type FLOW) in 
     let _ = set_ofp_stats_request_flags bits 0 in 
-    let _ = Cstruct.shift bits sizeof_ofp_stats_request in 
+    let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = Match.marshal_match flow_match bits in 
+    let bits = Cstruct.shift bits Match.sizeof_ofp_match in 
     let _ = set_ofp_flow_stats_request_table_id bits table_id in 
     let _ = set_ofp_flow_stats_request_out_port bits (Port.int_of_port out_port) in 
-      Cstruct.shift bits sizeof_ofp_flow_stats_request
+      Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
+      Match.sizeof_ofp_match + sizeof_ofp_flow_stats_request
 
   let create_aggr_flow_stat_req flow_match ?(table_id=0xff) ?(out_port=Port.No_port) 
       ?(xid=(Random.int32 Int32.max_int)) bits = 
@@ -1897,13 +2014,16 @@ module Stats = struct
                       sizeof_ofp_flow_stats_request ) 
                      xid in 
     let _ = Header.marshal_header header bits in 
+    let bits = Cstruct.shift bits Header.sizeof_ofp_header in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type AGGREGATE) in 
     let _ = set_ofp_stats_request_flags bits 0 in 
-    let _ = Cstruct.shift bits sizeof_ofp_stats_request in 
+    let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = Match.marshal_match flow_match bits in 
+    let bits = Cstruct.shift bits Match.sizeof_ofp_match in 
     let _ = set_ofp_flow_stats_request_table_id bits table_id in 
     let _ = set_ofp_flow_stats_request_out_port bits (Port.int_of_port out_port) in 
-      Cstruct.shift bits sizeof_ofp_flow_stats_request
+      Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
+      Match.sizeof_ofp_match + sizeof_ofp_flow_stats_request
 
 (*  struct ofp_vendor_header {
     uint32_t vendor;         
@@ -1918,9 +2038,10 @@ module Stats = struct
                      (Header.sizeof_ofp_header + 
                       sizeof_ofp_stats_request) xid in 
     let _ = Header.marshal_header header bits in 
+    let bits = Cstruct.shift bits Header.sizeof_ofp_header in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type TABLE) in 
     let _ = set_ofp_stats_request_flags bits 0 in
-      Cstruct.shift bits sizeof_ofp_stats_request
+      Header.sizeof_ofp_header + sizeof_ofp_stats_request
 
   cstruct ofp_queue_stats_request {
     uint16_t port_no;
@@ -1935,12 +2056,14 @@ module Stats = struct
                       sizeof_ofp_stats_request + 
                       sizeof_ofp_queue_stats_request) xid in 
     let _ = Header.marshal_header header bits in 
+    let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type QUEUE) in 
     let _ = set_ofp_stats_request_flags bits 0 in
-    let _ = Cstruct.shift bits sizeof_ofp_stats_request in 
+    let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = set_ofp_queue_stats_request_port_no bits (Port.int_of_port port) in 
     let _ = set_ofp_queue_stats_request_queue_id bits queue_id in 
-      Cstruct.shift bits sizeof_ofp_queue_stats_request
+      Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
+      sizeof_ofp_queue_stats_request
 
   cstruct ofp_port_stats_request {
     uint16_t port_no;        
@@ -1954,11 +2077,13 @@ module Stats = struct
                       sizeof_ofp_stats_request + 
                       sizeof_ofp_port_stats_request) xid in 
     let _ = Header.marshal_header header bits in 
+    let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type PORT) in 
     let _ = set_ofp_stats_request_flags bits 0 in
-    let _ = Cstruct.shift bits sizeof_ofp_stats_request in 
+    let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = set_ofp_port_stats_request_port_no bits (Port.int_of_port port) in 
-      Cstruct.shift bits sizeof_ofp_port_stats_request
+      Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
+      sizeof_ofp_port_stats_request
 
   type req = 
     | Desc_req of req_hdr
@@ -2041,7 +2166,6 @@ module Stats = struct
 
   let rec parse_table_stats_reply bits =
     match (Cstruct.len bits ) with 
-    | 0 -> []
     | l -> 
       let table_id = table_id_of_int (get_ofp_table_stats_table_id bits) in 
       let name = get_ofp_table_stats_name bits in 
@@ -2056,6 +2180,7 @@ module Stats = struct
                   matched_count;} in
       let _ = Cstruct.shift bits sizeof_ofp_table_stats in 
         [ret] @ (parse_table_stats_reply bits)
+    | 0 -> []
           
   let rec string_of_table_stats_reply tables =
     match tables with

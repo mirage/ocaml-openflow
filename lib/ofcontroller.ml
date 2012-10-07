@@ -16,14 +16,13 @@
 
 open Lwt
 open Lwt_list
-(* open Openflow_net_lwt *)
 open Net
 open Printexc 
 
 let sp = Printf.sprintf
 let pp = Printf.printf
 let ep = Printf.eprintf
-let cp = Printf.printf "%s\n%!"
+let cp = OS.Console.log
 
 module OP = Ofpacket
 
@@ -38,7 +37,7 @@ module Event = struct
     | PORT_STATS_REPLY | TABLE_STATS_REPLY | PORT_STATUS_CHANGE 
 
   type e = 
-    | Datapath_join of OP.datapath_id * OP.Port.phy list
+    | Datapath_join of OP.datapath_id * OP.Port.phy list 
     | Datapath_leave of OP.datapath_id
     | Packet_in of OP.Port.t * int32 * Cstruct.buf * OP.datapath_id
     | Flow_removed of
@@ -54,7 +53,7 @@ module Event = struct
     | Port_status of OP.Port.reason * OP.Port.phy * OP.datapath_id
 
   let string_of_event = function
-    | Datapath_join(dpid, _) -> sp "Datapath_join: dpid:0x%012Lx" dpid
+    | Datapath_join (dpid, _) -> sp "Datapath_join: dpid:0x%012Lx" dpid
     | Datapath_leave dpid -> sp "Datapath_leave: dpid:0x%012Lx" dpid
     | Packet_in (port, buffer_id, bs, dpid) 
       -> (sp "Packet_in: port:%s ... dpid:0x%012Lx buffer_id:%ld" 
@@ -172,7 +171,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
       | Features_resp (h, sfs) (* Generate a datapath join event *)
         -> ((* cp "FEATURES_RESP";*)
             let dpid = sfs.Switch.datapath_id in
-            let evt = Event.Datapath_join(dpid, sfs.OP.Switch.ports) in
+            let evt = Event.Datapath_join (dpid, sfs.Switch.ports) in
             if (Hashtbl.mem state.dp_db dpid) then (
               Printf.printf "Deleting old state \n%!";
               Hashtbl.remove state.dp_db dpid;
@@ -257,7 +256,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
                  Lwt_list.iter_p (fun cb -> cb state dpid evt)
                    state.table_stats_reply_cb
                 )
-              | _ -> cp "New stats response received"; return ();
+              | _ -> OS.Console.log "New stats response received"; return ();
         ) 
 
       | Port_status(h, st) 
@@ -269,7 +268,7 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
             Lwt_list.iter_p (fun cb -> cb state dpid evt) state.port_status_cb
         )
 
-      | _ -> cp "New packet received"; return () 
+      | _ -> OS.Console.log "New packet received"; return () 
   )
 
 let send_of_data controller dpid bits = 
@@ -297,11 +296,10 @@ let terminate st =
   Hashtbl.iter (fun _ ch -> resolve (Channel.close ch) ) st.dp_db;
   Printf.printf "Terminating controller...\n"
    
-let controller init st (remote_addr, remote_port) t =
+let controller st (remote_addr, remote_port) t =
   let rs = Nettypes.ipv4_addr_to_string remote_addr in
   let cached_socket = Ofsocket.create_socket t in 
-  pp "OpenFlow Controller %s:%d\n%!" rs remote_port;  
-  let _ = init st in 
+  let _ = pp "OpenFlow Controller+ %s:%d\n%!" rs remote_port in
   let echo () =
     try_lwt 
       lwt hbuf = Ofsocket.read_data cached_socket OP.Header.sizeof_ofp_header in
@@ -332,7 +330,7 @@ let controller init st (remote_addr, remote_port) t =
       | exn -> 
           pp "{OpenFlow-controller} ERROR:%s\n%s\n%!" (Printexc.to_string exn)
             (Printexc.get_backtrace ());
-          return false
+          return true
 
     in
     let continue = ref true in
@@ -344,25 +342,39 @@ let controller init st (remote_addr, remote_port) t =
       return ()
     done
 
-let init_controller () = 
-  { dp_db                    = Hashtbl.create 0; 
-    channel_dp               = Hashtbl.create 0; 
-    datapath_join_cb         = []; 
-    datapath_leave_cb        = []; 
-    packet_in_cb             = [];
-    flow_removed_cb          = []; 
-    flow_stats_reply_cb      = [];
-    aggr_flow_stats_reply_cb = [];
-    desc_stats_reply_cb      = []; 
-    port_stats_reply_cb      = [];
-    table_stats_reply_cb     = [];
-    port_status_cb           = [];}
-
 let listen mgr loc init =
-  let st = init_controller () in
-    (Channel.listen mgr (`TCPv4 (loc, (controller init st) ))) 
+  let st = { dp_db                    = Hashtbl.create 0; 
+             channel_dp               = Hashtbl.create 0; 
+             datapath_join_cb         = []; 
+             datapath_leave_cb        = []; 
+             packet_in_cb             = [];
+             flow_removed_cb          = []; 
+             flow_stats_reply_cb      = [];
+             aggr_flow_stats_reply_cb = [];
+             desc_stats_reply_cb      = []; 
+             port_stats_reply_cb      = [];
+             table_stats_reply_cb     = [];
+             port_status_cb           = [];
+           } 
+  in
+  let _ = init st in 
+    (Channel.listen mgr (`TCPv4 (loc, (controller st) ))) 
 
 let connect mgr loc init = 
-  let st = init_controller () in
-    Channel.connect mgr (`TCPv4 (None, loc, 
-      (controller init st loc) ))
+  let st = { dp_db                    = Hashtbl.create 0; 
+             channel_dp               = Hashtbl.create 0; 
+             datapath_join_cb         = []; 
+             datapath_leave_cb        = []; 
+             packet_in_cb             = [];
+             flow_removed_cb          = []; 
+             flow_stats_reply_cb      = [];
+             aggr_flow_stats_reply_cb = [];
+             desc_stats_reply_cb      = []; 
+             port_stats_reply_cb      = [];
+             table_stats_reply_cb     = [];
+             port_status_cb           = [];
+           } 
+  in
+  let _ = init st in 
+    Net.Channel.connect mgr (`TCPv4 (None, loc, 
+      (controller st loc) ))
