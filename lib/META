@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 6849fb3ace6d3535ac1163c91dc21113)
+# DO NOT EDIT (digest: 0045d1e018354baf6501bc7d18bc32e3)
 version = "0.3.0"
 description = "OpenFlow protocol and switch implementations in pure OCaml"
 requires = "cstruct cstruct.syntax rpc mirage mirage-net"
@@ -7,6 +7,6 @@ archive(byte) = "openflow.cma"
 archive(byte, plugin) = "openflow.cma"
 archive(native) = "openflow.cmxa"
 archive(native, plugin) = "openflow.cmxs"
-exists_if = "openflow.cma"
+exists_if = "openflow.cmxa"
 # OASIS_STOP
 

@@ -2506,7 +2506,11 @@ let build_features_req xid bits =
   Header.marshal_header (Header.(create FEATURES_REQ 8 xid)) bits
 
 let build_echo_resp h bs bits = 
-  let _ = Header.(marshal_header (create ECHO_RESP get_len h.xid) bits ) in
+  let _ = 
+    Header.(marshal_header 
+              (create ECHO_RESP 
+                (get_len + (Cstruct.len bits)) h.xid)
+              bits ) in
   let _ = Cstruct.blit_buffer bs 0 bits 0 (Cstruct.len bs) in 
     Cstruct.shift bits (Cstruct.len bs)
 

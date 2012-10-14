@@ -28,6 +28,7 @@ Flag nettests
 Library openflow
   Path:                 lib
   Findlibname:          openflow
+  CompiledObject:       native
   Modules:              Ofpacket,  Ofcontroller, Ofswitch_config, Ofswitch
   Pack:                 True
   BuildDepends:         cstruct, cstruct.syntax, rpc, mirage, mirage-net (>= 0.3.0)

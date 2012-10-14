@@ -164,8 +164,12 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
 
       | Echo_req (h, bs)  (* Reply to ECHO requests *)
         -> ((* cp "ECHO_REQ"; *)
-          Channel.write_buffer t (build_echo_resp h bs (OS.Io_page.get ()));
-          Channel.flush t
+          let h = OP.Header.create OP.Header.ECHO_RESP 
+                    8 h.OP.Header.xid in
+          let bits = OP.marshal_and_sub (OP.Header.marshal_header h) 
+                       (OS.Io_page.get ()) in 
+          let _ = Channel.write_buffer t bits in
+            Channel.flush t
         )
 
       | Features_resp (h, sfs) (* Generate a datapath join event *)
@@ -330,7 +334,7 @@ let controller st (remote_addr, remote_port) t =
       | exn -> 
           pp "{OpenFlow-controller} ERROR:%s\n%s\n%!" (Printexc.to_string exn)
             (Printexc.get_backtrace ());
-          return true
+          return false
 
     in
     let continue = ref true in
