@@ -164,9 +164,8 @@ let process_of_packet state (remote_addr, remote_port) ofp t =
 
       | Echo_req (h, bs)  (* Reply to ECHO requests *)
         -> ((* cp "ECHO_REQ"; *)
-          let h = OP.Header.create OP.Header.ECHO_RESP 
-                    8 h.OP.Header.xid in
-          let bits = OP.marshal_and_sub (OP.Header.marshal_header h) 
+          let bits = OP.marshal_and_sub 
+                       (OP.build_echo_resp h bs) 
                        (OS.Io_page.get ()) in 
           let _ = Channel.write_buffer t bits in
             Channel.flush t

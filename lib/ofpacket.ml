@@ -279,7 +279,7 @@ module Header = struct
     xid: uint32;
   }
 
-  let get_len = 8 
+  let get_len = sizeof_ofp_header 
 
   let parse_header bits = 
     match ((get_ofp_header_version bits), 
@@ -2505,14 +2505,14 @@ let marshal_error errornum data xid bits =
 let build_features_req xid bits = 
   Header.marshal_header (Header.(create FEATURES_REQ 8 xid)) bits
 
-let build_echo_resp h bs bits = 
+let build_echo_resp h bs bits =
+  let len = Header.get_len + (Cstruct.len bs) in 
   let _ = 
     Header.(marshal_header 
-              (create ECHO_RESP 
-                (get_len + (Cstruct.len bits)) h.xid)
-              bits ) in
-  let _ = Cstruct.blit_buffer bs 0 bits 0 (Cstruct.len bs) in 
-    Cstruct.shift bits (Cstruct.len bs)
+              (create ECHO_RESP len h.xid) bits ) in
+  let _ = Cstruct.blit_buffer bs 0 bits Header.get_len
+            (Cstruct.len bs) in 
+    len
 
 type t =
   | Hello of Header.h

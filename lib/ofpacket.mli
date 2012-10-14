@@ -57,6 +57,7 @@ module Header :
       | QUEUE_GET_CONFIG_REQ
       | QUEUE_GET_CONFIG_RESP
     type h = { ver : uint8; ty : msg_code; len : uint16; xid : uint32; }
+    val get_len : int
     val parse_header : Cstruct.buf -> h
     val header_to_string : h -> string
     val create : msg_code -> uint16 -> uint32 -> h
@@ -501,7 +502,7 @@ val int_of_error_code : error_code -> uint32
 val string_of_error_code : error_code -> string
 val marshal_error : error_code -> Cstruct.buf -> int32 -> Cstruct.buf -> int
 val build_features_req : uint32 -> Cstruct.buf -> int
-val build_echo_resp : Header.h -> Cstruct.buf-> Cstruct.buf -> Cstruct.buf
+val build_echo_resp : Header.h -> Cstruct.buf-> Cstruct.buf -> int
 type t =
   Hello of Header.h 
   | Error of Header.h * error_code
