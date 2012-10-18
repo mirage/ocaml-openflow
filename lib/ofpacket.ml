@@ -661,8 +661,9 @@ module Port = struct
       | Some(reason) -> reason 
       | None -> raise(Unparsable("reason_of_int", bits))
     in
-    let _ = Cstruct.shift_left bits sizeof_ofp_port_status in
+    let bits = Cstruct.shift bits sizeof_ofp_port_status in
       {reason; desc=(parse_phy bits)}
+
   let marshal_port_status ?(xid=0l) status bits =
     let len = Header.get_len + sizeof_ofp_port_status + phy_len in 
     let header = Header.create Header.PORT_STATUS len xid in
