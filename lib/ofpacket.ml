@@ -1337,7 +1337,7 @@ module Flow = struct
     | Set_nw_src (ip) 
     | Set_nw_dst (ip) -> 
       let _ = set_ofp_action_nw_addr_typ bits (int_of_action m) in
-      let _ = set_ofp_action_nw_addr_len bits 16 in
+      let _ = set_ofp_action_nw_addr_len bits 8 in
       let _ = set_ofp_action_nw_addr_nw_addr bits ip in
         sizeof_ofp_action_nw_addr    
     | Set_nw_tos (tos) -> 
