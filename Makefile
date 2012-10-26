@@ -9,41 +9,33 @@ MIRAGE ?= $(shell if ocamlfind query mirage-net >/dev/null 2>&1; then echo --ena
 
 -include Makefile.config
 
-clean: setup.data setup.bin
-	./setup.bin -clean $(OFLAGS)
-	rm -f setup.data setup.log setup.bin
+clean: setup.ml setup.data
+	ocaml setup.ml -clean $(OFLAGS)
+	rm -f setup.data setup.log setup.ml
 
-distclean: setup.data setup.bin
-	./setup.bin -distclean $(OFLAGS)
-	rm -f setup.data setup.log setup.bin
+distclean: setup.ml setup.data
+	ocaml setup.ml -distclean $(OFLAGS)
+	rm -f setup.data setup.log setup.ml
 
-setup: setup.data setup.bin
+setup: setup.ml setup.data
 
-build: setup.data setup.bin $(wildcard lib/*.ml)
-	./setup.bin -build -j $(J) $(OFLAGS)
+build: setup.ml setup.data $(wildcard lib/*.ml)
+	ocaml setup.ml -build -j $(J) $(OFLAGS)
 
-doc: setup.data setup.bin
-	./setup.bin -doc -j $(J) $(OFLAGS)
+doc: setup.data setup.ml
+	ocaml setup.ml -doc -j $(J) $(OFLAGS)
 
 install: 
 	ocamlfind remove $(NAME)
-	./setup.bin -install $(OFLAGS)
+	ocaml setup.ml -install $(OFLAGS)
 
 test: build
-	./setup.bin -test
+	ocaml setup.ml -test
 
 ##
-
-setup.bin: setup.ml
-	ocamlopt.opt -o $@ $< || ocamlopt -o $@ $< || ocamlc -o $@ $<
-	rm -f setup.cmx setup.cmi setup.o setup.cmo
 
 setup.ml: _oasis
 	oasis setup
 
-setup.bin: setup.ml
-	ocamlopt.opt -o $@ $< || ocamlopt -o $@ $< || ocamlc -o $@ $<
-	$(RM) setup.cmx setup.cmi setup.o setup.cmo
-
-setup.data: setup.bin
-	./setup.bin -configure $(LWT) --disable-mirage 
+setup.data: setup.ml
+	ocaml setup.ml -configure $(LWT) --disable-mirage 
