@@ -43,7 +43,7 @@ Document openflow
 Executable ofswitch_ctrl
   Path:                 lib
   MainIs:               ofswitch_ctrl.ml
-  Build$:               flag(lwt)
+  Build$:               flag(nettests)
   Custom:               true
   CompiledObject:       native
   Install:              false
@@ -53,7 +53,7 @@ Executable ofswitch_ctrl
 Executable learning_switch_lwt
   Path:                 controller
   MainIs:               learning_switch.ml
-  Build$:               flag(lwt)
+  Build$:               flag(nettests)
   Custom:               true
   CompiledObject:       native
   Install:              false
@@ -62,7 +62,7 @@ Executable learning_switch_lwt
 Executable basic_switch_lwt
   Path:                 switch
   MainIs:               basic_switch.ml
-  Build$:               flag(lwt)
+  Build$:               flag(nettests)
   Custom:               true
   CompiledObject:       native
   Install:              false
@@ -71,7 +71,7 @@ Executable basic_switch_lwt
 (*Executable learning_switch_mirage
   Path:                 controller
   MainIs:               learning_switch.ml
-  Build$:               flag(mirage)
+  Build$:               flag(nettests)
   Custom:               true
   CompiledObject:       native
   Target:               xen
@@ -81,7 +81,7 @@ Executable basic_switch_lwt
 Executable basic_switch_mirage
   Path:                 switch
   MainIs:               basic_switch.ml
-  Build$:               flag(mirage)
+  Build$:               flag(nettests)
   Custom:               true
   CompiledObject:       native
   Target:               xen
