@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 7ec51c624334462bbfa7ad2802e56fa2)
+# DO NOT EDIT (digest: 8b713f0a8b07fba3ca07598399e032b1)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -23,13 +23,15 @@
 "lib/ofswitch_ctrl.native": use_openflow
 "lib/ofswitch_ctrl.native": pkg_cstruct
 "lib/ofswitch_ctrl.native": pkg_cstruct.syntax
-"lib/ofswitch_ctrl.native": pkg_rpc
+"lib/ofswitch_ctrl.native": pkg_rpclib
+"lib/ofswitch_ctrl.native": pkg_rpclib.json
 "lib/ofswitch_ctrl.native": pkg_mirage
 "lib/ofswitch_ctrl.native": pkg_mirage-net
 <lib/*.ml{,i}>: use_openflow
 <lib/*.ml{,i}>: pkg_cstruct
 <lib/*.ml{,i}>: pkg_cstruct.syntax
-<lib/*.ml{,i}>: pkg_rpc
+<lib/*.ml{,i}>: pkg_rpclib
+<lib/*.ml{,i}>: pkg_rpclib.json
 <lib/*.ml{,i}>: pkg_mirage
 <lib/*.ml{,i}>: pkg_mirage-net
 "lib/ofswitch_ctrl.native": custom
@@ -37,13 +39,15 @@
 "controller/learning_switch.native": use_openflow
 "controller/learning_switch.native": pkg_cstruct
 "controller/learning_switch.native": pkg_cstruct.syntax
-"controller/learning_switch.native": pkg_rpc
+"controller/learning_switch.native": pkg_rpclib
+"controller/learning_switch.native": pkg_rpclib.json
 "controller/learning_switch.native": pkg_mirage
 "controller/learning_switch.native": pkg_mirage-net
 <controller/*.ml{,i}>: use_openflow
 <controller/*.ml{,i}>: pkg_cstruct
 <controller/*.ml{,i}>: pkg_cstruct.syntax
-<controller/*.ml{,i}>: pkg_rpc
+<controller/*.ml{,i}>: pkg_rpclib
+<controller/*.ml{,i}>: pkg_rpclib.json
 <controller/*.ml{,i}>: pkg_mirage
 <controller/*.ml{,i}>: pkg_mirage-net
 "controller/learning_switch.native": custom
@@ -51,13 +55,15 @@
 "switch/basic_switch.native": use_openflow
 "switch/basic_switch.native": pkg_cstruct
 "switch/basic_switch.native": pkg_cstruct.syntax
-"switch/basic_switch.native": pkg_rpc
+"switch/basic_switch.native": pkg_rpclib
+"switch/basic_switch.native": pkg_rpclib.json
 "switch/basic_switch.native": pkg_mirage
 "switch/basic_switch.native": pkg_mirage-net
 <switch/*.ml{,i}>: use_openflow
 <switch/*.ml{,i}>: pkg_cstruct
 <switch/*.ml{,i}>: pkg_cstruct.syntax
-<switch/*.ml{,i}>: pkg_rpc
+<switch/*.ml{,i}>: pkg_rpclib
+<switch/*.ml{,i}>: pkg_rpclib.json
 <switch/*.ml{,i}>: pkg_mirage
 <switch/*.ml{,i}>: pkg_mirage-net
 "switch/basic_switch.native": custom

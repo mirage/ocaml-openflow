@@ -31,7 +31,7 @@ Library openflow
   CompiledObject:       native
   Modules:              Ofpacket,  Ofcontroller, Ofswitch_config, Ofswitch
   Pack:                 True
-  BuildDepends:         cstruct, cstruct.syntax, rpc, mirage, mirage-net (>= 0.3.0)
+  BuildDepends:         cstruct, cstruct.syntax, rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0)
 
 Document openflow
   Title:                OpenFlow docs
