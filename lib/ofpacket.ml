@@ -1621,8 +1621,7 @@ module Packet_in = struct
     let total_len = get_ofp_packet_in_total_len bits in
     let in_port = Port.port_of_int (get_ofp_packet_in_in_port bits) in
     let reason = reason_of_int (get_ofp_packet_in_reason bits) in
-    let data = Cstruct.sub bits sizeof_ofp_packet_in 
-      (total_len - sizeof_ofp_packet_in) in
+    let data = Cstruct.sub bits sizeof_ofp_packet_in total_len in
       { buffer_id; in_port; reason; data}
   
   let packet_in_to_string p = 
