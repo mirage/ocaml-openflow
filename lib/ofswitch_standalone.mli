@@ -1,5 +1,5 @@
-(*
- * Copyright (c) 2012 Haris Rotsos <cr409@cl.cam.ac.uk>
+(* 
+ * Copyright (c) 2012 Charalampos Rotsos <cr409@cl.cam.ac.uk>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,21 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-exception ReadError
-
-open Net 
-
-type conn_type 
-type conn_state = {
-  mutable dpid : Ofpacket.datapath_id;
-  t : conn_type; 
-}
-
-val init_socket_conn_state : Channel.t -> conn_state
-val init_unix_conn_state : Lwt_unix.file_descr -> conn_state
-val init_local_conn_state: Ofpacket.t Lwt_stream.t -> 
-  (Ofpacket.t option -> unit) -> conn_state
-val read_packet : conn_state -> Ofpacket.t Lwt.t
-val send_packet : conn_state -> Ofpacket.t -> unit Lwt.t
-val send_data_raw : conn_state -> Cstruct.buf -> unit Lwt.t
-val close : conn_state -> unit 
+val init_controller : unit -> Ofcontroller.t 
+val run_controller : Net.Manager.t -> Ofcontroller.t -> 
+  (Ofpacket.t Lwt_stream.t * (Ofpacket.t option -> unit)) Lwt.t

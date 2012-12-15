@@ -19,6 +19,7 @@ open Lwt
 open Net
 open Nettypes
 open Ofswitch_config
+open Printf
 
 module OP = Ofpacket
 
@@ -126,7 +127,7 @@ module Table = struct
       lookup_count=0L; matched_count=0L});}
 
   (* TODO fix flow_mod flag support. overlap is not considered *)
-  let add_flow table t =
+  let add_flow st table t =
     (* TODO check if the details are correct e.g. IP type etc. *)
     Hashtbl.replace table.entries t.OP.Flow_mod.of_match 
     (Entry.({actions=t.OP.Flow_mod.actions; counters=(init_flow_counters t); 
@@ -139,8 +140,8 @@ module Table = struct
     | OP.Flow.Output(port, _)::_ when (port = out_port) -> true
     | head::tail -> is_output_port out_port tail 
 
-  let del_flow table ?(xid=(Random.int32 Int32.max_int)) ?(reason=OP.Flow_removed.DELETE) 
-        t tuple out_port =
+  let del_flow table ?(xid=(Random.int32 Int32.max_int)) 
+        ?(reason=OP.Flow_removed.DELETE) tuple out_port t =
     (* Delete all matching entries from the flow table*)
     let remove_flow = 
       Hashtbl.fold (
@@ -164,8 +165,7 @@ module Table = struct
 
     (* Check for notification flag in flow and send 
     * flow modification warnings *)
-    let _ = 
-      List.iter (
+      Lwt_list.iter_s (
       fun (of_match, flow) -> 
         if (flow.Entry.counters.Entry.flags.OP.Flow_mod.send_flow_rem) then
           let duration_sec = Int32.sub (Int32.of_float (OS.Clock.time ()))  
@@ -176,12 +176,12 @@ module Table = struct
             reason; duration_sec; duration_nsec=0l;
             idle_timeout=flow.Entry.counters.Entry.idle_timeout;
             packet_count=flow.Entry.counters.Entry.n_packets;
-            byte_count=flow.Entry.counters.Entry.n_bytes;}) in 
-          let bits = OP.marshal_and_sub (OP.Flow_removed.marshal_flow_removed fl_rm) 
-            (OS.Io_page.get ()) in 
-            Channel.write_buffer t bits  
-    ) remove_flow  in 
-      Channel.flush t
+            byte_count=flow.Entry.counters.Entry.n_bytes;}) in
+          let h = OP.Header.(create ~xid FLOW_REMOVED (OP.Flow_removed.get_len)) in
+              Ofsocket.send_packet t (OP.Flow_removed (h,fl_rm)) 
+       else 
+          return ()
+    ) remove_flow 
 
   (* table stat update methods *)
   let update_table_found table = 
@@ -212,7 +212,7 @@ module Table = struct
     ) table.entries [] in 
       Lwt_list.iter_s (
         fun (of_match, entry, reason) -> 
-          del_flow table ~reason t of_match OP.Port.No_port 
+          del_flow table ~reason of_match OP.Port.No_port t
       ) flows
 
 
@@ -279,7 +279,7 @@ module Switch = struct
     (* Mapping port ids to port numbers *)
     mutable int_to_port: (int, port ref) Hashtbl.t;
     mutable ports : port list;
-    mutable controllers: (Net.Channel.t) list;
+    mutable controller: Ofsocket.conn_state option;
     table: Table.t;
     stats: stats;
     p_sflow: uint32; (** probability for sFlow sampling *)
@@ -499,49 +499,50 @@ type t = Switch.t
 
 (* 
  * let process_frame_depr intf_name frame =  *)
-let process_frame_inner st intf frame =
+let process_frame_inner st p intf frame =
   try_lwt
-      let p = (!(Hashtbl.find st.Switch.dev_to_port intf)) in  
+(*      let p = (!(Hashtbl.find st.Switch.dev_to_port intf)) in  *)
      let in_port = (OP.Port.port_of_int p.Switch.port_id) in 
      let tupple = (OP.Match.raw_packet_to_match in_port frame ) in
+
      (* Update port rx statistics *)
      let _ = Switch.update_port_rx_stats (Int64.of_int (Cstruct.len frame)) p in
 
     (* What is the size of the frame? Need to get sub_buffer in order  to
      * process it *)
-    let frame = 
+(*    let frame = 
       match (Switch.size_of_raw_packet frame) with
       | Some(len) -> Cstruct.sub_buffer frame 0 len
       | None -> raise Packet_type_unknw
-    in 
+    in *)
+(*    let _ = 
+      printf "XXX received on port %d (%d) [%s] \n%!"
+      p.Switch.port_id (Cstruct.len frame) (OP.Match.match_to_string tupple) 
+    in *)
      (* Lookup packet flow to existing flows in table *)
      let entry = (Switch.lookup_flow st tupple) in 
      match entry with 
-     | Switch.NOT_FOUND ->
+     | Switch.NOT_FOUND -> begin
        let _ = Table.update_table_missed st.Switch.table in
        let buffer_id = st.Switch.packet_buffer_id in
          (*TODO Move this code in the Switch module *)
        st.Switch.packet_buffer_id <- Int32.add st.Switch.packet_buffer_id 1l;
-       let pkt_in = OP.Packet_in.create_pkt_in ~buffer_id ~in_port 
+       let (_, pkt_in) = OP.Packet_in.create_pkt_in ~buffer_id ~in_port 
                       ~reason:OP.Packet_in.NO_MATCH ~data:frame in 
-         st.Switch.packet_buffer <- st.Switch.packet_buffer @ [pkt_in]; 
-       let bits = OP.marshal_and_sub (OP.Packet_in.marshal_pkt_in ~data_len:64 pkt_in) 
-                    (OS.Io_page.get ()) in 
-       Lwt_list.iter_p 
-       (fun t ->
-          match (Cstruct.len bits) with
-            | l when l <= 1400 -> 
-                let _ = Channel.write_buffer t bits in 
-                  Channel.flush t
-            | _ -> 
-                let buf = Cstruct.sub_buffer bits 0 1400 in 
-                let _ = Channel.write_buffer t buf in 
-                let buf = Cstruct.sub_buffer bits 1400 ((Cstruct.len bits) - 1400) in 
-                let _ = Channel.write_buffer t buf in
-                lwt _ = Channel.flush t in 
-                  return ()
-       )
-       st.Switch.controllers
+       let _ = st.Switch.packet_buffer <- st.Switch.packet_buffer @ [pkt_in] in
+       let size = 
+         if (Cstruct.len frame > 64) then
+           64
+         else 
+           Cstruct.len frame 
+       in
+       let (h, pkt_in) = OP.Packet_in.create_pkt_in ~buffer_id ~in_port 
+                      ~reason:OP.Packet_in.NO_MATCH 
+                      ~data:(Cstruct.sub frame 0 size) in
+       match st.Switch.controller with
+       | None -> return ()
+       | Some conn -> Ofsocket.send_packet conn (OP.Packet_in (h, pkt_in))
+    end
        (* generate a packet in event *)
      | Switch.Found(entry) ->
        let _ = Table.update_table_found st.Switch.table in
@@ -554,10 +555,10 @@ let process_frame_inner st intf frame =
       return ()
      | Packet_type_unknw -> return ()
 
-let process_frame st intf_name frame =
+let process_frame p st intf_name frame =
   try_lwt 
-    let p = Hashtbl.find st.Switch.dev_to_port intf_name in
-    process_frame_inner st intf_name frame
+    (*let p = Hashtbl.find st.Switch.dev_to_port intf_name in *)
+    process_frame_inner st p intf_name frame
 (*    if (st.Switch.queue_len < 256) then (
       st.Switch.queue_len <- st.Switch.queue_len + 1;
 
@@ -574,7 +575,7 @@ let process_frame st intf_name frame =
     | exn ->
       return (pr "%03.6f: switch error: %s\n%!" (OS.Clock.time ()) (Printexc.to_string exn))
 
-let data_plane st () = 
+(*let data_plane st () = 
   try_lwt 
   while_lwt true do 
     lwt a = Lwt_stream.get st.Switch.packet_queue in
@@ -583,7 +584,7 @@ let data_plane st () =
       st.Switch.queue_len <- st.Switch.queue_len - 1;
       process_frame_inner st p pkt
     | None -> return ()
-  done
+  done *)
 
 
 (*************************************************
@@ -595,41 +596,36 @@ type endhost = {
   port: int;
 }
 
-let process_openflow st t bits =  function
+let process_openflow st t msg = 
+  match msg with
   | OP.Hello (h) -> 
     (* Reply to HELLO with a HELLO and a feature request *)
     cp "HELLO";
     return ()
-  | OP.Echo_req (h, bs) -> (* Reply to ECHO requests *)
+  | OP.Echo_req h -> (* Reply to ECHO requests *)
     cp "ECHO_REQ";
-    let h = OP.Header.(create ECHO_RESP sizeof_ofp_header h.xid) in
-    let bits = OP.marshal_and_sub (OP.Header.marshal_header h)
-      (OS.Io_page.get ()) in 
-    let _ = Channel.write_buffer t bits in 
-      Channel.flush t
-  | OP.Features_req (h)  -> 
+    Ofsocket.send_packet t 
+      (OP.Echo_req 
+        OP.Header.(create ~xid:h.xid ECHO_RESP sizeof_ofp_header))
+ | OP.Features_req (h)  -> 
     cp "FEAT_REQ";
-    let bits = OP.marshal_and_sub
-      (OP.Switch.marshal_reply_features h.OP.Header.xid st.Switch.features )
-      (OS.Io_page.get ()) in 
-    let _ = Channel.write_buffer t bits in
-      Channel.flush t
-  | OP.Stats_req(h, req) -> begin
+    let h = OP.Header.create ~xid:(h.OP.Header.xid) OP.Header.FEATURES_RESP 
+              (OP.Switch.get_len st.Switch.features) in 
+      Ofsocket.send_packet t (OP.Features_resp (h, st.Switch.features))
+ | OP.Stats_req(h, req) -> begin
     let xid = h.OP.Header.xid in 
-    cp "STATS_REQ\n%!";
+    cp "STATS_REQ";
     match req with
     | OP.Stats.Desc_req(req) ->
-      let desc = OP.Stats.({ imfr_desc="Mirage"; hw_desc="Mirage";
-                  sw_desc="Mirage"; serial_num="0.1";dp_desc="Mirage";}) 
-      in  
-      let resp_h = OP.Stats.({st_ty=DESC; more_to_follow=false;}) in 
-      let bits =  OP.marshal_and_sub 
-                  (OP.Stats.marshal_stats_resp xid (OP.Stats.Desc_resp(resp_h,
-                  desc))) 
-                  (OS.Io_page.get ()) in   
-      let _ = Channel.write_buffer t bits in
-        Channel.flush t 
-    | OP.Stats.Flow_req(req_h, of_match, table_id, out_port) ->
+      let p = 
+        OP.Stats.(Desc_resp (
+          {st_ty=DESC; more_to_follow=false;},
+          { imfr_desc="Mirage"; hw_desc="Mirage";
+            sw_desc="Mirage"; serial_num="0.1";dp_desc="Mirage";}
+      )) in 
+      let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len p) in 
+        Ofsocket.send_packet t (OP.Stats_resp (h, p))
+   | OP.Stats.Flow_req(req_h, of_match, table_id, out_port) ->
       (*TODO Need to consider the  table_id and the out_port and 
        * split reply over multiple openflow packets if they don't
        * fit a single packet. *)
@@ -646,12 +642,10 @@ let process_openflow st t bits =  function
         Hashtbl.fold (fun key value r -> match_flows of_match key value r) 
           st.Switch.table.Table.entries [] in 
       let stats = OP.Stats.({st_ty=FLOW; more_to_follow=false;}) in 
-      let reply = OP.Stats.Flow_resp(stats, flows) in 
-      let bits = OP.marshal_and_sub (OP.Stats.marshal_stats_resp xid reply) 
-                  (OS.Io_page.get ()) in
-      let _ = Channel.write_buffer t bits in
-        Channel.flush t
-    | OP.Stats.Aggregate_req (req_h, of_match, table, port) -> 
+      let r = OP.Stats.Flow_resp(stats, flows) in
+      let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len r) in 
+        Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
+   | OP.Stats.Aggregate_req (req_h, of_match, table, port) -> 
       let aggr_flow_bytes = ref 0L in
       let aggr_flow_pkts = ref 0L in
       let aggr_flows = ref 0l in            
@@ -667,68 +661,57 @@ let process_openflow st t bits =  function
       Hashtbl.iter (fun key value -> match_flows_aggr of_match key value)
                     st.Switch.table.Table.entries;
       let stats = OP.Stats.({st_ty=AGGREGATE; more_to_follow=false;}) in  
-      let reply = OP.Stats.Aggregate_resp(stats, 
+      let r = OP.Stats.Aggregate_resp(stats, 
                     OP.Stats.({byte_count=(!aggr_flow_bytes);
                     packet_count=(!aggr_flow_pkts);
                     flow_count=(!aggr_flows);})) 
       in 
-      let bits = OP.marshal_and_sub (OP.Stats.marshal_stats_resp xid reply)
-                  (OS.Io_page.get ()) in
-      let _ =  Channel.write_buffer t bits in 
-        Channel.flush t
-    | OP.Stats.Table_req(req) ->
+      let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len r) in 
+        Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
+   | OP.Stats.Table_req(req) ->
       let stats = OP.Stats.({st_ty=TABLE; more_to_follow=false;}) in  
-      let reply = OP.Stats.Table_resp(stats, [st.Switch.table.Table.stats]) in 
-      let bits = OP.marshal_and_sub (OP.Stats.marshal_stats_resp xid reply) 
-                  (OS.Io_page.get ()) in
-      let _ = Channel.write_buffer t bits in 
-        Channel.flush t
-    | OP.Stats.Port_req(req_h, port) -> begin
+      let r = OP.Stats.Table_resp(stats, [st.Switch.table.Table.stats]) in 
+      let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len r) in 
+        Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
+   | OP.Stats.Port_req(req_h, port) -> begin
       match port with
       | OP.Port.No_port -> 
         let port_stats = List.map (fun p -> p.Switch.counter) st.Switch.ports in
         let stats = OP.Stats.({st_ty=PORT; more_to_follow=false;}) in 
-        let reply = OP.Stats.Port_resp(stats, port_stats) in 
-        let bits = OP.marshal_and_sub (OP.Stats.marshal_stats_resp xid reply) 
-                    (OS.Io_page.get ()) in
-        let _ = Channel.write_buffer t bits in 
-          Channel.flush t
+        let r = OP.Stats.Port_resp(stats, port_stats) in 
+        let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len r) in 
+          Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
       | OP.Port.Port(port_id) -> 
         try_lwt 
           let port = Hashtbl.find st.Switch.int_to_port port_id in
           let stats = OP.Stats.({st_ty=PORT; more_to_follow=false;}) in 
-          let reply = OP.Stats.Port_resp(stats, [(!port).Switch.counter]) in 
-          let bits = OP.marshal_and_sub (OP.Stats.marshal_stats_resp xid reply) 
-                      (OS.Io_page.get ()) in
-          let _ = Channel.write_buffer t bits in 
-            Channel.flush t
-        with Not_found ->
+          let r = OP.Stats.Port_resp(stats, [(!port).Switch.counter]) in 
+          let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len r) in 
+            Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
+       with Not_found ->
           (* TODO reply with right error code *)
           pr "Invalid port_id in stats\n%!";
           return ()
         end
-      | _ -> 
-        let bits = OP.marshal_and_sub (OP.marshal_error  
-                    OP.REQUEST_BAD_SUBTYPE bits xid) (OS.Io_page.get ()) in
-        let _ = Channel.write_buffer t bits in 
-          Channel.flush t
+      | _ ->
+          let bits = OP.marshal msg in 
+          let h = OP.Header.create ~xid OP.Header.ERROR 
+                    (OP.Header.get_len + 4 + (Cstruct.len bits)) in 
+          Ofsocket.send_packet t (OP.Error (h, OP.REQUEST_BAD_SUBTYPE, bits))
   end
-  | OP.Get_config_req(h) -> 
-    let resp = OP.Switch.init_switch_config in
-    let bits = OP.marshal_and_sub (OP.Switch.marshal_switch_config 
-                h.OP.Header.xid resp) (OS.Io_page.get ()) in
-    let _ = Channel.write_buffer t bits in 
-      Channel.flush t
-  | OP.Barrier_req(h) ->
-    cp (sp "BARRIER_REQ: %s\n%!" (OP.Header.header_to_string h));
-    let resp_h = (OP.Header.create OP.Header.BARRIER_RESP
-                  (OP.Header.sizeof_ofp_header) h.OP.Header.xid) in
-    let bits = OP.marshal_and_sub (OP.Header.marshal_header resp_h)        
-                (OS.Io_page.get ()) in
-    let _ = Channel.write_buffer t bits in 
-      Channel.flush t
-  | OP.Packet_out(h, pkt) ->
-    cp (sp "PACKET_OUT: %s\n%!" (OP.Packet_out.packet_out_to_string pkt));
+  | OP.Get_config_req(h) ->
+      let resp = OP.Switch.init_switch_config in
+      let h = OP.Header.create ~xid:h.OP.Header.xid OP.Header.GET_CONFIG_RESP 
+                OP.Switch.config_get_len in 
+        Ofsocket.send_packet t (OP.Get_config_resp(h, resp)) 
+ | OP.Barrier_req(h) ->
+     cp (sp "BARRIER_REQ: %s" (OP.Header.header_to_string h));
+     let resp_h = (OP.Header.create ~xid:h.OP.Header.xid OP.Header.BARRIER_RESP
+                  (OP.Header.sizeof_ofp_header)) in
+        Ofsocket.send_packet t (OP.Barrier_resp(resp_h)) 
+
+ | OP.Packet_out(h, pkt) ->
+    cp (sp "PACKET_OUT: %s" (OP.Packet_out.packet_out_to_string pkt)); 
     if (pkt.OP.Packet_out.buffer_id = -1l) then
       Switch.apply_of_actions st pkt.OP.Packet_out.in_port
                 pkt.OP.Packet_out.data pkt.OP.Packet_out.actions
@@ -744,20 +727,19 @@ let process_openflow st t bits =  function
         ) st.Switch.packet_buffer
       in 
         match (!pkt_in) with 
-        | None -> 
-            let bs = OP.marshal_and_sub 
-                       (OP.marshal_error OP.REQUEST_BUFFER_UNKNOWN bits h.OP.Header.xid)
-                       (OS.Io_page.get ()) in 
-            let _ = Channel.write_buffer t bs in 
-              Channel.flush t 
-        | Some(pkt_in) ->
-            let _ = pr "Sending as packet_out data %d\n%!" 
-                      (Cstruct.len pkt_in.OP.Packet_in.data) in 
+        | None ->
+            let bits = OP.marshal msg in 
+            let h = OP.Header.create ~xid:h.OP.Header.xid OP.Header.ERROR 
+                    (OP.Header.get_len + 4 + (Cstruct.len bits)) in 
+              Ofsocket.send_packet t (OP.Error(h, OP.REQUEST_BUFFER_UNKNOWN, bits)) 
+       | Some(pkt_in) ->
+(*            let _ = pr "Sending as packet_out data %d\n%!" 
+                      (Cstruct.len pkt_in.OP.Packet_in.data) in *)
             Switch.apply_of_actions st pkt_in.OP.Packet_in.in_port
               pkt_in.OP.Packet_in.data pkt.OP.Packet_out.actions
     end 
   | OP.Flow_mod(h,fm)  ->
-    cp (sp "FLOW_MOD: %s\n%!" (OP.Flow_mod.flow_mod_to_string fm));
+    cp (sp "FLOW_MOD: %s" (OP.Flow_mod.flow_mod_to_string fm));
     let of_match = fm.OP.Flow_mod.of_match in 
     let of_actions = fm.OP.Flow_mod.actions in
     lwt _ = 
@@ -765,10 +747,10 @@ let process_openflow st t bits =  function
       | OP.Flow_mod.ADD 
       | OP.Flow_mod.MODIFY 
       | OP.Flow_mod.MODIFY_STRICT -> 
-        return (Table.add_flow st.Switch.table fm)
+        return (Table.add_flow st st.Switch.table fm)
       | OP.Flow_mod.DELETE 
       | OP.Flow_mod.DELETE_STRICT ->
-        Table.del_flow st.Switch.table t of_match fm.OP.Flow_mod.out_port
+        Table.del_flow st.Switch.table of_match fm.OP.Flow_mod.out_port t
     in
       if (fm.OP.Flow_mod.buffer_id = -1l) then
         return () 
@@ -784,14 +766,12 @@ let process_openflow st t bits =  function
           ) st.Switch.packet_buffer
         in 
           match (!pkt_in) with 
-            | None -> 
-                let bs = 
-                  OP.marshal_and_sub 
-                    (OP.marshal_error OP.REQUEST_BUFFER_UNKNOWN bits h.OP.Header.xid)
-                    (OS.Io_page.get ()) in 
-                let _ = Channel.write_buffer t bs in 
-                  Channel.flush t 
-            | Some(pkt_in) ->
+            | None ->
+                let bits = OP.marshal msg in 
+                let h = OP.Header.create ~xid:h.OP.Header.xid OP.Header.ERROR 
+                    (OP.Header.get_len + 4 + (Cstruct.len bits)) in 
+                Ofsocket.send_packet t (OP.Error(h, OP.REQUEST_BUFFER_UNKNOWN, bits)) 
+           | Some(pkt_in) ->
                 (* TODO check if the match is accurate? *)
                 Switch.apply_of_actions st pkt_in.OP.Packet_in.in_port
                   pkt_in.OP.Packet_in.data of_actions 
@@ -808,78 +788,84 @@ let process_openflow st t bits =  function
   | OP.Get_config_resp (h, _)
   | OP.Features_resp (h, _)
   | OP.Vendor (h, _, _)
-  | OP.Echo_resp (h, _)
-  | OP.Error (h, _) ->
-    let bits = OP.marshal_and_sub (OP.marshal_error         
-                OP.REQUEST_BAD_TYPE bits h.OP.Header.xid) 
-                (OS.Io_page.get ()) in
-    let _ = Channel.write_buffer t bits in 
-      Channel.flush t
+  | OP.Echo_resp h
+  | OP.Error (h, _, _) ->
+      let bits = OP.marshal msg in 
+      let h = OP.Header.create ~xid:h.OP.Header.xid OP.Header.ERROR 
+                    (OP.Header.get_len + 4 + (Cstruct.len bits)) in 
+      Ofsocket.send_packet t (OP.Error(h, OP.REQUEST_BAD_TYPE, bits)) 
 
-let control_channel st (remote_addr, remote_port) t =
-  let rs = Nettypes.ipv4_addr_to_string remote_addr in
-  Printf.eprintf "OpenFlow Switch: controller %s:%d" rs remote_port; 
-  st.Switch.controllers <- (st.Switch.controllers @ [t]);
-
+let control_channel_run st conn t = 
   (* Trigger the dance between the 2 nodes *)
-  let h = OP.Header.(create HELLO sizeof_ofp_header 1l) in  
-  let bits = OP.marshal_and_sub (OP.Header.marshal_header h)
-               (OS.Io_page.get ()) in 
-  let _ = Channel.write_buffer t bits in 
-  lwt _ = Channel.flush t in 
-  let cached_socket = Ofsocket.create_socket t in 
-
+  let h = OP.Header.(create ~xid:1l HELLO sizeof_ofp_header) in  
+  lwt _ = Ofsocket.send_packet conn (OP.Hello(h)) in
   let rec echo () =
     try_lwt
-      lwt hbuf = Ofsocket.read_data cached_socket OP.Header.sizeof_ofp_header in
-        let ofh  = OP.Header.parse_header  hbuf in
-        let dlen = ofh.OP.Header.len - OP.Header.sizeof_ofp_header in 
-        lwt dbuf = Ofsocket.read_data cached_socket dlen in
-        let ofp  = OP.parse ofh dbuf in
-          process_openflow st t dbuf ofp (* Bitstring.concat [hbuf; dbuf] *) 
+      lwt ofp = Ofsocket.read_packet conn in 
+         process_openflow st conn ofp (* Bitstring.concat [hbuf; dbuf] *) 
           >> echo ()
     with
     | Nettypes.Closed -> 
-            (* TODO Need to remove the t from st.Switch.controllers *)
-        pr "Controller channel closed....\n%!"; 
-        return ()
+        pr "Controller channel closed....\n%!";
+         return ()
     | OP.Unparsed (m, bs) -> (pr "# unparsed! m=%s\n %!" m); echo ()
     | exn -> 
         pr "[OpenFlow-Switch-Control] ERROR:%s\n" (Printexc.to_string exn);
         (echo () ) 
 
-  in 
-    echo () <&> (Table.monitor_flow_timeout st.Switch.table t)
+  in
+  lwt _ = 
+    ( lwt _ = t  in return (printf "thread terminated\n%!"))<?>
+    echo () <?> 
+    (lwt _ = Table.monitor_flow_timeout st.Switch.table conn in return (pp
+    "[switch] terminated flow_timeout thread") )
+  in
+  let _ = Ofsocket.close conn in 
+  let _ = st.Switch.controller <- None in 
+    return (printf "control channel thread returned\n%!")
+
+let control_channel st (remote_addr, remote_port) t =
+  let rs = Nettypes.ipv4_addr_to_string remote_addr in
+  Printf.eprintf "OpenFlow Switch: controller %s:%d" rs remote_port; 
+  let conn = Ofsocket.init_socket_conn_state t in
+  let _ = st.Switch.controller <- (Some conn) in 
+  let t, _ = Lwt.task () in 
+    control_channel_run st conn t 
 
 (*
  * Interaface with external applications
  * *)
-let add_port mgr sw ethif = 
+let add_port mgr ?(use_mac=false) sw ethif = 
   sw.Switch.portnum <- sw.Switch.portnum + 1;
-  let _ = pr "Adding port %d (%s)\n %!" sw.Switch.portnum 
-            (Net.Manager.get_intf_name mgr ethif) in 
-  let port = Switch.init_port mgr sw.Switch.portnum ethif in 
+  let hw_addr =  
+    (Net.Nettypes.ethernet_mac_to_string
+    (Manager.get_intf_mac mgr ethif)) in
+  let _ = pr "Adding port %d (%s) '%s' \n %!" sw.Switch.portnum 
+            (Net.Manager.get_intf_name mgr ethif) hw_addr in 
+  lwt _ = 
+    if (use_mac) then
+      lwt _ = Lwt_unix.system (sprintf "ifconfig tap0 lladdr %s" hw_addr) in
+        return ()
+    else
+      return ()
+  in
+  let port = Switch.init_port mgr sw.Switch.portnum ethif in
   sw.Switch.ports <- sw.Switch.ports @ [port];
   Hashtbl.add sw.Switch.int_to_port sw.Switch.portnum (ref port); 
   Hashtbl.add sw.Switch.dev_to_port ethif (ref port);
   sw.Switch.features.OP.Switch.ports  <- 
     sw.Switch.features.OP.Switch.ports @ [port.Switch.phy];
-  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw) in
-  let port_status = OP.Port.create_port_status OP.Port.ADD port.Switch.phy in 
-  let bits = OP.marshal_and_sub (OP.Port.marshal_port_status port_status)
-               (Lwt_bytes.create 2048) in 
-  lwt _ = Lwt_list.iter_p 
-            (fun t -> 
-               let _ = Net.Channel.write_buffer t bits in
-                 Net.Channel.flush t
-            )
-            sw.Switch.controllers in 
-    return ()
+  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw port) in
+  let h,p = OP.Port.create_port_status OP.Port.ADD port.Switch.phy in 
+  lwt _ = 
+    match sw.Switch.controller with
+    | None -> return ()
+    | Some t -> Ofsocket.send_packet t (OP.Port_status (h,p)) 
+  in 
+   return ()
 
 let add_port_local mgr sw ethif = 
-  let _ = pr "Adding port 0 (%s)\n %!" 
-            (Net.Manager.get_intf_name mgr ethif) in 
-  (*TODO Find first if a port is already registered as port 0 
+ (*TODO Find first if a port is already registered as port 0 
   * as port 0 and disable it *)
   let port = Switch.init_port mgr 0 ethif in 
   sw.Switch.ports <- 
@@ -897,7 +883,7 @@ let add_port_local mgr sw ethif =
   (List.filter (fun a -> (a.OP.Port.port_no <> 0)) 
                            sw.Switch.features.OP.Switch.ports )
    @ [port.Switch.phy];
-  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw) in
+  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw port) in
     ()
 
 
@@ -905,17 +891,52 @@ let create_switch () =
   let (packet_queue, push_packet) = Lwt_stream.create () in
   Switch.(
     { ports = []; int_to_port = (Hashtbl.create 64); dev_to_port=(Hashtbl.create 64); 
-      p_sflow = 0_l; controllers=[]; errornum = 0l; portnum=0; packet_queue; push_packet; 
+      p_sflow = 0_l; controller=None; errornum = 0l; portnum=0; packet_queue; push_packet; 
       queue_len = 0; stats={n_frags=0L; n_hits=0L;n_missed=0L;n_lost=0L;};
     table = (Table.init_table ()); features=(Switch.switch_features ()); 
-    packet_buffer=[]; packet_buffer_id=0l};)
+    packet_buffer=[]; packet_buffer_id=0l;})
 
 let listen st mgr loc =
-  Channel.listen mgr (`TCPv4 (loc, (control_channel st))) <&>
-    (Ofswitch_config.listen_t mgr 6634) <&>
-    (data_plane st ())
+  Channel.listen mgr (`TCPv4 (loc, (control_channel st ))) <&>
+    (Ofswitch_config.listen_t mgr 6634)
 
 let connect st mgr loc  =
   Channel.connect mgr (`TCPv4 (None, loc, (control_channel st loc))) <&> 
-    (Ofswitch_config.listen_t mgr 6634) <&>
-       (data_plane st ())
+    (Ofswitch_config.listen_t mgr 6634)
+
+let local_connect st mgr input output   =
+  let conn = Ofsocket.init_local_conn_state input output in 
+  let _ = st.Switch.controller <- (Some conn) in 
+  let t, _ = Lwt.task () in 
+     (control_channel_run st conn t) <&> 
+    (Ofswitch_config.listen_t mgr 6634)
+
+let lwt_connect st ?(standalone=true) mgr loc  =
+  let of_ctrl = Ofswitch_standalone.init_controller () in 
+  let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
+  let _ = Lwt_unix.setsockopt fd Unix.SO_REUSEADDR true in 
+  let _ = Lwt_unix.bind fd (Unix.ADDR_INET(Unix.inet_addr_any, 6633)) in 
+  let _ = Lwt_unix.listen fd 1 in
+  let _ = printf "[switch] Listening socket...\n%!" in 
+    while_lwt true do
+      let t,u = Lwt.task () in 
+      ((
+        let _ = printf "[switch] standalone controller connected...\n%!" in 
+        lwt (switch_in, switch_out) = 
+          Ofswitch_standalone.run_controller mgr of_ctrl in
+        let conn = Ofsocket.init_local_conn_state switch_in switch_out in 
+        let _ = st.Switch.controller <- (Some conn) in 
+        lwt _ = control_channel_run st conn t in 
+        let _ = printf "[switch] standalone controller stopped...\n%!" in 
+          return ()
+      ) <&>
+      (
+        lwt (sock, loc) = Lwt_unix.accept fd in
+        let conn = Ofsocket.init_unix_conn_state sock in 
+        let _ = wakeup u () in 
+        let t,_ = Lwt.task () in 
+        let _ = st.Switch.controller <- (Some conn) in 
+        let _ = printf "[switch] remote controller connected...\n%!" in 
+          control_channel_run st conn t
+      ))
+    done

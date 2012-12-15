@@ -19,6 +19,16 @@ open Printf
 open Net
 open Net.Nettypes
 
+let resolve t = Lwt.on_success t (fun _ -> ())
+
+module OP = Openflow.Ofpacket
+module OC = Openflow.Ofcontroller
+module OE = Openflow.Ofcontroller.Event
+open Openflow.Ofswitch
+
+let pp = Printf.printf
+let sp = Printf.sprintf
+
 (****************************************************************
  * OpenFlow Switch configuration 
  *****************************************************************)
@@ -30,24 +40,20 @@ let print_time () =
   done
 
 let switch_run () = 
-  let sw = Ofswitch.create_switch () in
+  let sw = create_switch () in
   try_lwt 
-    Manager.create ~devs:2 ~attached:(["vboxnet0"]) 
+    Manager.create ~devs:1 ~attached:(["en0"]) 
     (fun mgr interface id ->
        match (Manager.get_intf_name mgr id) with 
          | "tap0" 
          | "0" ->
-             let ip = 
-                 (ipv4_addr_of_tuple (10l,0l,0l,2l),
-                  ipv4_addr_of_tuple (255l,255l,255l,0l), []) in  
-               lwt _ = Manager.configure interface (`IPv4 ip) in
-               let dst_ip = ipv4_addr_of_tuple (10l,0l,0l,1l) in
-               let _ = printf "connecting switch...\n%!" in 
-               lwt _ = Ofswitch.connect sw mgr (dst_ip, 6633) in 
-               let _ = printf "connect returned...\n%!" in 
-                return ()
-      | "1" -> return (Ofswitch.add_port_local mgr sw id) 
-      | _ ->  Ofswitch.add_port mgr sw id
+             let _ = printf "connecting switch...\n%!" in 
+             let _ = add_port_local mgr sw id in 
+              let dst_ip = ipv4_addr_of_tuple (0l,0l,0l,0l) in
+             lwt _ = lwt_connect sw mgr (dst_ip, 6633) in 
+             let _ = printf "connect returned...\n%!" in 
+              return ()
+      | _ ->  add_port mgr ~use_mac:true sw id
     )
   with e ->
     Printf.eprintf "Error: %s" (Printexc.to_string e); 

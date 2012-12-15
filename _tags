@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 8b713f0a8b07fba3ca07598399e032b1)
+# DO NOT EDIT (digest: 89cfc75151445422183dc48c904b7297)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -19,6 +19,8 @@
 "lib/ofcontroller.cmx": for-pack(Openflow)
 "lib/ofswitch_config.cmx": for-pack(Openflow)
 "lib/ofswitch.cmx": for-pack(Openflow)
+"lib/ofsocket.cmx": for-pack(Openflow)
+"lib/ofswitch_standalone.cmx": for-pack(Openflow)
 # Executable ofswitch_ctrl
 "lib/ofswitch_ctrl.native": use_openflow
 "lib/ofswitch_ctrl.native": pkg_cstruct

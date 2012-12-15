@@ -17,7 +17,9 @@
 open Lwt
 open Lwt_list
 open Net
-open Printexc 
+open Printexc
+open Printf
+open Ofsocket
 
 let sp = Printf.sprintf
 let pp = Printf.printf
@@ -26,7 +28,6 @@ let cp = OS.Console.log
 
 module OP = Ofpacket
 
-let resolve t = Lwt.on_success t (fun _ -> ())
 
 exception ReadError
 
@@ -89,8 +90,7 @@ module Event = struct
 end
 
 type t = {
-  mutable dp_db: (OP.datapath_id, Channel.t) Hashtbl.t;
-  mutable channel_dp: ((Nettypes.ipv4_addr * int) , OP.datapath_id) Hashtbl.t;
+  mutable dp_db: (OP.datapath_id, conn_state) Hashtbl.t;
   mutable datapath_join_cb: 
     (t -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable datapath_leave_cb:
@@ -147,148 +147,120 @@ let register_cb controller e cb =
         -> controller.port_status_cb <- controller.port_status_cb @ [cb] 
   )
 
-let process_of_packet state (remote_addr, remote_port) ofp t = 
+let process_of_packet state conn ofp = 
   OP.(
-    let ep = (remote_addr, remote_port) in
     match ofp with
-      | Hello (h) (* Reply to HELLO with a HELLO and a feature request *)
-        -> ( cp "HELLO"; 
-          let bits = OP.marshal_and_sub (Header.marshal_header h)
-          (OS.Io_page.get ()) in 
-          let _ = Channel.write_buffer t bits in
-          let bits = OP.marshal_and_sub (OP.build_features_req 1l)
-          (OS.Io_page.get ()) in 
-          let _ = Channel.write_buffer t bits in 
-            Channel.flush t
-        )
-
-      | Echo_req (h, bs)  (* Reply to ECHO requests *)
-        -> ((* cp "ECHO_REQ"; *)
-          let bits = OP.marshal_and_sub 
-                       (OP.build_echo_resp h bs) 
-                       (OS.Io_page.get ()) in 
-          let _ = Channel.write_buffer t bits in
-            Channel.flush t
-        )
-
-      | Features_resp (h, sfs) (* Generate a datapath join event *)
-        -> ((* cp "FEATURES_RESP";*)
-            let dpid = sfs.Switch.datapath_id in
-            let evt = Event.Datapath_join (dpid, sfs.Switch.ports) in
-            if (Hashtbl.mem state.dp_db dpid) then (
-              Printf.printf "Deleting old state \n%!";
-              Hashtbl.remove state.dp_db dpid;
-              Hashtbl.remove state.channel_dp ep
-            );
-            Hashtbl.add state.dp_db dpid t;
-            Hashtbl.add state.channel_dp ep dpid;
-            Lwt_list.iter_p (fun cb -> cb state dpid evt) state.datapath_join_cb
-        )
-
-      | Packet_in (h, p) (* Generate a packet_in event *) 
-        -> ( 
+      | Hello (h) -> begin (* Reply to HELLO with a HELLO and a feature request *)
+        let _ = cp "HELLO" in
+        lwt _ = send_packet conn (OP.Hello (h)) in
+        let h = OP.Header.create OP.Header.FEATURES_RESP OP.Header.get_len  in 
+          send_packet conn (OP.Features_req (h) )
+     end
+      | Echo_req h  -> begin (* Reply to ECHO requests *)
+        cp "ECHO_REQ"; 
+          let h = OP.Header.(create ~xid:h.xid ECHO_RESP get_len) in
+            send_packet conn (OP.Echo_resp h)
+     end
+      | Features_resp (h, sfs) -> begin (* Generate a datapath join event *)
+        cp "FEATURES_RESP";
+        let dpid = sfs.Switch.datapath_id in 
+        let _ = conn.dpid <- dpid in
+        let evt = Event.Datapath_join (dpid, sfs.Switch.ports) in
+        let _ = 
+          if (Hashtbl.mem state.dp_db dpid) then 
+            Printf.printf "Deleting old state \n%!"
+        in 
+        let _ = Hashtbl.replace state.dp_db dpid conn in 
+          Lwt_list.iter_p (fun cb -> cb state dpid evt) state.datapath_join_cb
+      end
+      | Packet_in (h, p) -> begin (* Generate a packet_in event *) 
           cp (sp "+ %s|%s" 
                   (OP.Header.header_to_string h)
                   (OP.Packet_in.packet_in_to_string p)); 
-            let dpid = Hashtbl.find state.channel_dp ep in
             let evt = Event.Packet_in (
               p.Packet_in.in_port, p.Packet_in.buffer_id,
-              p.Packet_in.data, dpid) 
+              p.Packet_in.data, conn.dpid) 
             in
-             iter_p (fun cb -> cb state dpid evt)
+             iter_p (fun cb -> cb state conn.dpid evt)
                      state.packet_in_cb
-        )
-        
+      end
       | Flow_removed (h, p)
-        -> ((* cp (sp "+ %s|%s" 
-                  (OP.Header.string_of_h h)
-                  (OP.Flow_removed.string_of_flow_removed p)); *)
-            let dpid = Hashtbl.find state.channel_dp ep in
+        -> (cp (sp "+ %s|%s" 
+                  (OP.Header.header_to_string h)
+                  (OP.Flow_removed.string_of_flow_removed p)); 
             let evt = Event.Flow_removed (
               p.Flow_removed.of_match, p.Flow_removed.reason, 
               p.Flow_removed.duration_sec, p.Flow_removed.duration_nsec, 
-              p.Flow_removed.packet_count, p.Flow_removed.byte_count, dpid)
+              p.Flow_removed.packet_count, p.Flow_removed.byte_count, conn.dpid)
             in
-            Lwt_list.iter_p (fun cb -> cb state dpid evt) state.flow_removed_cb
+            Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) state.flow_removed_cb
         )
 
-      | Stats_resp(h, resp) 
-        -> ((* cp (sp "+ %s|%s" (OP.Header.string_of_h h)
-                  (OP.Stats.string_of_stats resp)); *)
+      | Stats_resp(h, resp) -> begin  
+         cp (sp "+ %s|%s" (OP.Header.header_to_string h)
+                  (OP.Stats.string_of_stats resp)); 
             match resp with 
-              | OP.Stats.Flow_resp(resp_h, flows) ->
-                (let dpid = Hashtbl.find state.channel_dp ep in
-                 let evt = Event.Flow_stats_reply(
-                   h.Header.xid, resp_h.Stats.more_to_follow, flows, dpid) 
+              | OP.Stats.Flow_resp(resp_h, flows) -> begin
+                let evt = Event.Flow_stats_reply(
+                   h.Header.xid, resp_h.Stats.more_to_follow, flows, conn.dpid) 
                  in
-                 Lwt_list.iter_p (fun cb -> cb state dpid evt) 
+                 Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) 
                    state.flow_stats_reply_cb
-                )
-              | OP.Stats.Aggregate_resp(resp_h, aggr) -> 
-                (let dpid = Hashtbl.find state.channel_dp ep in
+              end
+              | OP.Stats.Aggregate_resp(resp_h, aggr) -> begin
                  let evt = Event.Aggr_flow_stats_reply(
                    h.Header.xid, aggr.Stats.packet_count, 
-                   aggr.Stats.byte_count, aggr.Stats.flow_count, dpid) 
+                   aggr.Stats.byte_count, aggr.Stats.flow_count, conn.dpid) 
                  in
-                 Lwt_list.iter_p (fun cb -> cb state dpid evt) 
+                 Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) 
                    state.aggr_flow_stats_reply_cb
-                )
-              | OP.Stats.Desc_resp (resp_h, aggr) ->
-                (let dpid = Hashtbl.find state.channel_dp ep in
+              end
+              | OP.Stats.Desc_resp (resp_h, aggr) -> begin
                  let evt = Event.Desc_stats_reply(
                    aggr.Stats.imfr_desc, aggr.Stats.hw_desc, 
                    aggr.Stats.sw_desc, aggr.Stats.serial_num, 
-                   aggr.Stats.dp_desc, dpid) 
+                   aggr.Stats.dp_desc, conn.dpid) 
                  in
-                 Lwt_list.iter_p (fun cb -> cb state dpid evt) 
+                 Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) 
                    state.desc_stats_reply_cb
-                )
+              end
                   
-              | OP.Stats.Port_resp (resp_h, ports) ->
-                (let dpid = Hashtbl.find state.channel_dp ep in
-                 let evt = Event.Port_stats_reply(h.Header.xid, ports, dpid) 
+              | OP.Stats.Port_resp (resp_h, ports) -> begin
+                 let evt = Event.Port_stats_reply(h.Header.xid, ports, conn.dpid) 
                  in
-                 Lwt_list.iter_p (fun cb -> cb state dpid evt)
+                 Lwt_list.iter_p (fun cb -> cb state conn.dpid evt)
                    state.port_stats_reply_cb
-                )
+              end
                   
-              | OP.Stats.Table_resp (resp_h, tables) ->
-                (let dpid = Hashtbl.find state.channel_dp ep in
-                 let evt = Event.Table_stats_reply(h.Header.xid, tables, dpid)
-                 in
-                 Lwt_list.iter_p (fun cb -> cb state dpid evt)
+              | OP.Stats.Table_resp (resp_h, tables) -> begin
+                let evt = Event.Table_stats_reply(h.Header.xid, tables, conn.dpid) in
+                 Lwt_list.iter_p (fun cb -> cb state conn.dpid evt)
                    state.table_stats_reply_cb
-                )
+              end
               | _ -> OS.Console.log "New stats response received"; return ();
-        ) 
+      end
 
-      | Port_status(h, st) 
-        -> ( (* cp (sp "+ %s|%s" (OP.Header.string_of_h h)
-                  (OP.Port.string_of_status st)); *)
-            let dpid = Hashtbl.find state.channel_dp ep in
-            let evt = Event.Port_status (st.Port.reason, st.Port.desc, dpid) 
+      | Port_status(h, st) -> begin 
+         cp (sp "+ %s|%s" (OP.Header.header_to_string h)
+                  (OP.Port.string_of_status st)); 
+            let evt = Event.Port_status (st.Port.reason, st.Port.desc, conn.dpid) 
             in
-            Lwt_list.iter_p (fun cb -> cb state dpid evt) state.port_status_cb
-        )
-
-      | _ -> OS.Console.log "New packet received"; return () 
+            Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) state.port_status_cb
+      end
+      | _ -> 
+          let _ = OS.Console.log (sp "Packet type not supported %s"
+          (OP.to_string ofp)) in 
+            return () 
   )
 
-let send_of_data controller dpid bits = 
-  let t = Hashtbl.find controller.dp_db dpid in
-    match (Cstruct.len bits) with
-      | l when l <= 1400 -> 
-          let _ = Channel.write_buffer t bits in 
-            Channel.flush t
-      | _ -> 
-          let buf = Cstruct.sub_buffer bits 0 1400 in 
-          let _ = Channel.write_buffer t buf in 
-          let buf = Cstruct.sub_buffer bits 1400 ((Cstruct.len bits) - 1400) in 
-          let _ = Channel.write_buffer t buf in
-          lwt _ = Channel.flush t in 
-            return ()
-(*  let _ = Channel.write_buffer t.ch data in
-Channel.flush t.ch *)
+let send_of_data controller dpid bits =
+  let conn = Hashtbl.find controller.dp_db dpid in
+    Ofsocket.send_data_raw conn bits
+
+let send_data controller dpid ofp =
+  let conn = Hashtbl.find controller.dp_db dpid in
+    Ofsocket.send_packet conn ofp
+
 
 let mem_dbg name =
 (*   Gc.compact ();  *)
@@ -296,88 +268,81 @@ let mem_dbg name =
   Printf.printf "blocks %s: l=%d f=%d \n %!" name s.Gc.live_blocks s.Gc.free_blocks
 
 let terminate st = 
-  Hashtbl.iter (fun _ ch -> resolve (Channel.close ch) ) st.dp_db;
-  Printf.printf "Terminating controller...\n"
-   
-let controller st (remote_addr, remote_port) t =
-  let rs = Nettypes.ipv4_addr_to_string remote_addr in
-  let cached_socket = Ofsocket.create_socket t in 
-  let _ = pp "OpenFlow Controller+ %s:%d\n%!" rs remote_port in
-  let echo () =
-    try_lwt 
-      lwt hbuf = Ofsocket.read_data cached_socket OP.Header.sizeof_ofp_header in
-      let ofh  = OP.Header.parse_header hbuf in
-      let dlen = ofh.OP.Header.len - OP.Header.sizeof_ofp_header in 
-      lwt dbuf = Ofsocket.read_data cached_socket dlen in 
-      let ofp  = OP.parse ofh dbuf in
-      lwt () = process_of_packet st (remote_addr, remote_port) ofp t in
-        return true
-    with
+  let _ = Hashtbl.iter 
+    (fun _ c -> Ofsocket.close c ) st.dp_db in 
+    Printf.printf "Terminating controller...\n%!"
+ 
+let controller_run st conn =
+  let continue = ref true in
+  lwt _ = 
+    while_lwt !continue do
+      try_lwt
+        lwt pkt = read_packet conn in 
+          process_of_packet st conn pkt 
+      with
       | Nettypes.Closed -> begin
-        let dpid = Hashtbl.find st.channel_dp (remote_addr, remote_port) in
-        let evt = Event.Datapath_leave (dpid) in
-        lwt _ = Lwt_list.iter_p (fun cb -> cb st dpid evt)
-                  st.datapath_leave_cb in
-        let _ = Hashtbl.remove st.channel_dp (remote_addr, remote_port) in 
-        let _ = Hashtbl.remove st.dp_db dpid in 
-          return false
+        let _ = printf "XXXXX switch disconnected\n%!" in 
+          return (continue := false)
       end
       | OP.Unparsed(m, bs) 
       | OP.Unparsable(m, bs) -> 
-        cp (sp "# unparsed! m=%s" m);
-        Cstruct.hexdump bs; 
-        return true
+        let _ = cp (sp "# unparsed! m=%s" m) in 
+          return (Cstruct.hexdump bs)
       | Not_found ->  
-        Printf.printf "Error: Not found %s\n%!" (Printexc.get_backtrace ());  
-        return true
+        return (Printf.printf "Error: Not found %s\n%!"
+                  (Printexc.get_backtrace ()) ) 
       | exn -> 
-          pp "{OpenFlow-controller} ERROR:%s\n%s\n%!" (Printexc.to_string exn)
-            (Printexc.get_backtrace ());
-          return false
+        pp "{OpenFlow-controller} ERROR:%s\n%s\n%!" (Printexc.to_string exn)
+          (Printexc.get_backtrace ()); 
+          return (continue := false)
+   done
+  in
+    if (conn.dpid > 0L) then
+      let evt = Event.Datapath_leave (conn.dpid) in
+      lwt _ = Lwt_list.iter_p (fun cb -> cb st conn.dpid evt)
+                  st.datapath_leave_cb in
+      let _ = Hashtbl.remove st.dp_db conn.dpid in 
+        return ()
+      else
+        return ()
+ 
 
-    in
-    let continue = ref true in
-    let count = (ref 0) in 
-    while_lwt !continue do
-      incr count;
-      lwt x = echo () in
-      continue := x;
-      return ()
-    done
+   
+let socket_controller st (remote_addr, remote_port) t =
+  let rs = Nettypes.ipv4_addr_to_string remote_addr in
+  let _ = pp "OpenFlow Controller+ %s:%d\n%!" rs remote_port in
+  let conn = init_socket_conn_state t in 
+    controller_run st conn 
+
+let init_controller () = 
+  { dp_db                    = Hashtbl.create 0; 
+    datapath_join_cb         = []; 
+    datapath_leave_cb        = []; 
+    packet_in_cb             = [];
+    flow_removed_cb          = []; 
+    flow_stats_reply_cb      = [];
+    aggr_flow_stats_reply_cb = [];
+    desc_stats_reply_cb      = []; 
+    port_stats_reply_cb      = [];
+    table_stats_reply_cb     = [];
+    port_status_cb           = []; } 
 
 let listen mgr loc init =
-  let st = { dp_db                    = Hashtbl.create 0; 
-             channel_dp               = Hashtbl.create 0; 
-             datapath_join_cb         = []; 
-             datapath_leave_cb        = []; 
-             packet_in_cb             = [];
-             flow_removed_cb          = []; 
-             flow_stats_reply_cb      = [];
-             aggr_flow_stats_reply_cb = [];
-             desc_stats_reply_cb      = []; 
-             port_stats_reply_cb      = [];
-             table_stats_reply_cb     = [];
-             port_status_cb           = [];
-           } 
-  in
+  let st = init_controller () in
   let _ = init st in 
-    (Channel.listen mgr (`TCPv4 (loc, (controller st) ))) 
+    (Channel.listen mgr (`TCPv4 (loc, (socket_controller st) ))) 
 
 let connect mgr loc init = 
-  let st = { dp_db                    = Hashtbl.create 0; 
-             channel_dp               = Hashtbl.create 0; 
-             datapath_join_cb         = []; 
-             datapath_leave_cb        = []; 
-             packet_in_cb             = [];
-             flow_removed_cb          = []; 
-             flow_stats_reply_cb      = [];
-             aggr_flow_stats_reply_cb = [];
-             desc_stats_reply_cb      = []; 
-             port_stats_reply_cb      = [];
-             table_stats_reply_cb     = [];
-             port_status_cb           = [];
-           } 
-  in
+  let st = init_controller () in
   let _ = init st in 
     Net.Channel.connect mgr (`TCPv4 (None, loc, 
-      (controller st loc) ))
+      (socket_controller st loc) ))
+
+let init_controller init =
+  let st = init_controller () in
+  let _ = init st in
+    st
+
+let local_connect mgr st (input, output) init =
+ let conn = init_local_conn_state input output in 
+    controller_run st conn 

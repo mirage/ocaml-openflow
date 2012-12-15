@@ -17,7 +17,7 @@
 
 open Lwt
 open Printf
-open Ofswitch_config
+open Openflow.Ofswitch_config
 open Lwt_unix
 
 let check_cmd_args cmd count = 
@@ -34,7 +34,7 @@ let send_cmd cl =
        match (Sys.argv.(1)) with
          | "add-port" -> 
              let _ = check_cmd_args "add_port" 1 in 
-             lwt _ = Ofswitch_config.add_port cl Sys.argv.(2) in 
+             lwt _ = add_port cl Sys.argv.(2) in 
                return ()
          | _ -> 
              let _ = printf "Fail: unknown cmd: %s\n%!" Sys.argv.(1) in
@@ -44,7 +44,7 @@ let send_cmd cl =
 
 lwt _ = 
   try_lwt 
-   lwt cl = Ofswitch_config.connect_client () in  
+   lwt cl = connect_client () in  
    lwt _ = send_cmd cl in 
       return ()
   with e ->

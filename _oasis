@@ -29,7 +29,7 @@ Library openflow
   Path:                 lib
   Findlibname:          openflow
   CompiledObject:       native
-  Modules:              Ofpacket,  Ofcontroller, Ofswitch_config, Ofswitch
+  Modules:              Ofpacket,  Ofcontroller, Ofswitch_config, Ofswitch, Ofsocket, Ofswitch_standalone
   Pack:                 True
   BuildDepends:         cstruct, cstruct.syntax, rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0)
 
@@ -38,31 +38,31 @@ Document openflow
   Type:                 ocamlbuild (0.2)
   BuildTools+:          ocamldoc
   XOCamlbuildPath:      lib 
-  XOCamlbuildModules:   Ofpacket, Ofcontroller, Ofswitch
+  XOCamlbuildModules:   Ofpacket, Ofcontroller, Ofswitch, Ofsocket, Ofswitch_config
 
 Executable ofswitch_ctrl
   Path:                 lib
   MainIs:               ofswitch_ctrl.ml
-  Build$:               flag(nettests)
+  Build$:               flag(lwt)
   Custom:               true
   CompiledObject:       native
-  Install:              false
+  Install:              true
   BuildDepends:         openflow
 
 
 Executable learning_switch_lwt
   Path:                 controller
   MainIs:               learning_switch.ml
-  Build$:               flag(nettests)
+  Build$:               flag(lwt)
   Custom:               true
   CompiledObject:       native
-  Install:              false
+  Install:              true
   BuildDepends:         cstruct, cstruct.syntax, openflow
 
 Executable basic_switch_lwt
   Path:                 switch
   MainIs:               basic_switch.ml
-  Build$:               flag(nettests)
+  Build$:               flag(lwt)
   Custom:               true
   CompiledObject:       native
   Install:              false
@@ -71,7 +71,7 @@ Executable basic_switch_lwt
 (*Executable learning_switch_mirage
   Path:                 controller
   MainIs:               learning_switch.ml
-  Build$:               flag(nettests)
+  Build$:               flag(mirage)
   Custom:               true
   CompiledObject:       native
   Target:               xen
@@ -81,9 +81,9 @@ Executable basic_switch_lwt
 Executable basic_switch_mirage
   Path:                 switch
   MainIs:               basic_switch.ml
-  Build$:               flag(nettests)
+  Build$:               flag(mirage)
   Custom:               true
   CompiledObject:       native
   Target:               xen
   Install:              false
-  BuildDepends:         openflow*)
+  BuildDepends:         openflow *)

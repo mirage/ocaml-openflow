@@ -298,7 +298,7 @@ module Header = struct
     sp "ver:%d type:%s len:%d xid:0x%08lx" 
       (int_of_byte h.ver) (msg_code_to_string h.ty) h.len h.xid
 
-  let create ty len xid  =
+  let create ?(xid=Random.int32 Int32.max_int) ty len  =
     { ver=byte 1; ty; len; xid }
 
   let marshal_header h bits = 
@@ -649,7 +649,8 @@ module Port = struct
   } as big_endian 
 
   let create_port_status reason desc =
-    {reason; desc;}
+    ((Header.(create PORT_STATUS (get_len + sizeof_ofp_port_status)) ), 
+    {reason; desc;})
 
   let string_of_status st = 
     (sp "Port status,reason:%s,%s" (reason_to_string st.reason)
@@ -666,7 +667,7 @@ module Port = struct
 
   let marshal_port_status ?(xid=0l) status bits =
     let len = Header.get_len + sizeof_ofp_port_status + phy_len in 
-    let header = Header.create Header.PORT_STATUS len xid in
+    let header = Header.create ~xid Header.PORT_STATUS len in
     let (_, bits) = marshal_and_shift (Header.marshal_header header) bits in
     let _ = set_ofp_port_status_reason bits (reason_to_int status.reason) in 
     let bits = Cstruct.shift bits sizeof_ofp_port_status in
@@ -776,12 +777,16 @@ module Switch = struct
       | head :: tail ->
         let bits = Port.marshal_phy head bits in
           marshal_phy_ports tail bits
+  let get_len t = 
+    Header.get_len + sizeof_ofp_switch_features + 
+    ((List.length t.ports) * Port.phy_len)
+
 
   let marshal_reply_features xid feat bits =
     let ports_count = (List.length feat.ports) in    
     let len = Header.get_len + sizeof_ofp_switch_features +
     ports_count*Port.phy_len in 
-    let header = Header.create Header.FEATURES_RESP len xid in
+    let header = Header.create ~xid Header.FEATURES_RESP len in
     let (_, bits) = marshal_and_shift (Header.marshal_header header) bits in
     let _ = set_ofp_switch_features_datapath_id bits feat.datapath_id in
     let _ = set_ofp_switch_features_n_buffers bits feat.n_buffers in 
@@ -821,9 +826,11 @@ module Switch = struct
     uint16_t miss_send_len 
   } as big_endian 
 
+  let config_get_len = Header.get_len + sizeof_ofp_switch_config
+
   let marshal_switch_config xid config bits =
-    let header = (Header.create  Header.GET_CONFIG_RESP 
-                    (Header.get_len + sizeof_ofp_switch_config) xid) in
+    let header = (Header.create  ~xid Header.GET_CONFIG_RESP 
+                    (Header.get_len + sizeof_ofp_switch_config)) in
     let (_, bits) = marshal_and_shift (Header.marshal_header header) bits in 
     let _ = set_ofp_switch_config_flags bits 0 in
     let _ = set_ofp_switch_config_miss_send_len bits config.miss_send_len in
@@ -1572,10 +1579,12 @@ module Packet_out = struct
       ~data ~in_port () =
     {buffer_id; in_port; actions; data;} 
 
-  let marshal_packet_out m bits =
-    let size = (Header.sizeof_ofp_header + sizeof_ofp_packet_out + 
-                (Flow.actions_len m.actions) + (Cstruct.len m.data)) in
-    let of_header=(Header.(create PACKET_OUT size 0l)) in
+  let get_len t = Header.sizeof_ofp_header + sizeof_ofp_packet_out + 
+                (Flow.actions_len t.actions) + (Cstruct.len t.data) 
+
+  let marshal_packet_out ?(xid=Random.int32 Int32.max_int) m bits =
+    let size = get_len m in
+    let of_header=Header.(create ~xid PACKET_OUT size) in
     let (ofp_len, bits) = marshal_and_shift (Header.marshal_header of_header)
     bits in
     let _ = set_ofp_packet_out_buffer_id bits m.buffer_id in
@@ -1628,8 +1637,13 @@ module Packet_in = struct
     sp "Packet_in: buffer_id:%ld in_port:%s reason:%s"
       p.buffer_id (Port.string_of_port p.in_port) (string_of_reason p.reason)
 
-  let create_pkt_in ?(buffer_id=(-1l)) ~in_port ~reason ~data = 
-    {buffer_id; in_port; reason; data;}
+  let get_len t = Header.get_len + sizeof_ofp_packet_in +
+                    (Cstruct.len t.data)
+
+  let create_pkt_in ?(buffer_id=(-1l)) ~in_port ~reason ~data =
+    let pkt_in = {buffer_id; in_port; reason; data;} in
+    let h = Header.create Header.PACKET_IN (get_len pkt_in) in 
+      (h, pkt_in)
 
   let marshal_pkt_in ?(xid=(Random.int32 Int32.max_int)) ?(data_len=0)
         t bits =
@@ -1643,8 +1657,8 @@ module Packet_in = struct
             Cstruct.len t.data 
           )
       in 
-      let h = Header.create Header.PACKET_IN (Header.sizeof_ofp_header +
-                        sizeof_ofp_packet_in + data_len) xid in 
+      let h = Header.create ~xid Header.PACKET_IN (Header.sizeof_ofp_header +
+                        sizeof_ofp_packet_in + data_len) in 
       let (ofp_len, bits) = marshal_and_shift (Header.marshal_header h) bits in
       let _ = set_ofp_packet_in_buffer_id bits t.buffer_id in
       let _ = set_ofp_packet_in_total_len bits (sizeof_ofp_packet_in + data_len) in
@@ -1741,7 +1755,7 @@ module Flow_mod = struct
   let marshal_flow_mod ?(xid=(Random.int32 Int32.max_int)) m bits =
     let len = Header.sizeof_ofp_header + Match.sizeof_ofp_match + 
               sizeof_ofp_flow_mod + (Flow.actions_len m.actions) in
-    let header = Header.create Header.FLOW_MOD len xid in 
+    let header = Header.create ~xid Header.FLOW_MOD len in 
     let (_, bits) = marshal_and_shift (Header.marshal_header header) bits in 
     let (_, bits) = marshal_and_shift (Match.marshal_match m.of_match) bits in 
     let _ = set_ofp_flow_mod_cookie bits m.cookie in 
@@ -1843,10 +1857,12 @@ module Flow_removed = struct
       {of_match; cookie; priority; reason; duration_sec; duration_nsec; 
       idle_timeout; packet_count; byte_count;}
 
+  let get_len = Header.sizeof_ofp_header + Match.sizeof_ofp_match + 
+                  sizeof_ofp_flow_removed
+
   let marshal_flow_removed ?(xid=(Random.int32 Int32.max_int)) m bits =
-    let len = Header.sizeof_ofp_header + Match.sizeof_ofp_match + 
-              sizeof_ofp_flow_removed in
-    let header = Header.create Header.FLOW_REMOVED len xid in 
+    let len = get_len in
+    let header = Header.create ~xid Header.FLOW_REMOVED len in 
     let (_, bits) = marshal_and_shift (Header.marshal_header header) bits in 
     let (_, bits) = marshal_and_shift (Match.marshal_match m.of_match) bits in 
     let _ = set_ofp_flow_removed_cookie bits m.cookie in 
@@ -1966,14 +1982,7 @@ module Stats = struct
       | 6 -> VENDOR  
       | v -> raise(Unsupported("req_type_of_int"))
         
-  let get_len = function
-      | FLOW -> (Header.sizeof_ofp_header + 4 + Match.sizeof_ofp_match + 4 )
-      | AGGREGATE -> (Header.sizeof_ofp_header + 4 + Match.sizeof_ofp_match + 4 )
-      | PORT ->  (Header.sizeof_ofp_header + 12)
-      | QUEUE -> (Header.sizeof_ofp_header + 12)
-      | _ -> (Header.sizeof_ofp_header + 4)
-
-  cstruct ofp_stats_request {
+ cstruct ofp_stats_request {
     uint16_t typ;
     uint16_t flags
   } as big_endian
@@ -1984,15 +1993,43 @@ module Stats = struct
     uint16_t out_port              
   } as big_endian
 
-  let create_flow_stat_req flow_match ?(table_id=0xff) ?(out_port=(Port.No_port))  
-(*     ?(xid=0l) bits () =  *)
-    ?(xid=(Random.int32 Int32.max_int)) bits =  
-    let header = Header.create Header.STATS_REQ 
-                     (Header.sizeof_ofp_header + 
-                      sizeof_ofp_stats_request +
-                      Match.sizeof_ofp_match +
-                      sizeof_ofp_flow_stats_request ) 
-                     xid in 
+  cstruct ofp_queue_stats_request {
+    uint16_t port_no;
+    uint8_t pad[2];
+    uint32_t queue_id 
+  } as big_endian
+
+  cstruct ofp_port_stats_request {
+    uint16_t port_no;        
+    uint8_t pad[6]
+  } as big_endian
+
+    let get_len = function
+    | TABLE
+    | DESC -> Header.sizeof_ofp_header + sizeof_ofp_stats_request
+    | AGGREGATE
+    | FLOW -> 
+        (Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
+        Match.sizeof_ofp_match + sizeof_ofp_flow_stats_request )
+    | QUEUE ->  (Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
+                  sizeof_ofp_queue_stats_request)
+    | PORT -> (Header.sizeof_ofp_header + sizeof_ofp_stats_request +
+                sizeof_ofp_port_stats_request)
+    | _ -> (Header.sizeof_ofp_header + 4)
+
+   let create_desc_stat_req ?(xid=(Random.int32 Int32.max_int)) bits =  
+    let len = get_len DESC in 
+    let header = Header.create ~xid Header.STATS_REQ len in 
+    let _ = Header.marshal_header header bits in
+    let bits = Cstruct.shift bits Header.sizeof_ofp_header in 
+    let _ = set_ofp_stats_request_typ bits (int_of_req_type DESC) in 
+    let _ = set_ofp_stats_request_flags bits 0 in 
+      len
+
+  let create_flow_stat_req flow_match ?(table_id=All) ?(out_port=(Port.No_port))
+        ?(xid=(Random.int32 Int32.max_int)) bits = 
+    let len = get_len FLOW in  
+    let header = Header.create ~xid Header.STATS_REQ len in 
     let _ = Header.marshal_header header bits in
     let bits = Cstruct.shift bits Header.sizeof_ofp_header in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type FLOW) in 
@@ -2000,19 +2037,14 @@ module Stats = struct
     let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = Match.marshal_match flow_match bits in 
     let bits = Cstruct.shift bits Match.sizeof_ofp_match in 
-    let _ = set_ofp_flow_stats_request_table_id bits table_id in 
+    let _ = set_ofp_flow_stats_request_table_id bits (int_of_table_id table_id) in 
     let _ = set_ofp_flow_stats_request_out_port bits (Port.int_of_port out_port) in 
-      Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
-      Match.sizeof_ofp_match + sizeof_ofp_flow_stats_request
+      len
 
-  let create_aggr_flow_stat_req flow_match ?(table_id=0xff) ?(out_port=Port.No_port) 
+  let create_aggr_flow_stat_req flow_match ?(table_id=All) ?(out_port=Port.No_port) 
       ?(xid=(Random.int32 Int32.max_int)) bits = 
-    let header = Header.create Header.STATS_REQ 
-                     (Header.sizeof_ofp_header + 
-                      sizeof_ofp_stats_request +
-                      Match.sizeof_ofp_match +
-                      sizeof_ofp_flow_stats_request ) 
-                     xid in 
+    let len = get_len AGGREGATE in 
+    let header = Header.create ~xid Header.STATS_REQ len in  
     let _ = Header.marshal_header header bits in 
     let bits = Cstruct.shift bits Header.sizeof_ofp_header in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type AGGREGATE) in 
@@ -2020,10 +2052,9 @@ module Stats = struct
     let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = Match.marshal_match flow_match bits in 
     let bits = Cstruct.shift bits Match.sizeof_ofp_match in 
-    let _ = set_ofp_flow_stats_request_table_id bits table_id in 
+    let _ = set_ofp_flow_stats_request_table_id bits (int_of_table_id table_id) in 
     let _ = set_ofp_flow_stats_request_out_port bits (Port.int_of_port out_port) in 
-      Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
-      Match.sizeof_ofp_match + sizeof_ofp_flow_stats_request
+      len
 
 (*  struct ofp_vendor_header {
     uint32_t vendor;         
@@ -2033,28 +2064,19 @@ module Stats = struct
     let header = (Header.build_h (Header.create Header.STATS_REQ (get_len VENDOR) snd_xid)) in 
     BITSTRING{(header):(Header.get_len * 8):bitstring; (int_of_req_type
                                                           DESC):16;0:16}*)
-  let create_table_stat_req ?(xid=(Random.int32 Int32.max_int)) bits = 
-    let header = Header.create Header.STATS_REQ 
-                     (Header.sizeof_ofp_header + 
-                      sizeof_ofp_stats_request) xid in 
+  let create_table_stat_req ?(xid=(Random.int32 Int32.max_int)) bits =
+    let len = get_len TABLE in 
+    let header = Header.create ~xid Header.STATS_REQ len in 
     let _ = Header.marshal_header header bits in 
     let bits = Cstruct.shift bits Header.sizeof_ofp_header in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type TABLE) in 
     let _ = set_ofp_stats_request_flags bits 0 in
-      Header.sizeof_ofp_header + sizeof_ofp_stats_request
+      len
 
-  cstruct ofp_queue_stats_request {
-    uint16_t port_no;
-    uint8_t pad[2];
-    uint32_t queue_id 
-  } as big_endian
-
-  let create_queue_stat_req ?(xid=(Random.int32 Int32.max_int))
+ let create_queue_stat_req ?(xid=(Random.int32 Int32.max_int))
       ?(queue_id=0xffffffffl) ?(port=Port.No_port) bits =
-    let header = Header.create Header.STATS_REQ 
-                     (Header.sizeof_ofp_header + 
-                      sizeof_ofp_stats_request + 
-                      sizeof_ofp_queue_stats_request) xid in 
+    let len = get_len QUEUE in 
+    let header = Header.create ~xid Header.STATS_REQ len in 
     let _ = Header.marshal_header header bits in 
     let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type QUEUE) in 
@@ -2062,28 +2084,19 @@ module Stats = struct
     let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = set_ofp_queue_stats_request_port_no bits (Port.int_of_port port) in 
     let _ = set_ofp_queue_stats_request_queue_id bits queue_id in 
-      Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
-      sizeof_ofp_queue_stats_request
+      len 
 
-  cstruct ofp_port_stats_request {
-    uint16_t port_no;        
-    uint8_t pad[6]
-  } as big_endian
-
-  let create_port_stat_req ?(xid=(Random.int32 Int32.max_int)) 
-        ?(port=Port.No_port) bits = 
-    let header = Header.create Header.STATS_REQ 
-                     (Header.sizeof_ofp_header + 
-                      sizeof_ofp_stats_request + 
-                      sizeof_ofp_port_stats_request) xid in 
+ let create_port_stat_req ?(xid=(Random.int32 Int32.max_int)) 
+        ?(port=Port.No_port) bits =
+    let len = get_len PORT in 
+    let header = Header.create ~xid Header.STATS_REQ len in 
     let _ = Header.marshal_header header bits in 
     let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = set_ofp_stats_request_typ bits (int_of_req_type PORT) in 
     let _ = set_ofp_stats_request_flags bits 0 in
     let bits = Cstruct.shift bits sizeof_ofp_stats_request in 
     let _ = set_ofp_port_stats_request_port_no bits (Port.int_of_port port) in 
-      Header.sizeof_ofp_header + sizeof_ofp_stats_request + 
-      sizeof_ofp_port_stats_request
+      len
 
   type req = 
     | Desc_req of req_hdr
@@ -2093,6 +2106,21 @@ module Stats = struct
     | Port_req of req_hdr * Port.t
     | Queue_req of req_hdr * Port.t * queue_id
     | Vendor_req of req_hdr
+
+  let marshal_stats_req ?(xid=Random.int32 Int32.max_int) req bits = 
+      match req with
+      | Desc_req _ -> create_desc_stat_req ~xid bits 
+      | Table_req _ -> create_table_stat_req ~xid bits 
+      | Flow_req (_, m, table_id, out_port) -> 
+          create_flow_stat_req m ~table_id ~out_port ~xid bits 
+      | Aggregate_req (_, m, table_id, out_port) -> 
+          create_aggr_flow_stat_req m ~table_id ~out_port ~xid bits
+      | Port_req (_, port) -> 
+          create_port_stat_req ~xid ~port bits 
+      | Queue_req (_, port, queue_id) -> 
+          create_queue_stat_req ~xid ~queue_id ~port bits
+(*      | Vendor_req _ -> failwith "Vendor queue req not supported" *)
+
 
   let parse_stats_req bits =
     let flags = get_ofp_stats_request_flags bits in  
@@ -2266,7 +2294,14 @@ module Stats = struct
 
   let resp_get_len = function
     | Desc_resp(_, _) -> Header.sizeof_ofp_header + sizeof_ofp_desc_stats 
-    | Table_resp (_, tables) -> 4 + (List.length tables) *(1+3+32+4+4+4+8+8)
+    | Flow_resp (_, f) ->
+      let flow_len = List.fold_right 
+        (fun f l -> l + (Flow.flow_stats_len f) ) f 0 in 
+        Header.get_len + sizeof_ofp_stats_reply +flow_len
+    | Aggregate_resp _ ->
+      Header.get_len + sizeof_ofp_stats_reply +
+                  sizeof_ofp_aggregate_stats_reply
+     | Table_resp (_, tables) -> 4 + (List.length tables) *(1+3+32+4+4+4+8+8)
     | _ -> failwith "resp_get_len"
 
   let marshal_stats_resp xid resp bits =
@@ -2274,7 +2309,7 @@ module Stats = struct
     | Desc_resp(resp_hdr, desc) ->
       let len = (Header.sizeof_ofp_header + sizeof_ofp_stats_reply +
                   sizeof_ofp_desc_stats) in 
-      let of_header = Header.create Header.STATS_RESP len xid in 
+      let of_header = Header.create ~xid Header.STATS_RESP len in 
       let (ofp_len, bits) = marshal_and_shift (Header.marshal_header of_header)
                               bits in
       let _ = set_ofp_stats_reply_typ bits (int_of_stats_type DESC) in 
@@ -2292,7 +2327,7 @@ module Stats = struct
         (fun f l -> l + (Flow.flow_stats_len f) ) flows 0 in 
       let len = (Header.sizeof_ofp_header + sizeof_ofp_stats_reply +
                   flow_len) in
-      let of_header = Header.create Header.STATS_RESP len xid in 
+      let of_header = Header.create ~xid Header.STATS_RESP len in 
       let (ofp_len, bits) = marshal_and_shift (Header.marshal_header of_header)
                               bits in
       let _ = set_ofp_stats_reply_typ bits (int_of_stats_type FLOW) in 
@@ -2306,7 +2341,7 @@ module Stats = struct
     | Aggregate_resp(resp, stats) ->
       let len = Header.sizeof_ofp_header + sizeof_ofp_stats_reply +
                   sizeof_ofp_aggregate_stats_reply in
-      let of_header = Header.create Header.STATS_RESP len xid in 
+      let of_header = Header.create ~xid Header.STATS_RESP len in 
       let (ofp_len, bits) = marshal_and_shift (Header.marshal_header of_header)
                               bits in
       let _ = set_ofp_stats_reply_typ bits (int_of_stats_type AGGREGATE) in 
@@ -2490,8 +2525,8 @@ and string_of_error_code = function
 
 let marshal_error errornum data xid bits = 
     let req_len = Cstruct.len data in
-    let req_h = (Header.create Header.ERROR  
-    (Header.get_len + sizeof_ofp_error_msg + req_len) xid) in
+    let req_h = Header.create ~xid Header.ERROR  
+    (Header.get_len + sizeof_ofp_error_msg + req_len) in
     let (len, bits) = marshal_and_shift (Header.marshal_header req_h) bits in
     let errornum = int_of_error_code errornum in 
     let _ = set_ofp_error_msg_typ bits 
@@ -2503,22 +2538,20 @@ let marshal_error errornum data xid bits =
       (Header.get_len + sizeof_ofp_error_msg + req_len)
 
 let build_features_req xid bits = 
-  Header.marshal_header (Header.(create FEATURES_REQ 8 xid)) bits
+  Header.marshal_header (Header.(create ~xid FEATURES_REQ 8)) bits
 
-let build_echo_resp h bs bits =
-  let len = Header.get_len + (Cstruct.len bs) in 
+let build_echo_resp h bits =
+  let len = Header.get_len in 
   let _ = 
     Header.(marshal_header 
-              (create ECHO_RESP len h.xid) bits ) in
-  let _ = Cstruct.blit_buffer bs 0 bits Header.get_len
-            (Cstruct.len bs) in 
-    len
+              (create ~xid:h.xid ECHO_RESP len ) bits) in
+   len
 
 type t =
   | Hello of Header.h
-  | Error of Header.h  * error_code
-  | Echo_req of Header.h  * Cstruct.buf
-  | Echo_resp of Header.h  * Cstruct.buf
+  | Error of Header.h  * error_code * Cstruct.buf
+  | Echo_req of Header.h 
+  | Echo_resp of Header.h 
   | Vendor of Header.h  * vendor * Cstruct.buf
 
   | Features_req of Header.h
@@ -2548,8 +2581,8 @@ let parse h bits =
   Header.(match h.ty with
     | HELLO -> Hello (h)
     | ERROR -> raise (Unparsed ("ERROR", bits))
-    | ECHO_REQ -> Echo_req (h, bits)
-    | ECHO_RESP -> Echo_resp (h, bits)
+    | ECHO_REQ -> Echo_req h
+    | ECHO_RESP -> Echo_resp h
     | VENDOR -> raise (Unparsed ("VENDOR", bits))
     | FEATURES_REQ -> Features_req (h)
     | FEATURES_RESP -> Features_resp (h, Switch.parse_features bits)
@@ -2569,13 +2602,66 @@ let parse h bits =
     | _ -> raise (Unparsed ("_", bits))
   )
 
-(*  let new_parse bits = 
-    bitmatch bits with
-    | { 1:8:int; t:8; len:16; xid:32; body:-1:bitstring }
-    -> (
-        (parse (Header.({ ver=byte 1; ty=(msg_code_of_int t); 
-        len; xid;})) body,
-        (Bitstring.dropbits  (len*8) bits) )  
-      )
-      | { _ } -> raise (Unparsable ("parse_h", bits)) *)
+let to_string  = function
+  | Features_req h
+  | Get_config_req h
+  | Barrier_req h
+  | Barrier_resp h
+  | Echo_req h
+  | Echo_resp h
+  | Get_config_req h
+  | Get_config_resp (h, _)
+  | Set_config (h, _) 
+  | Flow_removed (h, _) 
+  | Packet_in (h, _) 
+  | Features_resp (h, _) 
+  | Port_status (h, _) 
+  | Stats_req (h, _)  
+  | Stats_resp (h, _) 
+  | Error (h, _, _) 
+  | Packet_out (h, _)  
+  | Flow_mod (h, _)  
+  | Hello h -> Header.header_to_string h 
+  | _ -> failwith "Unsupported message" 
 
+let marshal msg =
+  let marshal = 
+    match msg with
+        | Features_req h
+        | Get_config_req h
+        | Barrier_req h
+        | Barrier_resp h
+        | Echo_req h
+        | Echo_resp h
+        | Get_config_req h
+        | Hello h -> Header.marshal_header h 
+        | Flow_removed (h, frm) ->
+            Flow_removed.marshal_flow_removed ~xid:(h.Header.xid) frm
+        | Packet_in (h, pkt_in) -> 
+            Packet_in.marshal_pkt_in ~xid:h.Header.xid pkt_in
+        | Features_resp (h, p) ->
+            Switch.marshal_reply_features h.Header.xid p
+        | Get_config_resp (h, c)
+        | Set_config (h, c) -> 
+            Switch.marshal_switch_config h.Header.xid c        
+        | Port_status (h, p) ->
+            Port.marshal_port_status ~xid:h.Header.xid p 
+        | Stats_req (h, p) -> 
+            Stats.marshal_stats_req ~xid:h.Header.xid p
+        | Stats_resp (h, p) ->
+            Stats.marshal_stats_resp h.Header.xid p
+        | Error (h, err, bits) ->
+            marshal_error err bits h.Header.xid
+        | Packet_out (h, p) -> 
+            Packet_out.marshal_packet_out ~xid:h.Header.xid p
+        | Flow_mod (h, fm) -> 
+            Flow_mod.marshal_flow_mod ~xid:h.Header.xid fm
+        | _ -> failwith "Unsupported message" 
+    in
+(*
+  | Vendor of Header.h  * vendor * Cstruct.buf
+  | Port_mod of Header.h  * Port_mod.t
+  | Queue_get_config_req of Header.h * Port.t
+  | Queue_get_config_resp of Header.h * Port.t * Queue.t array
+ *)
+    marshal_and_sub marshal (OS.Io_page.get ())
