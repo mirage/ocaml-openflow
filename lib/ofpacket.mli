@@ -209,6 +209,7 @@ module Wildcards :
       dl_vlan_pcp : bool;
       nw_tos : bool;
     }
+    val in_port : t
     val full_wildcard : t
     val exact_match : t
     val l2_match : t

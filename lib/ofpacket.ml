@@ -853,7 +853,13 @@ module Wildcards = struct
     dl_vlan_pcp: bool;
     nw_tos: bool;
   }
-  let full_wildcard = 
+  let in_port = 
+    { in_port=false; dl_vlan=true; dl_src=true; 
+      dl_dst=true; dl_type=true; nw_proto=true; 
+      tp_src=true; tp_dst=true; nw_src=(char_of_int 32); 
+      nw_dst=(char_of_int 32); dl_vlan_pcp=true; nw_tos=true;
+    }
+   let full_wildcard = 
     { in_port=true; dl_vlan=true; dl_src=true; 
       dl_dst=true; dl_type=true; nw_proto=true; 
       tp_src=true; tp_dst=true; nw_src=(char_of_int 32); 

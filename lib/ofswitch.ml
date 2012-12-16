@@ -167,7 +167,9 @@ module Table = struct
     * flow modification warnings *)
       Lwt_list.iter_s (
       fun (of_match, flow) -> 
-        if (flow.Entry.counters.Entry.flags.OP.Flow_mod.send_flow_rem) then
+        if (t <> None) &&
+          (flow.Entry.counters.Entry.flags.OP.Flow_mod.send_flow_rem) then
+          let Some(t) = t in
           let duration_sec = Int32.sub (Int32.of_float (OS.Clock.time ()))  
             flow.Entry.counters.Entry.insert_sec in
           let fl_rm = OP.Flow_removed.(
@@ -332,7 +334,7 @@ module Switch = struct
       Lwt_list.iter_p  
       (fun port -> 
         if(port.port_id != (OP.Port.int_of_port in_port)) then (
-          update_port_tx_stats (Int64.of_int (Cstruct.len frame)) port;
+         update_port_tx_stats (Int64.of_int (Cstruct.len frame)) port;
           Net.Manager.inject_packet port.mgr port.ethif frame
         ) else
           return ()
@@ -711,7 +713,7 @@ let process_openflow st t msg =
         Ofsocket.send_packet t (OP.Barrier_resp(resp_h)) 
 
  | OP.Packet_out(h, pkt) ->
-    cp (sp "PACKET_OUT: %s" (OP.Packet_out.packet_out_to_string pkt)); 
+(*    cp (sp "PACKET_OUT: %s" (OP.Packet_out.packet_out_to_string pkt)); *)
     if (pkt.OP.Packet_out.buffer_id = -1l) then
       Switch.apply_of_actions st pkt.OP.Packet_out.in_port
                 pkt.OP.Packet_out.data pkt.OP.Packet_out.actions
@@ -739,7 +741,7 @@ let process_openflow st t msg =
               pkt_in.OP.Packet_in.data pkt.OP.Packet_out.actions
     end 
   | OP.Flow_mod(h,fm)  ->
-    cp (sp "FLOW_MOD: %s" (OP.Flow_mod.flow_mod_to_string fm));
+(*    cp (sp "FLOW_MOD: %s" (OP.Flow_mod.flow_mod_to_string fm)); *)
     let of_match = fm.OP.Flow_mod.of_match in 
     let of_actions = fm.OP.Flow_mod.actions in
     lwt _ = 
@@ -750,7 +752,8 @@ let process_openflow st t msg =
         return (Table.add_flow st st.Switch.table fm)
       | OP.Flow_mod.DELETE 
       | OP.Flow_mod.DELETE_STRICT ->
-        Table.del_flow st.Switch.table of_match fm.OP.Flow_mod.out_port t
+        Table.del_flow st.Switch.table of_match fm.OP.Flow_mod.out_port 
+          (Some t)
     in
       if (fm.OP.Flow_mod.buffer_id = -1l) then
         return () 
@@ -817,7 +820,7 @@ let control_channel_run st conn t =
   lwt _ = 
     ( lwt _ = t  in return (printf "thread terminated\n%!"))<?>
     echo () <?> 
-    (lwt _ = Table.monitor_flow_timeout st.Switch.table conn in return (pp
+    (lwt _ = Table.monitor_flow_timeout st.Switch.table (Some conn) in return (pp
     "[switch] terminated flow_timeout thread") )
   in
   let _ = Ofsocket.close conn in 
@@ -864,6 +867,46 @@ let add_port mgr ?(use_mac=false) sw ethif =
   in 
    return ()
 
+let del_port mgr sw name =
+  try_lwt 
+  let port = 
+    List.find (
+      fun a -> 
+        name = (Net.Manager.get_intf_name mgr a.Switch.ethif) 
+    ) sw.Switch.ports in 
+  let _ = sw.Switch.ports <- List.filter (
+    fun a ->
+      if (name = (Net.Manager.get_intf_name mgr a.Switch.ethif)) then
+        let _ = printf "removing port %s\n%!" (Net.Manager.get_intf_name mgr
+        a.Switch.ethif) in 
+        false
+      else 
+        true
+(*      not (name = (Net.Manager.get_intf_name mgr a.Switch.ethif)  ) *)
+  ) sw.Switch.ports in 
+  let _ = Hashtbl.find sw.Switch.int_to_port port.Switch.port_id in 
+  let _ = Hashtbl.remove sw.Switch.int_to_port port.Switch.port_id in  
+  let _ = Hashtbl.find sw.Switch.int_to_port port.Switch.port_id in 
+  let _ = Hashtbl.remove sw.Switch.dev_to_port port.Switch.ethif in 
+  let h,p = OP.Port.create_port_status OP.Port.DEL port.Switch.phy in 
+  let of_match = OP.Match.create_flow_match OP.Wildcards.full_wildcard () in 
+  lwt _ = Table.del_flow sw.Switch.table of_match 
+            (OP.Port.port_of_int port.Switch.port_id) 
+            sw.Switch.controller in 
+  let of_match = OP.Match.create_flow_match OP.Wildcards.in_port
+                  ~in_port:(port.Switch.port_id) () in 
+  lwt _ = Table.del_flow sw.Switch.table of_match 
+            OP.Port.No_port sw.Switch.controller in 
+  lwt _ = 
+    match sw.Switch.controller with
+    | None -> return ()
+    | Some t -> Ofsocket.send_packet t (OP.Port_status (h,p)) 
+  in 
+    return ()
+  with exn -> 
+    let _ = printf "[switch] device not found %s\n%!" name in 
+      return ()
+
 let add_port_local mgr sw ethif = 
  (*TODO Find first if a port is already registered as port 0 
   * as port 0 and disable it *)
@@ -898,21 +941,23 @@ let create_switch () =
 
 let listen st mgr loc =
   Channel.listen mgr (`TCPv4 (loc, (control_channel st ))) <&>
-    (Ofswitch_config.listen_t mgr 6634)
+    (Ofswitch_config.listen_t mgr (del_port mgr st) 6634)
 
 let connect st mgr loc  =
   Channel.connect mgr (`TCPv4 (None, loc, (control_channel st loc))) <&> 
-    (Ofswitch_config.listen_t mgr 6634)
+    (Ofswitch_config.listen_t mgr (del_port mgr st) 6634)
 
 let local_connect st mgr input output   =
   let conn = Ofsocket.init_local_conn_state input output in 
   let _ = st.Switch.controller <- (Some conn) in 
   let t, _ = Lwt.task () in 
      (control_channel_run st conn t) <&> 
-    (Ofswitch_config.listen_t mgr 6634)
+    (Ofswitch_config.listen_t mgr (del_port mgr st) 6634)
 
 let lwt_connect st ?(standalone=true) mgr loc  =
   let of_ctrl = Ofswitch_standalone.init_controller () in 
+
+  let _ = Lwt.ignore_result (Ofswitch_config.listen_t mgr (del_port mgr st) 6634) in 
   let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
   let _ = Lwt_unix.setsockopt fd Unix.SO_REUSEADDR true in 
   let _ = Lwt_unix.bind fd (Unix.ADDR_INET(Unix.inet_addr_any, 6633)) in 

@@ -42,7 +42,7 @@ let print_time () =
 let switch_run () = 
   let sw = create_switch () in
   try_lwt 
-    Manager.create ~devs:1 ~attached:(["en0"]) 
+    Manager.create ~devs:1 (* ~attached:(["en0"]) *)
     (fun mgr interface id ->
        match (Manager.get_intf_name mgr id) with 
          | "tap0" 

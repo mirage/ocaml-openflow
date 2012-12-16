@@ -23,5 +23,4 @@ val connect_client: Net.Manager.t ->
   Net.Nettypes.ipv4_dst -> t Lwt.t
  *)
 val connect_client: unit -> t Lwt.t
-val listen_t: Net.Manager.t -> 
-  int -> unit Lwt.t
+val listen_t: Net.Manager.t -> (string -> unit Lwt.t) -> int -> unit Lwt.t

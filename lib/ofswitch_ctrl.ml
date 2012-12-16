@@ -25,18 +25,28 @@ let check_cmd_args cmd count =
     failwith (sprintf "Insufficient args for command %s (required %d)"
                 cmd count)
 
-let send_cmd cl =
-   try_lwt
+let send_cmd (input, output) =
+  try_lwt
      let _ = 
        if ((Array.length Sys.argv) < 2) then 
          failwith "No command defined"
      in 
        match (Sys.argv.(1)) with
          | "add-port" -> 
-             let _ = check_cmd_args "add_port" 1 in 
-             lwt _ = add_port cl Sys.argv.(2) in 
+             let _ = check_cmd_args Sys.argv.(1) 1 in 
+             let cmd = Rpc.({name=Sys.argv.(1); params=[(Rpc.String
+             Sys.argv.(2))];}) in 
+             lwt _ = Lwt_io.write_line output (Jsonrpc.string_of_call cmd) in 
+             lwt _ = Lwt_io.read_line input in 
                return ()
-         | _ -> 
+         | "del-port" ->
+             let _ = check_cmd_args Sys.argv.(1) 1 in 
+             let cmd = Rpc.({name=Sys.argv.(1); params=[(Rpc.String
+             Sys.argv.(2))];}) in 
+             lwt _ = Lwt_io.write_line output (Jsonrpc.string_of_call cmd) in 
+             lwt _ = Lwt_io.read_line input in 
+                return ()
+          | _ -> 
              let _ = printf "Fail: unknown cmd: %s\n%!" Sys.argv.(1) in
                return ()
    with  ex -> 
@@ -44,8 +54,17 @@ let send_cmd cl =
 
 lwt _ = 
   try_lwt 
-   lwt cl = connect_client () in  
-   lwt _ = send_cmd cl in 
+    (* lwt cl = connect_client () in  *)
+(*    let sock = socket PF_INET SOCK_STREAM 0 in  *)
+    let dst = ADDR_INET( (Unix.inet_addr_of_string "127.0.0.1"), 
+                         6634) in
+    lwt _ = Lwt_io.with_connection dst (send_cmd) in  
+(*    lwt _ = Lwt_unix.connect sock dst in 
+    let output = Lwt_io.of_fd ~mode:Lwt_io.output sock in 
+    let  = Lwt_io.of_fd ~mode:Lwt_io.output sock in 
+    (* lwt _ = connect sock dst in *)
+
+    lwt _ = send_cmd output in *)
       return ()
   with e ->
     Printf.eprintf "Error: %s" (Printexc.to_string e); 

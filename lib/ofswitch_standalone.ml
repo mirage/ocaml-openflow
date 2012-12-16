@@ -64,7 +64,18 @@ let datapath_leave_cb controller dpid evt =
 
 
 let req_count = (ref 0)
-
+let port_status_cb controller dpid = function
+  | OE.Port_status (OP.Port.DEL, port, _) -> 
+    let macs = Hashtbl.fold (
+      fun mac p r -> 
+        if(p = (OP.Port.port_of_int port.OP.Port.port_no) ) then 
+          r @ [mac]
+        else
+          r ) switch_data.mac_cache [] 
+    in
+      return (
+        List.iter (Hashtbl.remove switch_data.mac_cache) macs)
+  | _ -> return ()
 let add_entry_in_hashtbl mac_cache ix in_port = 
   if not (Hashtbl.mem mac_cache ix ) then
       Hashtbl.add mac_cache ix in_port
@@ -87,18 +98,18 @@ let packet_in_cb controller dpid evt =
  
   (* check if I know the output port in order to define what type of message
    * we need to send *)
-(*  let broadcast = String.make 6 '\255' in
+  let broadcast = String.make 6 '\255' in
   let ix = m.OP.Match.dl_dst in
   if ( (ix = broadcast)
        || (not (Hashtbl.mem switch_data.mac_cache ix)) ) 
-  then ( *)
+  then ( 
     let bs = 
           (OP.Packet_out.create ~buffer_id:buffer_id 
              ~actions:[ OP.(Flow.Output(Port.All , 2000))] 
            ~data:data ~in_port:in_port () ) in   
     let h = OP.Header.create OP.Header.PACKET_OUT 0 in 
         OC.send_data controller dpid (OP.Packet_out (h, bs))
-(*  ) else (
+  ) else (
     let out_port = (Hashtbl.find switch_data.mac_cache ix) in
     let flags = OP.Flow_mod.({send_flow_rem=true; emerg=false; overlap=false;}) in 
     lwt _ = 
@@ -120,7 +131,7 @@ let packet_in_cb controller dpid evt =
                  [OP.Flow.Output(out_port, 2000)] ()) in
         let h = OP.Header.create OP.Header.FLOW_MOD 0 in 
           OC.send_data controller dpid (OP.Flow_mod (h, pkt))
- ) *)
+ )
 
 let init controller = 
   pp "test controller register datapath cb\n%!";
@@ -128,7 +139,10 @@ let init controller =
   pp "test controller register leave cb\n%!";
   OC.register_cb controller OE.DATAPATH_LEAVE datapath_leave_cb;
    pp "test controller register packet_in cb\n%!";
-  OC.register_cb controller OE.PACKET_IN packet_in_cb
+  OC.register_cb controller OE.PACKET_IN packet_in_cb;
+   pp "test controller register packet_in cb\n%!";
+  OC.register_cb controller OE.PORT_STATUS_CHANGE port_status_cb
+
 
 let init_controller () =
   OC.init_controller init
@@ -144,6 +158,3 @@ let run_controller mgr st =
       exn))
       ) in
     return (switch_input, switch_output)
- 
-
-

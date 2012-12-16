@@ -83,7 +83,7 @@ let connect_client mgr dst =
 let connect_client  () =
   try_lwt
     let sock = socket PF_INET SOCK_STREAM 0 in  
-    let dst = ADDR_INET( (Unix.inet_addr_of_string "10.0.0.2"), 
+    let dst = ADDR_INET( (Unix.inet_addr_of_string "127.0.0.1"), 
                          6634) in 
     lwt _ = connect sock dst in 
     let cl = {fd=sock;} in
@@ -92,23 +92,34 @@ let connect_client  () =
     failwith (sprintf "ofswitch_config client failed: %s"
     (Printexc.to_string ex))
   
-let listen_t mgr port =
-  let listen_inner mgr dst t =
-    while_lwt true do
-      lwt req = Net.Channel.read_some t in
-      let req = Jsonrpc.call_of_string
-                  (Cstruct.to_string req) in 
-      lwt success = 
-        match (req.Rpc.name, req.Rpc.params) with
-          | ("add_port", (Rpc.String (dev))::_) -> Net.Manager.attach mgr dev
-          | ("del_port", (Rpc.String (dev))::_) -> Net.Manager.detach mgr dev
-          | (_, _) -> return false
-      in 
-      let resp = 
-        Jsonrpc.string_of_response (Rpc.success (Rpc.Null)) in 
-      let _ = Net.Channel.write_string t resp in 
-        Net.Channel.flush t
-    done
+let listen_t mgr del_port port =
+  let listen_inner mgr st (input, output) =
+  lwt req = Lwt_io.read_line input in
+  let req = Jsonrpc.call_of_string req in 
+  lwt success = 
+   match (req.Rpc.name, req.Rpc.params) with
+     | ("add-port", (Rpc.String (dev))::_) -> 
+         let _ = printf "attaching port %s\n%!" dev in 
+         Net.Manager.attach mgr dev
+     | ("del-port", (Rpc.String (dev))::_) -> 
+         let _ = printf "attaching port %s\n%!" dev in 
+          lwt _ = del_port dev in 
+          lwt _ = Net.Manager.detach mgr dev in 
+            return true
+     | (_, _) -> 
+         let _ = printf "[ofswitch-config] invalid action %s\n%!" 
+                   (req.Rpc.name) in 
+         return false
   in 
-    Net.Channel.listen mgr 
-      (`TCPv4 ((None, port), (listen_inner mgr) ))
+  let resp = 
+    Jsonrpc.string_of_response (Rpc.success (Rpc.Null)) in 
+  lwt _ = Lwt_io.write_line output resp in 
+  lwt _ = Lwt_io.close output in 
+  lwt _ = Lwt_io.close input in 
+    return ()
+   in 
+ let addr = Unix.ADDR_INET(Unix.inet_addr_any, 6634) in 
+  let _ = Lwt_io.establish_server addr 
+            (fun a -> Lwt.ignore_result (listen_inner mgr del_port a) ) in 
+    return ()
+

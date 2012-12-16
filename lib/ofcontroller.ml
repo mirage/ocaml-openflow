@@ -174,9 +174,9 @@ let process_of_packet state conn ofp =
           Lwt_list.iter_p (fun cb -> cb state dpid evt) state.datapath_join_cb
       end
       | Packet_in (h, p) -> begin (* Generate a packet_in event *) 
-          cp (sp "+ %s|%s" 
+(*          cp (sp "+ %s|%s" 
                   (OP.Header.header_to_string h)
-                  (OP.Packet_in.packet_in_to_string p)); 
+                  (OP.Packet_in.packet_in_to_string p)); *)
             let evt = Event.Packet_in (
               p.Packet_in.in_port, p.Packet_in.buffer_id,
               p.Packet_in.data, conn.dpid) 
