@@ -884,16 +884,14 @@ let del_port mgr sw name =
         true
 (*      not (name = (Net.Manager.get_intf_name mgr a.Switch.ethif)  ) *)
   ) sw.Switch.ports in 
-  let _ = Hashtbl.find sw.Switch.int_to_port port.Switch.port_id in 
   let _ = Hashtbl.remove sw.Switch.int_to_port port.Switch.port_id in  
-  let _ = Hashtbl.find sw.Switch.int_to_port port.Switch.port_id in 
   let _ = Hashtbl.remove sw.Switch.dev_to_port port.Switch.ethif in 
   let h,p = OP.Port.create_port_status OP.Port.DEL port.Switch.phy in 
   let of_match = OP.Match.create_flow_match OP.Wildcards.full_wildcard () in 
   lwt _ = Table.del_flow sw.Switch.table of_match 
             (OP.Port.port_of_int port.Switch.port_id) 
             sw.Switch.controller in 
-  let of_match = OP.Match.create_flow_match OP.Wildcards.in_port
+  let of_match = OP.Match.create_flow_match OP.Wildcards.in_port_match
                   ~in_port:(port.Switch.port_id) () in 
   lwt _ = Table.del_flow sw.Switch.table of_match 
             OP.Port.No_port sw.Switch.controller in 

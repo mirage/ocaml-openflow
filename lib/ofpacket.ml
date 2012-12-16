@@ -853,7 +853,7 @@ module Wildcards = struct
     dl_vlan_pcp: bool;
     nw_tos: bool;
   }
-  let in_port = 
+  let in_port_match = 
     { in_port=false; dl_vlan=true; dl_src=true; 
       dl_dst=true; dl_type=true; nw_proto=true; 
       tp_src=true; tp_dst=true; nw_src=(char_of_int 32); 
