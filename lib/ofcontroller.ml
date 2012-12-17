@@ -153,7 +153,7 @@ let process_of_packet state conn ofp =
       | Hello (h) -> begin (* Reply to HELLO with a HELLO and a feature request *)
         let _ = cp "HELLO" in
         lwt _ = send_packet conn (OP.Hello (h)) in
-        let h = OP.Header.create OP.Header.FEATURES_RESP OP.Header.get_len  in 
+        let h = OP.Header.create OP.Header.FEATURES_REQ OP.Header.get_len  in 
           send_packet conn (OP.Features_req (h) )
      end
       | Echo_req h  -> begin (* Reply to ECHO requests *)
