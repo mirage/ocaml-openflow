@@ -122,7 +122,7 @@ let set_int32_byte f off v =
     logor f value
 
 let get_int32_nw_mask f off = 
-  let ret = shift_left (logand f (shift_left 13l off)) off in 
+  let ret = shift_right (logand f (shift_left 0x3fl off)) off in 
     char_of_int (0x003f land (Int32.to_int ret))  
 let set_int32_nw_mask f off v = 
   let value = Int32.of_int ((0x3f land v) lsl off) in
@@ -1115,7 +1115,34 @@ module Match = struct
       nw_tos=(char_of_int 0); nw_proto=(char_of_int 0); 
       tp_src=0; tp_dst=0}
 
-  let match_to_string m = 
+  let print_field flag name value = 
+    if (flag) then
+      ""
+    else
+      sprintf "%s:%s," name value 
+
+  let match_to_string m =
+    sprintf 
+      "%s%s%s%s%s%s%s%s%s%s%s%s"
+      (print_field m.wildcards.Wildcards.in_port "in_port" (Port.string_of_port m.in_port))
+      (print_field m.wildcards.Wildcards.dl_src "dl_src" (eaddr_to_string m.dl_src))
+      (print_field m.wildcards.Wildcards.dl_dst "dl_dst" (eaddr_to_string m.dl_dst))
+      (print_field m.wildcards.Wildcards.dl_vlan "dl_vlan" (string_of_int m.dl_vlan))
+      (print_field m.wildcards.Wildcards.dl_vlan_pcp "dl_pcp" 
+        (string_of_int (int_of_char m.dl_vlan_pcp) ))
+      (print_field m.wildcards.Wildcards.dl_type "dl_type" (string_of_int m.dl_type))
+     (print_field (m.wildcards.Wildcards.nw_src >= '\x20') "nw_src" 
+        (sprintf "%s/%d" (Net.Nettypes.ipv4_addr_to_string (Net.Nettypes.ipv4_addr_of_uint32 m.nw_src))
+          (int_of_char m.wildcards.Wildcards.nw_src) ))
+      (print_field (m.wildcards.Wildcards.nw_dst >= '\x20') "nw_dst" 
+        (sprintf "%s/%d" (Net.Nettypes.ipv4_addr_to_string (Net.Nettypes.ipv4_addr_of_uint32 m.nw_dst) )
+          (int_of_char m.wildcards.Wildcards.nw_dst) ))
+      (print_field m.wildcards.Wildcards.nw_tos "nw_tos" (string_of_int (int_of_char m.nw_tos)))
+      (print_field m.wildcards.Wildcards.nw_proto "nw_proto" (string_of_int (int_of_char m.nw_proto)))
+      (print_field m.wildcards.Wildcards.tp_src "tp_src" (string_of_int m.tp_src))
+      (print_field m.wildcards.Wildcards.tp_dst "tp_dst" (string_of_int m.tp_dst))
+
+(*    let _ = switch_data.dpid <- dp in 
     match (m.dl_type, (int_of_char m.nw_proto)) with
       | (0x0800, 17) 
         -> (sp "in_port:%s,dl_src:%s,dl_dst:%s,dl_type:ip,nw_src:%s/%d,nw_dst:%s/%d,\
@@ -1136,9 +1163,10 @@ module Match = struct
       | (_, _) -> (sp "in_port:%s,dl_src:%s,dl_dst:%s,dl_type:0x%x"
         (Port.string_of_port m.in_port) (eaddr_to_string m.dl_src) 
         (eaddr_to_string m.dl_dst) m.dl_type  
-      )
+      ) *)
+
   let flow_match_compare flow flow_def wildcard =
-(*  Printf.printf "comparing flows %s \n%s\n%s \n%!" (Wildcards.string_of_wildcard wildcard) 
+(*  Printf.printf "comparing flows %s \n%s\n%s \n%!" (Wildcards.wildcard_to_string wildcard) 
       (match_to_string flow)  (match_to_string flow_def); 
     Printf.printf "in_port:%s,dl_vlan:%s,dl_src:%s(%d %d),dl_dst:%s,dl_type:%s,\
         nw_proto:%s,tp_src:%s(%d %d),tp_dst:%s,nw_src:%s,nw_dst:%s,\
