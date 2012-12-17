@@ -324,6 +324,7 @@ module Switch = struct
   let forward_frame st in_port frame pkt_size = function
     | OP.Port.Port(port) -> 
       if Hashtbl.mem st.int_to_port port then(
+        let _ = printf "sending to port %d\n%!" port in
         let out_p = (!( Hashtbl.find st.int_to_port port))  in
           Net.Manager.inject_packet out_p.mgr out_p.ethif frame )
       else
@@ -342,11 +343,22 @@ module Switch = struct
     | OP.Port.In_port ->
       let port = (OP.Port.int_of_port in_port) in 
       if Hashtbl.mem st.int_to_port port then
+        let _ = printf "sending to port %d\n%!" port in
         let out_p = !(Hashtbl.find st.int_to_port port) in
           update_port_tx_stats (Int64.of_int (Cstruct.len frame)) out_p;
           Net.Manager.inject_packet out_p.mgr out_p.ethif frame
       else
-        return (Printf.printf "Port %d not registered \n" port)
+        return (Printf.printf "Port %d not registered \n%!" port)
+    | OP.Port.Local ->
+        let local_port_id = OP.Port.int_of_port OP.Port.Local in 
+      if Hashtbl.mem st.int_to_port local_port_id then
+        let out_p = !(Hashtbl.find st.int_to_port local_port_id) in
+        let _ = printf "sending to port %d\n%!" local_port_id in
+        let _ = update_port_tx_stats (Int64.of_int (Cstruct.len frame)) out_p in 
+          Net.Manager.inject_packet out_p.mgr out_p.ethif frame
+      else
+        return (Printf.printf "Port %d not registered \n%!" local_port_id)
+ 
         (*           | Table
          *           | Normal
          *           | Controller -> generate a packet out. 
@@ -533,8 +545,8 @@ let process_frame_inner st p intf frame =
                       ~reason:OP.Packet_in.NO_MATCH ~data:frame in 
        let _ = st.Switch.packet_buffer <- st.Switch.packet_buffer @ [pkt_in] in
        let size = 
-         if (Cstruct.len frame > 64) then
-           64
+         if (Cstruct.len frame > 92) then
+           92
          else 
            Cstruct.len frame 
        in
@@ -741,7 +753,7 @@ let process_openflow st t msg =
               pkt_in.OP.Packet_in.data pkt.OP.Packet_out.actions
     end 
   | OP.Flow_mod(h,fm)  ->
-(*    cp (sp "FLOW_MOD: %s" (OP.Flow_mod.flow_mod_to_string fm)); *)
+    cp (sp "FLOW_MOD: %s" (OP.Flow_mod.flow_mod_to_string fm)); 
     let of_match = fm.OP.Flow_mod.of_match in 
     let of_actions = fm.OP.Flow_mod.actions in
     lwt _ = 
@@ -804,11 +816,8 @@ let control_channel_run st conn t =
   lwt _ = Ofsocket.send_packet conn (OP.Hello(h)) in
   let rec echo () =
     try_lwt
-      let _ = printf "reading packet...\n%!" in 
       lwt ofp = Ofsocket.read_packet conn in 
-      let _ = printf "read packet...\n%!" in 
       lwt _ = process_openflow st conn ofp in
-      let _ = printf "processed packet...\n%!" in 
         echo ()
     with
     | Nettypes.Closed -> 
@@ -911,20 +920,21 @@ let del_port mgr sw name =
 let add_port_local mgr sw ethif = 
  (*TODO Find first if a port is already registered as port 0 
   * as port 0 and disable it *)
-  let port = Switch.init_port mgr 0 ethif in 
+  let local_port_id = OP.Port.int_of_port OP.Port.Local in 
+  let port = Switch.init_port mgr local_port_id ethif in 
   sw.Switch.ports <- 
   (List.filter (fun a -> (a.Switch.port_id <> 0)) sw.Switch.ports) 
   @ [port];
-  Hashtbl.replace sw.Switch.int_to_port 0 (ref port); 
+  Hashtbl.replace sw.Switch.int_to_port local_port_id (ref port); 
   Hashtbl.iter 
     (fun a b -> 
-       if (!b.Switch.port_id = 0) then 
+       if (!b.Switch.port_id = local_port_id) then 
          Hashtbl.remove sw.Switch.dev_to_port a
     ) sw.Switch.dev_to_port;
   Hashtbl.add sw.Switch.dev_to_port ethif (ref port);
   (*TODO Need to filter out any 0 port *)
   sw.Switch.features.OP.Switch.ports <- 
-  (List.filter (fun a -> (a.OP.Port.port_no <> 0)) 
+  (List.filter (fun a -> (a.OP.Port.port_no <> local_port_id)) 
                            sw.Switch.features.OP.Switch.ports )
    @ [port.Switch.phy];
   let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw port) in
