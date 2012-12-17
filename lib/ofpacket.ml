@@ -1667,7 +1667,7 @@ module Packet_in = struct
                         sizeof_ofp_packet_in + data_len) in 
       let (ofp_len, bits) = marshal_and_shift (Header.marshal_header h) bits in
       let _ = set_ofp_packet_in_buffer_id bits t.buffer_id in
-      let _ = set_ofp_packet_in_total_len bits (sizeof_ofp_packet_in + data_len) in
+      let _ = set_ofp_packet_in_total_len bits data_len in
       let _ = set_ofp_packet_in_in_port bits (Port.int_of_port t.in_port) in 
       let _ = set_ofp_packet_in_reason bits  (int_of_reason t.reason) in
       let _ = Cstruct.blit_buffer t.data 0 bits sizeof_ofp_packet_in 
