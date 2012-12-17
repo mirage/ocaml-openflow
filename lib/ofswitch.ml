@@ -804,16 +804,19 @@ let control_channel_run st conn t =
   lwt _ = Ofsocket.send_packet conn (OP.Hello(h)) in
   let rec echo () =
     try_lwt
+      let _ = printf "reading packet...\n%!" in 
       lwt ofp = Ofsocket.read_packet conn in 
-         process_openflow st conn ofp (* Bitstring.concat [hbuf; dbuf] *) 
-          >> echo ()
+      let _ = printf "read packet...\n%!" in 
+      lwt _ = process_openflow st conn ofp in
+      let _ = printf "processed packet...\n%!" in 
+        echo ()
     with
     | Nettypes.Closed -> 
         pr "Controller channel closed....\n%!";
          return ()
     | OP.Unparsed (m, bs) -> (pr "# unparsed! m=%s\n %!" m); echo ()
     | exn -> 
-        pr "[OpenFlow-Switch-Control] ERROR:%s\n" (Printexc.to_string exn);
+        pr "[OpenFlow-Switch-Control] ERROR:%s\n%!" (Printexc.to_string exn);
         (echo () ) 
 
   in
@@ -956,10 +959,9 @@ let lwt_connect st ?(standalone=true) mgr loc  =
   let of_ctrl = Ofswitch_standalone.init_controller () in 
 
   let _ = Lwt.ignore_result (Ofswitch_config.listen_t mgr (del_port mgr st) 6634) in 
-  let fd = Lwt_unix.socket Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
-  let _ = Lwt_unix.setsockopt fd Unix.SO_REUSEADDR true in 
+(*  let _ = Lwt_unix.setsockopt fd Unix.SO_REUSEADDR true in 
   let _ = Lwt_unix.bind fd (Unix.ADDR_INET(Unix.inet_addr_any, 6633)) in 
-  let _ = Lwt_unix.listen fd 1 in
+  let _ = Lwt_unix.listen fd 1 in *)
   let _ = printf "[switch] Listening socket...\n%!" in 
     while_lwt true do
       let t,u = Lwt.task () in 
@@ -974,7 +976,20 @@ let lwt_connect st ?(standalone=true) mgr loc  =
           return ()
       ) <&>
       (
-        lwt (sock, loc) = Lwt_unix.accept fd in
+        let rec connect_socket () =
+          try_lwt
+            let sock = Lwt_unix.socket 
+                        Lwt_unix.PF_INET Lwt_unix.SOCK_STREAM 0 in
+            let dst = Unix.ADDR_INET(
+              (Unix.inet_addr_of_string "127.0.0.1"), 6633) in 
+            lwt addr = Lwt_unix.connect sock dst in 
+              return sock 
+          with exn -> 
+            lwt _ = Lwt_unix.sleep 5.0 in 
+              connect_socket ()
+        in
+        (* lwt (sock, loc) = Lwt_unix.accept fd in *)
+        lwt sock = connect_socket () in 
         let conn = Ofsocket.init_unix_conn_state sock in 
         let _ = wakeup u () in 
         let t,_ = Lwt.task () in 
