@@ -18,67 +18,11 @@ open Lwt
 open Lwt_unix
 open Printf
 
+module OP = Ofpacket
+
 type t = {
-(*
-  dev_m: (string * string) Lwt_condition.t; 
-  res_m: bool Lwt_condition.t;
- *)
-  fd: Lwt_unix.file_descr;
+ fd: Lwt_unix.file_descr;
 }
-
-let add_port t dev = 
-  let buf = String.create 4096 in 
-  let req = Jsonrpc.string_of_call
-              (Rpc.call "add_port" [Rpc.String dev]) in
-  lwt _ = send t.fd req 0 (String.length req) [] in
-  lwt len = recv t.fd buf 0 4096 [] in
-  let resp = Jsonrpc.response_of_string buf in 
-    return (resp.Rpc.success)
- (*
-  let _ = Lwt_condition.signal t.dev_m ("add_port", dev) in
-    Lwt_condition.wait t.res_m
-
- *)
-let del_port t dev = 
-  return false
-  (*
-  let _ = Lwt_condition.signal t.dev_m ("add_port", dev) in
-    Lwt_condition.wait t.res_m
- *)
-
-  (*
-let client_t mgr client t = 
-  let _ = Lwt_condition.signal client.res_m true in 
-    while_lwt true do
-      lwt (op, dev) = Lwt_condition.wait client.dev_m in
-      let req = Jsonrpc.string_of_call
-        (Rpc.call op [Rpc.String dev]) in
-      let _ = Net.Channel.write_string t req 0 (String.length req) in
-      lwt _ = Net.Channel.flush t in
-      lwt resp_str = Net.Channel.read_some t in
-      let resp =
-        Jsonrpc.response_of_string
-        (Cstruct.to_string resp_str) in 
-        return (Lwt_condition.signal client.res_m resp.Rpc.success)
-    done
-
-let connect_client mgr dst =
-  try_lwt
-    let dev_m = Lwt_condition.create () in 
-    let res_m = Lwt_condition.create () in
-    let cl = {dev_m; res_m;} in 
-    let _ = 
-      Lwt.ignore_result 
-        (Net.Channel.connect mgr 
-           (`TCPv4 (None, dst, (client_t mgr cl)))) in
-    lwt res = Lwt_condition.wait cl.res_m in
-    match res with
-      | true -> return cl
-      | false -> failwith "ofswitch_config client failed"
-  with ex -> 
-    failwith (sprintf "ofswitch_config client failed: %s"
-    (Printexc.to_string ex))
-   *)
 
 let connect_client  () =
   try_lwt
@@ -91,34 +35,152 @@ let connect_client  () =
   with ex -> 
     failwith (sprintf "ofswitch_config client failed: %s"
     (Printexc.to_string ex))
-  
-let listen_t mgr del_port port =
+ 
+let hashtbl_to_flow_match map =
+  let of_match =  OP.Match.wildcard () in
+  let _ = 
+    Hashtbl.iter (
+      fun name value -> 
+        match name with 
+        | "in_port" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.in_port <- false in 
+            let _ = of_match.OP.Match.in_port <- OP.Port.port_of_int 
+                      (int_of_string value) in 
+              ()
+        | "dl_vlan" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.dl_vlan <- false in 
+            let _ = of_match.OP.Match.dl_vlan <- int_of_string value in 
+              ()
+        | "dl_vlan_pcp" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.dl_vlan_pcp <- false in 
+            let _ = of_match.OP.Match.dl_vlan_pcp <- char_of_int (int_of_string value) in
+            ()
+         | "dl_src" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.dl_src <- false in
+            let _ = 
+              match (Net.Nettypes.ethernet_mac_of_string value) with
+              | None -> printf "Invalid mac addr %s\n%!" value
+              | Some t -> of_match.OP.Match.dl_src <- Net.Nettypes.ethernet_mac_to_bytes t 
+            in 
+            ()
+         | "dl_dst" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.dl_dst <- false in 
+            let _ = 
+              match (Net.Nettypes.ethernet_mac_of_string value) with
+              | None -> printf "Invalid mac addr %s\n%!" value
+              | Some t -> of_match.OP.Match.dl_dst <- Net.Nettypes.ethernet_mac_to_bytes t 
+            in 
+           ()
+         | "dl_type" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.dl_type <- false in 
+            let _ = of_match.OP.Match.dl_type <- int_of_string value in 
+            ()
+         | "nw_src" -> 
+             let fields = 
+               match (Re_str.split (Re_str.regexp "\/") value) with
+               | ip::mask::_ -> 
+                   match (Net.Nettypes.ipv4_addr_of_string ip) with
+                   | None -> printf "Invalid ip definition"
+                   | Some ip -> 
+                       let _ = of_match.OP.Match.wildcards.OP.Wildcards.nw_src <-
+                         char_of_int (int_of_string mask) in 
+                       let _ = of_match.OP.Match.nw_src <-
+                         Net.Nettypes.ipv4_addr_to_uint32 ip in 
+                       ()
+               | _ -> printf "Invalid ip definition"
+             in
+               ()
+         | "nw_dst" -> 
+             let fields = 
+               match (Re_str.split (Re_str.regexp "\/") value) with
+               | ip::mask::_ -> 
+                   match (Net.Nettypes.ipv4_addr_of_string ip) with
+                   | None -> printf "Invalid ip definition"
+                   | Some ip -> 
+                       let _ = of_match.OP.Match.wildcards.OP.Wildcards.nw_dst <-
+                         char_of_int (int_of_string mask) in 
+                       let _ = of_match.OP.Match.nw_dst <-
+                         Net.Nettypes.ipv4_addr_to_uint32 ip in 
+                       ()
+               | _ -> printf "Invalid ip definition"
+             in
+               ()
+         | "nw_tos" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.dl_vlan <- false in 
+            let _ = of_match.OP.Match.nw_tos <- char_of_int (int_of_string
+            value) in 
+            ()
+         | "nw_proto" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.nw_proto <- false in 
+            let _ = of_match.OP.Match.nw_proto <- char_of_int (int_of_string
+            value) in 
+            ()
+         | "tp_src" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.tp_src <- false in 
+            let _ = of_match.OP.Match.tp_src <- int_of_string value in 
+            ()
+         | "tp_dst" -> 
+            let _ = of_match.OP.Match.wildcards.OP.Wildcards.tp_dst <- false in 
+            let _ = of_match.OP.Match.tp_dst <- int_of_string value in 
+            ()
+          | _ -> 
+            let _ = eprintf "Invalid field name %s" name in 
+            ()
+    ) map in 
+      of_match
+
+
+let listen_t mgr del_port get_stats port =
   let listen_inner mgr st (input, output) =
-  lwt req = Lwt_io.read_line input in
-  let req = Jsonrpc.call_of_string req in 
-  lwt success = 
-   match (req.Rpc.name, req.Rpc.params) with
-     | ("add-port", (Rpc.String (dev))::_) -> 
-         let _ = printf "attaching port %s\n%!" dev in 
-         Net.Manager.attach mgr dev
-     | ("del-port", (Rpc.String (dev))::_) -> 
-         let _ = printf "attaching port %s\n%!" dev in 
-          lwt _ = del_port dev in 
-          lwt _ = Net.Manager.detach mgr dev in 
-            return true
-     | (_, _) -> 
-         let _ = printf "[ofswitch-config] invalid action %s\n%!" 
-                   (req.Rpc.name) in 
-         return false
+    try_lwt 
+      lwt req = Lwt_io.read_line input in
+      let req = Jsonrpc.call_of_string req in 
+      lwt success = 
+        match (req.Rpc.name, req.Rpc.params) with
+         | ("add-port", (Rpc.String (dev))::_) -> 
+             let _ = Net.Manager.attach mgr dev in 
+               return (Rpc.Enum [(Rpc.String "true")])
+         | ("del-port", (Rpc.String (dev))::_) -> 
+             lwt _ = del_port dev in 
+             lwt _ = Net.Manager.detach mgr dev in 
+               return (Rpc.Enum [(Rpc.String "true")])
+         | ("dump-flows", (Rpc.Dict t)::_) -> 
+             let _ = printf "dumpflows for %s\n%!" (Rpc.string_of_call req) in
+             let map = 
+               List.fold_right (
+                 fun (name, value) r -> 
+                   let _ = Hashtbl.add r name (Rpc.string_of_rpc value) in 
+                   let _ = printf "Adding %s = %s\n%!" name (Rpc.string_of_rpc
+                   value) in 
+                     r 
+               ) t (Hashtbl.create 10) in
+             let of_match = hashtbl_to_flow_match map in
+             let _ = printf "Find rules matching %s\n%!"
+             (OP.Match.match_to_string of_match) in 
+             let flows = get_stats of_match in 
+             let res = 
+               List.fold_right (
+                 fun a r -> 
+                   r @ [(Rpc.String (OP.Flow.string_of_flow_stat a))]
+
+               ) flows [] in 
+             return (Rpc.Enum res)
+         | (_, _) -> 
+             let _ = printf "[ofswitch-config] invalid action %s\n%!" 
+                     (req.Rpc.name) in 
+             return (Rpc.Enum [(Rpc.String "false")])
+      in 
+      let resp = 
+        Jsonrpc.string_of_response (Rpc.success success) in 
+      lwt _ = Lwt_io.write_line output resp in 
+      lwt _ = Lwt_io.close output in 
+      lwt _ = Lwt_io.close input in 
+        return ()
+    with exn ->
+      Lwt_log.log  ~exn ~level:Lwt_log.Notice "[ofswitch_config] server error" 
+ 
   in 
-  let resp = 
-    Jsonrpc.string_of_response (Rpc.success (Rpc.Null)) in 
-  lwt _ = Lwt_io.write_line output resp in 
-  lwt _ = Lwt_io.close output in 
-  lwt _ = Lwt_io.close input in 
-    return ()
-   in 
- let addr = Unix.ADDR_INET(Unix.inet_addr_any, 6634) in 
+  let addr = Unix.ADDR_INET(Unix.inet_addr_any, 6634) in 
   let _ = Lwt_io.establish_server addr 
             (fun a -> Lwt.ignore_result (listen_inner mgr del_port a) ) in 
     return ()

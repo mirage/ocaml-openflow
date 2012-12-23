@@ -196,18 +196,18 @@ module Switch :
 module Wildcards :
   sig
     type t = {
-      in_port : bool;
-      dl_vlan : bool;
-      dl_src : bool;
-      dl_dst : bool;
-      dl_type : bool;
-      nw_proto : bool;
-      tp_src : bool;
-      tp_dst : bool;
-      nw_src : byte;
-      nw_dst : byte;
-      dl_vlan_pcp : bool;
-      nw_tos : bool;
+      mutable in_port : bool;
+      mutable dl_vlan : bool;
+      mutable dl_src : bool;
+      mutable dl_dst : bool;
+      mutable dl_type : bool;
+      mutable nw_proto : bool;
+      mutable tp_src : bool;
+      mutable tp_dst : bool;
+      mutable nw_src : byte;
+      mutable nw_dst : byte;
+      mutable dl_vlan_pcp : bool;
+      mutable nw_tos : bool;
     }
     val in_port_match : t
     val full_wildcard : t
@@ -220,20 +220,22 @@ module Wildcards :
 module Match :
   sig
     type t = {
-      wildcards : Wildcards.t;
-      in_port : Port.t;
-      dl_src : eaddr;
-      dl_dst : eaddr;
-      dl_vlan : uint16;
-      dl_vlan_pcp : byte;
-      dl_type : uint16;
-      nw_src : uint32;
-      nw_dst : uint32;
-      nw_tos : byte;
-      nw_proto : byte;
-      tp_src : uint16;
-      tp_dst : uint16;
+      mutable wildcards : Wildcards.t;
+      mutable in_port : Port.t;
+      mutable dl_src : eaddr;
+      mutable dl_dst : eaddr;
+      mutable dl_vlan : uint16;
+      mutable dl_vlan_pcp : byte;
+      mutable dl_type : uint16;
+      mutable nw_src : uint32;
+      mutable nw_dst : uint32;
+      mutable nw_tos : byte;
+      mutable nw_proto : byte;
+      mutable tp_src : uint16;
+      mutable tp_dst : uint16;
     }
+
+    val wildcard: unit -> t
     val flow_match_compare : t -> t -> Wildcards.t -> bool
     val create_flow_match :
       Wildcards.t ->

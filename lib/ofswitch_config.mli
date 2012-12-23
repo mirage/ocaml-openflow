@@ -16,11 +16,6 @@
 
 type t 
 
-val add_port: t -> string -> bool Lwt.t
-val del_port: t -> string -> bool Lwt.t
-(*
-val connect_client: Net.Manager.t -> 
-  Net.Nettypes.ipv4_dst -> t Lwt.t
- *)
 val connect_client: unit -> t Lwt.t
-val listen_t: Net.Manager.t -> (string -> unit Lwt.t) -> int -> unit Lwt.t
+val listen_t: Net.Manager.t -> (string -> unit Lwt.t) -> 
+  (Ofpacket.Match.t -> Ofpacket.Flow.stats list) -> int -> unit Lwt.t

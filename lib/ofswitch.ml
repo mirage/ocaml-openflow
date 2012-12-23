@@ -16,6 +16,8 @@
  *)
 
 open Lwt
+open Lwt_log
+
 open Net
 open Nettypes
 open Ofswitch_config
@@ -129,9 +131,13 @@ module Table = struct
   (* TODO fix flow_mod flag support. overlap is not considered *)
   let add_flow st table t =
     (* TODO check if the details are correct e.g. IP type etc. *)
-    Hashtbl.replace table.entries t.OP.Flow_mod.of_match 
-    (Entry.({actions=t.OP.Flow_mod.actions; counters=(init_flow_counters t); 
-             cache_entries=[];}))
+    lwt _ = 
+      log ~level:Notice 
+      (sprintf "Adding flow %s" (OP.Match.match_to_string t.OP.Flow_mod.of_match)) in 
+    let _ = Hashtbl.replace table.entries t.OP.Flow_mod.of_match 
+              Entry.({actions=t.OP.Flow_mod.actions; counters=(init_flow_counters t); 
+             cache_entries=[];}) in 
+      return ()
 
   (* check if a list of actions has an output action forwarding packets to
    * out_port *)
@@ -166,7 +172,11 @@ module Table = struct
     (* Check for notification flag in flow and send 
     * flow modification warnings *)
       Lwt_list.iter_s (
-      fun (of_match, flow) -> 
+      fun (of_match, flow) ->
+        lwt _ = 
+          log ~level:Notice 
+          (sprintf "Adding flow %s" (OP.Match.match_to_string of_match)) in 
+ 
         if (t <> None) &&
           (flow.Entry.counters.Entry.flags.OP.Flow_mod.send_flow_rem) then
           let Some(t) = t in
@@ -324,7 +334,7 @@ module Switch = struct
   let forward_frame st in_port frame pkt_size = function
     | OP.Port.Port(port) -> 
       if Hashtbl.mem st.int_to_port port then(
-        let _ = printf "sending to port %d\n%!" port in
+(*        let _ = printf "sending to port %d\n%!" port in *)
         let out_p = (!( Hashtbl.find st.int_to_port port))  in
           Net.Manager.inject_packet out_p.mgr out_p.ethif frame )
       else
@@ -343,7 +353,7 @@ module Switch = struct
     | OP.Port.In_port ->
       let port = (OP.Port.int_of_port in_port) in 
       if Hashtbl.mem st.int_to_port port then
-        let _ = printf "sending to port %d\n%!" port in
+(*        let _ = printf "sending to port %d\n%!" port in *)
         let out_p = !(Hashtbl.find st.int_to_port port) in
           update_port_tx_stats (Int64.of_int (Cstruct.len frame)) out_p;
           Net.Manager.inject_packet out_p.mgr out_p.ethif frame
@@ -353,7 +363,7 @@ module Switch = struct
         let local_port_id = OP.Port.int_of_port OP.Port.Local in 
       if Hashtbl.mem st.int_to_port local_port_id then
         let out_p = !(Hashtbl.find st.int_to_port local_port_id) in
-        let _ = printf "sending to port %d\n%!" local_port_id in
+(*        let _ = printf "sending to port %d\n%!" local_port_id in *)
         let _ = update_port_tx_stats (Int64.of_int (Cstruct.len frame)) out_p in 
           Net.Manager.inject_packet out_p.mgr out_p.ethif frame
       else
@@ -610,6 +620,20 @@ type endhost = {
   port: int;
 }
 
+let get_flow_stats st of_match = 
+  let match_flows of_match key value ret =
+    if (OP.Match.flow_match_compare key of_match 
+              of_match.OP.Match.wildcards) then ( 
+                ret @ [
+                  (Entry.flow_counters_to_flow_stats 
+              key (char_of_int 1) value)] 
+    ) else 
+      ret 
+  in
+    Hashtbl.fold (fun key value r -> match_flows of_match key value r) 
+    st.Switch.table.Table.entries []  
+ 
+
 let process_openflow st t msg = 
   match msg with
   | OP.Hello (h) -> 
@@ -643,18 +667,7 @@ let process_openflow st t msg =
       (*TODO Need to consider the  table_id and the out_port and 
        * split reply over multiple openflow packets if they don't
        * fit a single packet. *)
-      let match_flows of_match key value ret =
-        if (OP.Match.flow_match_compare key of_match 
-              of_match.OP.Match.wildcards) then ( 
-          ret @ [
-            (Entry.flow_counters_to_flow_stats 
-              of_match (char_of_int 1) value)] 
-        ) else 
-          ret 
-      in
-      let flows = 
-        Hashtbl.fold (fun key value r -> match_flows of_match key value r) 
-          st.Switch.table.Table.entries [] in 
+      let flows = get_flow_stats st of_match in 
       let stats = OP.Stats.({st_ty=FLOW; more_to_follow=false;}) in 
       let r = OP.Stats.Flow_resp(stats, flows) in
       let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len r) in 
@@ -761,9 +774,11 @@ let process_openflow st t msg =
       | OP.Flow_mod.ADD 
       | OP.Flow_mod.MODIFY 
       | OP.Flow_mod.MODIFY_STRICT -> 
-        return (Table.add_flow st st.Switch.table fm)
+        Table.add_flow st st.Switch.table fm
       | OP.Flow_mod.DELETE 
       | OP.Flow_mod.DELETE_STRICT ->
+          (* Need to implemente strict deletion in order to enable signpost
+           * switching *)
         Table.del_flow st.Switch.table of_match fm.OP.Flow_mod.out_port 
           (Some t)
     in
@@ -857,6 +872,8 @@ let add_port mgr ?(use_mac=false) sw ethif =
     (Manager.get_intf_mac mgr ethif)) in
   let _ = pr "Adding port %d (%s) '%s' \n %!" sw.Switch.portnum 
             (Net.Manager.get_intf_name mgr ethif) hw_addr in 
+  lwt _ = log ~level:Notice (sprintf "Adding port %s (port_id=%d)" ethif
+  sw.Switch.portnum) in 
   lwt _ = 
     if (use_mac) then
       lwt _ = Lwt_unix.system (sprintf "ifconfig tap0 lladdr %s" hw_addr) in
@@ -907,6 +924,8 @@ let del_port mgr sw name =
                   ~in_port:(port.Switch.port_id) () in 
   lwt _ = Table.del_flow sw.Switch.table of_match 
             OP.Port.No_port sw.Switch.controller in 
+  lwt _ = log ~level:Notice (sprintf "Removing port %s (port_id=%d)" name
+            port.Switch.port_id) in 
   lwt _ = 
     match sw.Switch.controller with
     | None -> return ()
@@ -937,8 +956,10 @@ let add_port_local mgr sw ethif =
   (List.filter (fun a -> (a.OP.Port.port_no <> local_port_id)) 
                            sw.Switch.features.OP.Switch.ports )
    @ [port.Switch.phy];
-  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw port) in
-    ()
+  lwt _ = log ~level:Notice (sprintf "Adding port %s (port_id=%d)" ethif
+            local_port_id) in 
+   let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw port) in
+    return ()
 
 
 let create_switch () = 
@@ -952,23 +973,23 @@ let create_switch () =
 
 let listen st mgr loc =
   Channel.listen mgr (`TCPv4 (loc, (control_channel st ))) <&>
-    (Ofswitch_config.listen_t mgr (del_port mgr st) 6634)
+    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 6634)
 
 let connect st mgr loc  =
   Channel.connect mgr (`TCPv4 (None, loc, (control_channel st loc))) <&> 
-    (Ofswitch_config.listen_t mgr (del_port mgr st) 6634)
+    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 6634)
 
 let local_connect st mgr input output   =
   let conn = Ofsocket.init_local_conn_state input output in 
   let _ = st.Switch.controller <- (Some conn) in 
   let t, _ = Lwt.task () in 
      (control_channel_run st conn t) <&> 
-    (Ofswitch_config.listen_t mgr (del_port mgr st) 6634)
+    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 6634)
 
 let lwt_connect st ?(standalone=true) mgr loc  =
   let of_ctrl = Ofswitch_standalone.init_controller () in 
 
-  let _ = Lwt.ignore_result (Ofswitch_config.listen_t mgr (del_port mgr st) 6634) in 
+  let _ = Lwt.ignore_result (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 6634) in 
 (*  let _ = Lwt_unix.setsockopt fd Unix.SO_REUSEADDR true in 
   let _ = Lwt_unix.bind fd (Unix.ADDR_INET(Unix.inet_addr_any, 6633)) in 
   let _ = Lwt_unix.listen fd 1 in *)
@@ -976,13 +997,13 @@ let lwt_connect st ?(standalone=true) mgr loc  =
     while_lwt true do
       let t,u = Lwt.task () in 
       ((
-        let _ = printf "[switch] standalone controller connected...\n%!" in 
-        lwt (switch_in, switch_out) = 
+        lwt _ = log ~level:Notice "Standalone controller taking over..." in 
+         lwt (switch_in, switch_out) = 
           Ofswitch_standalone.run_controller mgr of_ctrl in
         let conn = Ofsocket.init_local_conn_state switch_in switch_out in 
         let _ = st.Switch.controller <- (Some conn) in 
         lwt _ = control_channel_run st conn t in 
-        let _ = printf "[switch] standalone controller stopped...\n%!" in 
+        lwt _ = log ~level:Notice "Standalone controller stopped..." in 
           return ()
       ) <&>
       (
@@ -1004,7 +1025,7 @@ let lwt_connect st ?(standalone=true) mgr loc  =
         let _ = wakeup u () in 
         let t,_ = Lwt.task () in 
         let _ = st.Switch.controller <- (Some conn) in 
-        let _ = printf "[switch] remote controller connected...\n%!" in 
+        lwt _ = log ~level:Notice "Remote controller started..." in 
           control_channel_run st conn t
       ))
     done
