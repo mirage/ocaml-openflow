@@ -297,8 +297,8 @@ module Switch = struct
     p_sflow: uint32; (** probability for sFlow sampling *)
     mutable errornum : uint32; 
     mutable portnum : int;
-    packet_queue : (Cstruct.buf * Net.Manager.id) Lwt_stream.t;
-    push_packet : ((Cstruct.buf * Net.Manager.id) option -> unit);
+    packet_queue : (Cstruct.t * Net.Manager.id) Lwt_stream.t;
+    push_packet : ((Cstruct.t * Net.Manager.id) option -> unit);
     (* TODO: add this in the port definition and make also 
      * packet output assyncronous *) 
     mutable queue_len : int;
@@ -372,28 +372,30 @@ module Switch = struct
   } as big_endian
 
 
-  let forward_frame st in_port frame pkt_size checksum port = 
+  let forward_frame st in_port bits pkt_size checksum port = 
     let _ = 
-      if ((checksum) && ((get_dl_header_dl_type frame) = 0x800)) then
-        let ip_data = Cstruct.shift frame sizeof_dl_header in
+      if ((checksum) && ((get_dl_header_dl_type bits) = 0x800)) then
+        let ip_data = Cstruct.shift bits sizeof_dl_header in
         let _ = set_nw_header_csum ip_data 0 in
-        let csm = Net.Checksum.ones_complement ip_data sizeof_nw_header in
+        let csm = Net.Checksum.ones_complement (Cstruct.sub ip_data 0
+        sizeof_nw_header) in
         let _ = set_nw_header_csum ip_data csm in
         let _ = 
           match (get_nw_header_nw_proto ip_data) with
           | 6 (* TCP *) -> ()
           | 17 (* UDP *) -> ()
-              ()
           | _ -> ()
         in
           ()
     in 
+    let frame = Net.Frame.of_buffer bits (Cstruct.len bits) in 
     match port with 
     | OP.Port.Port(port) -> 
       if Hashtbl.mem st.int_to_port port then(
 (*        let _ = printf "sending to port %d\n%!" port in *)
         let out_p = (!( Hashtbl.find st.int_to_port port))  in
-          Net.Manager.inject_packet out_p.mgr out_p.ethif frame )
+          Net.Manager.inject_packet out_p.mgr out_p.ethif frame
+        ) 
       else
         return (Printf.printf "Port %d not registered \n" port)
     | OP.Port.No_port -> return ()
@@ -402,7 +404,7 @@ module Switch = struct
       Lwt_list.iter_p  
       (fun port -> 
         if(port.port_id != (OP.Port.int_of_port in_port)) then (
-         update_port_tx_stats (Int64.of_int (Cstruct.len frame)) port;
+         update_port_tx_stats (Int64.of_int (Cstruct.len bits)) port;
           Net.Manager.inject_packet port.mgr port.ethif frame
         ) else
           return ()
@@ -412,7 +414,7 @@ module Switch = struct
       if Hashtbl.mem st.int_to_port port then
 (*        let _ = printf "sending to port %d\n%!" port in *)
         let out_p = !(Hashtbl.find st.int_to_port port) in
-          update_port_tx_stats (Int64.of_int (Cstruct.len frame)) out_p;
+          update_port_tx_stats (Int64.of_int (Cstruct.len bits)) out_p;
           Net.Manager.inject_packet out_p.mgr out_p.ethif frame
       else
         return (Printf.printf "Port %d not registered \n%!" port)
@@ -421,7 +423,7 @@ module Switch = struct
       if Hashtbl.mem st.int_to_port local_port_id then
         let out_p = !(Hashtbl.find st.int_to_port local_port_id) in
 (*        let _ = printf "sending to port %d\n%!" local_port_id in *)
-        let _ = update_port_tx_stats (Int64.of_int (Cstruct.len frame)) out_p in 
+        let _ = update_port_tx_stats (Int64.of_int (Cstruct.len bits)) out_p in 
           Net.Manager.inject_packet out_p.mgr out_p.ethif frame
       else
         return (Printf.printf "Port %d not registered \n%!" local_port_id)
@@ -542,26 +544,17 @@ type t = Switch.t
 (* 
  * let process_frame_depr intf_name frame =  *)
 let process_frame_inner st p intf frame =
-  try_lwt
-(*      let p = (!(Hashtbl.find st.Switch.dev_to_port intf)) in  *)
+  match frame with
+  | Net.Ethif.Output _ -> return ()
+  | Net.Ethif.Input frame -> begin
+    try_lwt
      let in_port = (OP.Port.port_of_int p.Switch.port_id) in 
      let tupple = (OP.Match.raw_packet_to_match in_port frame ) in
 
      (* Update port rx statistics *)
      let _ = Switch.update_port_rx_stats (Int64.of_int (Cstruct.len frame)) p in
 
-    (* What is the size of the frame? Need to get sub_buffer in order  to
-     * process it *)
-(*    let frame = 
-      match (Switch.size_of_raw_packet frame) with
-      | Some(len) -> Cstruct.sub_buffer frame 0 len
-      | None -> raise Packet_type_unknw
-    in *)
-(*    let _ = 
-      printf "XXX received on port %d (%d) [%s] \n%!"
-      p.Switch.port_id (Cstruct.len frame) (OP.Match.match_to_string tupple) 
-    in *)
-     (* Lookup packet flow to existing flows in table *)
+   (* Lookup packet flow to existing flows in table *)
      let entry = (Switch.lookup_flow st tupple) in 
      match entry with 
      | Switch.NOT_FOUND -> begin
@@ -595,7 +588,7 @@ let process_frame_inner st p intf frame =
       pp "control channel error: %s\nbt: %s\n%!" 
         (Printexc.to_string exn) (Printexc.get_backtrace ());
       return ()
-     | Packet_type_unknw -> return ()
+  end
 
 let process_frame p st intf_name frame =
   try_lwt 

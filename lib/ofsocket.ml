@@ -30,7 +30,7 @@ let resolve t = Lwt.on_success t (fun _ -> ())
 module Socket = struct  
 type t = {
   sock: Channel.t;
-  data_cache: Cstruct.buf list ref; 
+  data_cache: Cstruct.t list ref; 
 }
 
 let create_socket sock = 
@@ -42,9 +42,9 @@ let write_buffer t bits =
         let _ = Channel.write_buffer t.sock bits in 
         Channel.flush t.sock
     | _ -> 
-        let buf = Cstruct.sub_buffer bits 0 1400 in 
+        let buf = Cstruct.sub bits 0 1400 in 
         let _ = Channel.write_buffer t.sock buf in 
-        let buf = Cstruct.sub_buffer bits 1400 ((Cstruct.len bits) - 1400) in 
+        let buf = Cstruct.sub bits 1400 ((Cstruct.len bits) - 1400) in 
         let _ = Channel.write_buffer t.sock buf in
         lwt _ = Channel.flush t.sock in 
           return ()
@@ -56,7 +56,7 @@ let rec read_data t len =
     match (len, !(t.data_cache)) with
     | (0, _) -> 
 (*        pp "| (0, _) ->\n%!";  *)
-      return (Cstruct.sub (OS.Io_page.get ()) 0 0 )
+      return (Cstruct.create 0)
     | (_, []) ->
 (*        pp " | (_, []) ->\n%!";  *)
       lwt data = Channel.read_some t.sock in
@@ -66,21 +66,21 @@ let rec read_data t len =
         when ((List.fold_right (fun a b ->b+(Cstruct.len a)) tail (Cstruct.len head))>=len) -> (
 (*           pp "| (_, head::tail) when ((List.fold_right (f a b
  *           ->b+(Cstruct.len b)) tail (Cstruct.len head)) >= len) ->\n%!"; *)
-          let ret = OS.Io_page.get () in 
+          let ret = Cstruct.create len in 
           let ret_len = ref 0 in 
           let rec read_data_inner = function 
             | head::tail when ((!ret_len + (Cstruct.len head)) < len) ->
-                let _ = Cstruct.blit_buffer head 0 ret !ret_len (Cstruct.len head) in
+                let _ = Cstruct.blit head 0 ret !ret_len (Cstruct.len head) in
                   ret_len := !ret_len + (Cstruct.len head);
                   read_data_inner tail
             | head::tail when ((!ret_len + (Cstruct.len head)) = len) -> 
-                let _ = Cstruct.blit_buffer head 0 ret !ret_len (Cstruct.len head) in
+                let _ = Cstruct.blit head 0 ret !ret_len (Cstruct.len head) in
                   ret_len := !ret_len + (Cstruct.len head);
                   t.data_cache := tail;
                   return ()
             | head::tail when ((!ret_len + (Cstruct.len head)) > len) -> 
                 let len_rest = len - !ret_len in 
-                let _ = Cstruct.blit_buffer head 0 ret !ret_len len_rest in
+                let _ = Cstruct.blit head 0 ret !ret_len len_rest in
                 let head = Cstruct.shift head len_rest in 
                   ret_len := !ret_len + len_rest;
                   t.data_cache := [head] @ tail; 
@@ -91,7 +91,7 @@ let rec read_data t len =
                 raise ReadError
           in 
           lwt _ = read_data_inner !(t.data_cache) in
-          let ret = Cstruct.sub_buffer ret 0 len in  
+          let ret = Cstruct.sub ret 0 len in  
             return (ret)
         )
     | (_, head::tail) 
@@ -104,13 +104,13 @@ let rec read_data t len =
     | (_, _) ->
 (*        pp "| (_, _) ->\n%!";  *)
       Printf.printf "read_data and not match found\n%!";
-      return (Cstruct.sub (OS.Io_page.get ()) 0 0 )
+      return (Cstruct.create 0 )
 end
 
 module Unix_socket = struct  
   type t = {
     sock: Lwt_unix.file_descr;
-    data_cache: Cstruct.buf list ref; 
+    data_cache: Cstruct.t list ref; 
   }
 
   let create_socket sock = 
@@ -120,7 +120,7 @@ module Unix_socket = struct
     let rec write_buffer_inner t bits = function
     | len when len >= (Cstruct.len bits) -> return ()
     | len -> 
-        lwt l = Lwt_bytes.write t.sock bits len ((Cstruct.len bits) - len) in
+        lwt l = Lwt_bytes.write t.sock bits.Cstruct.buffer (bits.Cstruct.off + len) ((Cstruct.len bits) - len) in
         let _ = 
           if (l = 0) then 
             raise Net.Nettypes.Closed
@@ -141,29 +141,29 @@ module Unix_socket = struct
   let rec read_data t len = 
     try_lwt 
       match (len, !(t.data_cache)) with
-      | (0, _) -> return (Lwt_bytes.create 0 )
+      | (0, _) -> return (Cstruct.create 0 )
       | (_, []) ->
-          let p = OS.Io_page.get () in 
-          lwt l = Lwt_bytes.read t.sock p 0 (Cstruct.len p) in
+          let p = Cstruct.of_bigarray (OS.Io_page.get ()) in 
+          lwt l = Lwt_bytes.read t.sock p.Cstruct.buffer 0 (Cstruct.len p) in
           let _ = if (l = 0) then raise Net.Nettypes.Closed in
           let _ = t.data_cache := [(Cstruct.sub p 0 l)] in 
             read_data t len
       | (_, head::tail) when (buf_size !(t.data_cache)) >= len -> begin
-          let ret = OS.Io_page.get () in 
+          let ret = Cstruct.of_bigarray (OS.Io_page.get ()) in 
           let ret_len = ref 0 in 
           let rec read_data_inner = function 
             | head::tail when ((!ret_len + (Cstruct.len head)) < len) ->
-                let _ = Cstruct.blit_buffer head 0 ret !ret_len (Cstruct.len head) in
+                let _ = Cstruct.blit head 0 ret !ret_len (Cstruct.len head) in
                     ret_len := !ret_len + (Cstruct.len head);
                     read_data_inner tail
             | head::tail when ((!ret_len + (Cstruct.len head)) = len) -> 
-                  let _ = Cstruct.blit_buffer head 0 ret !ret_len (Cstruct.len head) in
+                  let _ = Cstruct.blit head 0 ret !ret_len (Cstruct.len head) in
                     ret_len := !ret_len + (Cstruct.len head);
                     t.data_cache := tail;
                     return ()
             | head::tail when ((!ret_len + (Cstruct.len head)) > len) -> 
                   let len_rest = len - !ret_len in 
-                  let _ = Cstruct.blit_buffer head 0 ret !ret_len len_rest in
+                  let _ = Cstruct.blit head 0 ret !ret_len len_rest in
                   let head = Cstruct.shift head len_rest in 
                     ret_len := !ret_len + len_rest;
                     t.data_cache := [head] @ tail; 
@@ -174,18 +174,18 @@ module Unix_socket = struct
                   raise ReadError
             in 
             lwt _ = read_data_inner !(t.data_cache) in
-            let ret = Cstruct.sub_buffer ret 0 len in  
+            let ret = Cstruct.sub ret 0 len in  
               return (ret)
           end
       | (_, head::tail) when (buf_size !(t.data_cache)) < len -> 
-          let p = OS.Io_page.get () in 
-          lwt l = Lwt_bytes.read t.sock p 0 (Cstruct.len p) in 
+          let p = Cstruct.of_bigarray (OS.Io_page.get ()) in 
+          lwt l = Lwt_bytes.read t.sock p.Cstruct.buffer 0 (Cstruct.len p) in 
           let _ = if (l = 0) then raise Net.Nettypes.Closed in
           let _ = t.data_cache := !(t.data_cache) @ [(Cstruct.sub p 0 l)] in 
             read_data t len
       | (_, _) ->
           let _ = Printf.printf "read_data and not match found\n%!" in
-            return (Lwt_bytes.create 0 )
+            return (Cstruct.create 0 )
     with exn -> 
       let _ = printf "[socket] read error: %s\n%!" (Printexc.to_string exn) in 
         raise Net.Nettypes.Closed

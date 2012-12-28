@@ -40,7 +40,7 @@ module Event = struct
   type e = 
     | Datapath_join of OP.datapath_id * OP.Port.phy list 
     | Datapath_leave of OP.datapath_id
-    | Packet_in of OP.Port.t * int32 * Cstruct.buf * OP.datapath_id
+    | Packet_in of OP.Port.t * int32 * Cstruct.t * OP.datapath_id
     | Flow_removed of
         OP.Match.t * OP.Flow_removed.reason * int32 * int32 * int64 * int64
       * OP.datapath_id 

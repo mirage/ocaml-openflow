@@ -22,8 +22,8 @@ let sp = Printf.sprintf
 let pp = Printf.printf
 let ep = Printf.eprintf
   
-exception Unparsable of string * Cstruct.buf 
-exception Unparsed of string * Cstruct.buf 
+exception Unparsable of string * Cstruct.t 
+exception Unparsed of string * Cstruct.t 
 exception Unsupported of string 
 
 let resolve t = Lwt.on_success t (fun _ -> ())
@@ -604,7 +604,7 @@ module Port = struct
         rx_over_err=(get_ofp_port_stats_rx_over_err bits); 
         rx_crc_err=(get_ofp_port_stats_rx_crc_err bits); 
         collisions=(get_ofp_port_stats_collisions bits);}] in 
-      let _ = Cstruct.shift_left bits sizeof_ofp_port_stats in
+      let _ = Cstruct.shift bits sizeof_ofp_port_stats in
         record @ (parse_port_stats_reply (bits) )
       
   let rec string_of_port_stats_reply ports = 
@@ -1585,7 +1585,7 @@ module Packet_out = struct
     buffer_id: uint32;
     in_port: Port.t;
     actions: Flow.action list;
-    data : Cstruct.buf;
+    data : Cstruct.t;
   }
 
   cstruct ofp_packet_out {
@@ -1625,7 +1625,7 @@ module Packet_out = struct
     let _ = set_ofp_packet_out_actions_len bits (Flow.actions_len m.actions) in
     let bits = Cstruct.shift bits sizeof_ofp_packet_out in
     let (act_len, bits) = marshal_and_shift (Flow.marshal_actions m.actions) bits in
-    let _ = Cstruct.blit_buffer m.data 0 bits 0 (Cstruct.len m.data) in
+    let _ = Cstruct.blit m.data 0 bits 0 (Cstruct.len m.data) in
       size
 
 end
@@ -1647,7 +1647,7 @@ module Packet_in = struct
     buffer_id: uint32;
     in_port: Port.t;
     reason: reason;
-    data: Cstruct.buf;
+    data: Cstruct.t;
   }
 
  cstruct ofp_packet_in {
@@ -1697,7 +1697,7 @@ module Packet_in = struct
       let _ = set_ofp_packet_in_total_len bits data_len in
       let _ = set_ofp_packet_in_in_port bits (Port.int_of_port t.in_port) in 
       let _ = set_ofp_packet_in_reason bits  (int_of_reason t.reason) in
-      let _ = Cstruct.blit_buffer t.data 0 bits sizeof_ofp_packet_in 
+      let _ = Cstruct.blit t.data 0 bits sizeof_ofp_packet_in 
                 data_len in 
         ofp_len + sizeof_ofp_packet_in + data_len
 end
@@ -2222,7 +2222,7 @@ module Stats = struct
     | l -> 
       let table_id = table_id_of_int (get_ofp_table_stats_table_id bits) in 
       let name = get_ofp_table_stats_name bits in 
-      let name = Cstruct.copy_buffer name 0 (Cstruct.len name) in 
+      let name = Cstruct.copy name 0 (Cstruct.len name) in 
       let wildcards = Wildcards.parse_wildcards (get_ofp_table_stats_wildcards
       bits) in
       let max_entries = get_ofp_table_stats_max_entries bits in 
@@ -2290,12 +2290,12 @@ module Stats = struct
 
     match typ with
     | DESC -> 
-      let imfr_desc = Cstruct.copy_buffer (get_ofp_desc_stats_mfr_desc bits) 0 256 in 
-      let hw_desc= Cstruct.copy_buffer (get_ofp_desc_stats_hw_desc bits) 0 256 in 
-      let sw_desc = Cstruct.copy_buffer (get_ofp_desc_stats_sw_desc bits) 0 256 in
-      let serial_num = Cstruct.copy_buffer (get_ofp_desc_stats_serial_num bits)
+      let imfr_desc = Cstruct.copy (get_ofp_desc_stats_mfr_desc bits) 0 256 in 
+      let hw_desc= Cstruct.copy (get_ofp_desc_stats_hw_desc bits) 0 256 in 
+      let sw_desc = Cstruct.copy (get_ofp_desc_stats_sw_desc bits) 0 256 in
+      let serial_num = Cstruct.copy (get_ofp_desc_stats_serial_num bits)
                           0 32 in
-      let dp_desc = Cstruct.copy_buffer (get_ofp_desc_stats_dp_desc bits) 0 256
+      let dp_desc = Cstruct.copy (get_ofp_desc_stats_dp_desc bits) 0 256
       in 
         Desc_resp(resp, {imfr_desc; hw_desc; sw_desc; serial_num; dp_desc;})
 
@@ -2559,7 +2559,7 @@ let marshal_error errornum data xid bits =
     let _ = set_ofp_error_msg_code bits 
               (Int32.to_int (Int32.logand errornum 0xffff0000l)) in
     let bits = Cstruct.shift bits sizeof_ofp_error_msg in 
-    let _ = Cstruct.blit_buffer data 0 bits 0 (Cstruct.len data) in 
+    let _ = Cstruct.blit data 0 bits 0 (Cstruct.len data) in 
       (Header.get_len + sizeof_ofp_error_msg + req_len)
 
 let build_features_req xid bits = 
@@ -2574,10 +2574,10 @@ let build_echo_resp h bits =
 
 type t =
   | Hello of Header.h
-  | Error of Header.h  * error_code * Cstruct.buf
+  | Error of Header.h  * error_code * Cstruct.t
   | Echo_req of Header.h 
   | Echo_resp of Header.h 
-  | Vendor of Header.h  * vendor * Cstruct.buf
+  | Vendor of Header.h  * vendor * Cstruct.t
 
   | Features_req of Header.h
   | Features_resp of Header.h  * Switch.features
@@ -2589,7 +2589,7 @@ type t =
   | Flow_removed of Header.h  * Flow_removed.t
   | Port_status of Header.h  * Port.status
 
-  | Packet_out of Header.h  * Packet_out.t (* Cstruct.buf *)
+  | Packet_out of Header.h  * Packet_out.t (* Cstruct.t *)
   | Flow_mod of Header.h  * Flow_mod.t
   | Port_mod of Header.h  * Port_mod.t
 
@@ -2684,9 +2684,9 @@ let marshal msg =
         | _ -> failwith "Unsupported message" 
     in
 (*
-  | Vendor of Header.h  * vendor * Cstruct.buf
+  | Vendor of Header.h  * vendor * Cstruct.t
   | Port_mod of Header.h  * Port_mod.t
   | Queue_get_config_req of Header.h * Port.t
   | Queue_get_config_resp of Header.h * Port.t * Queue.t array
  *)
-    marshal_and_sub marshal (OS.Io_page.get ())
+    marshal_and_sub marshal (Cstruct.of_bigarray (OS.Io_page.get ()))

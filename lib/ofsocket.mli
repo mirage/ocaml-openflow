@@ -30,5 +30,5 @@ val init_local_conn_state: Ofpacket.t Lwt_stream.t ->
   (Ofpacket.t option -> unit) -> conn_state
 val read_packet : conn_state -> Ofpacket.t Lwt.t
 val send_packet : conn_state -> Ofpacket.t -> unit Lwt.t
-val send_data_raw : conn_state -> Cstruct.buf -> unit Lwt.t
+val send_data_raw : conn_state -> Cstruct.t -> unit Lwt.t
 val close : conn_state -> unit 
