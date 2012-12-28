@@ -85,6 +85,7 @@ module Port :
     val port_of_int : int16 -> t
     val int_of_port : t -> int16
     val string_of_port : t -> string
+    val port_of_string : string -> t option 
     type config = {
       port_down : bool;
       no_stp : bool;
@@ -209,12 +210,12 @@ module Wildcards :
       mutable dl_vlan_pcp : bool;
       mutable nw_tos : bool;
     }
-    val in_port_match : t
-    val full_wildcard : t
-    val exact_match : t
-    val l2_match : t
-    val l3_match : t
-    val arp_match : t
+    val in_port_match : unit -> t
+    val full_wildcard : unit ->  t
+    val exact_match : unit ->  t
+    val l2_match : unit ->  t
+    val l3_match : unit ->  t
+    val arp_match : unit ->  t
     val wildcard_to_string : t -> string
   end
 module Match :
@@ -337,16 +338,16 @@ module Flow_mod :
     val string_of_command : command -> string
     type flags = { send_flow_rem : bool; emerg : bool; overlap : bool; }
     type t = {
-      of_match : Match.t;
+      mutable of_match : Match.t;
       cookie : uint64;
       command : command;
-      idle_timeout : uint16;
-      hard_timeout : uint16;
-      priority : uint16;
+      mutable idle_timeout : uint16;
+      mutable hard_timeout : uint16;
+      mutable priority : uint16;
       buffer_id : int32;
       out_port : Port.t;
       flags : flags;
-      actions : Flow.action list; (* array; *)
+      mutable actions : Flow.action list; (* array; *)
     }
     val flow_mod_to_string: t -> string
     val create :

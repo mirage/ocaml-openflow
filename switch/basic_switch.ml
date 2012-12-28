@@ -41,6 +41,7 @@ let print_time () =
 
 let switch_run () = 
   let sw = create_switch () in
+  let use_mac = ref true in 
   try_lwt 
     Manager.create ~devs:1 (* ~attached:(["en0"]) *)
     (fun mgr interface id ->
@@ -53,7 +54,10 @@ let switch_run () =
              lwt _ = lwt_connect sw mgr (dst_ip, 6633) in 
              let _ = printf "connect returned...\n%!" in 
               return ()
-      | _ ->  add_port mgr ~use_mac:true sw id
+      | _ ->  
+          lwt _ = add_port mgr ~use_mac:(!use_mac) sw id in 
+          let _ = use_mac := false in 
+            return ()
     )
   with e ->
     Printf.eprintf "Error: %s" (Printexc.to_string e); 

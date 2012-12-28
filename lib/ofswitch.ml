@@ -125,7 +125,7 @@ module Table = struct
     { tid = 0_L; entries = (Hashtbl.create 10000); cache = (Hashtbl.create 10000);
     stats = OP.Stats.(
       {table_id=(OP.Stats.table_id_of_int 1); name="main_tbl"; 
-      wildcards=OP.Wildcards.exact_match; max_entries=1024l; active_count=0l; 
+      wildcards=(OP.Wildcards.exact_match ()); max_entries=1024l; active_count=0l; 
       lookup_count=0L; matched_count=0L});}
 
   (* TODO fix flow_mod flag support. overlap is not considered *)
@@ -331,7 +331,64 @@ module Switch = struct
     port.counter.OP.Port.rx_bytes <- (Int64.add 
       port.counter.OP.Port.rx_bytes pkt_len)
 
-  let forward_frame st in_port frame pkt_size = function
+  cstruct dl_header {
+    uint8_t   dl_dst[6];
+    uint8_t   dl_src[6]; 
+    uint16_t  dl_type 
+  } as big_endian
+
+  cstruct arphdr {
+    uint16_t ar_hrd;         
+    uint16_t ar_pro;         
+    uint8_t ar_hln;              
+    uint8_t ar_pln;              
+    uint16_t ar_op;          
+    uint8_t ar_sha[6];  
+    uint32_t nw_src;
+    uint8_t ar_tha[6];  
+    uint32_t nw_dst 
+  } as big_endian
+
+  cstruct nw_header {
+    uint8_t        hlen_version;
+    uint8_t        nw_tos;
+    uint16_t       total_len;
+    uint8_t        pad[5];
+    uint8_t        nw_proto; 
+    uint16_t       csum;
+    uint32_t       nw_src; 
+    uint32_t       nw_dst
+  } as big_endian 
+
+  cstruct tp_header {
+    uint16_t tp_src;
+    uint16_t tp_dst
+  } as big_endian 
+
+  cstruct icmphdr {
+    uint8_t typ;
+    uint8_t code;
+    uint16_t checksum
+  } as big_endian
+
+
+  let forward_frame st in_port frame pkt_size checksum port = 
+    let _ = 
+      if ((checksum) && ((get_dl_header_dl_type frame) = 0x800)) then
+        let ip_data = Cstruct.shift frame sizeof_dl_header in
+        let _ = set_nw_header_csum ip_data 0 in
+        let csm = Net.Checksum.ones_complement ip_data sizeof_nw_header in
+        let _ = set_nw_header_csum ip_data csm in
+        let _ = 
+          match (get_nw_header_nw_proto ip_data) with
+          | 6 (* TCP *) -> ()
+          | 17 (* UDP *) -> ()
+              ()
+          | _ -> ()
+        in
+          ()
+    in 
+    match port with 
     | OP.Port.Port(port) -> 
       if Hashtbl.mem st.int_to_port port then(
 (*        let _ = printf "sending to port %d\n%!" port in *)
@@ -376,114 +433,75 @@ module Switch = struct
          *           stack?  *)
         | _ -> return (Printf.printf "Not implemented output port\n")
 
-  cstruct dl_header {
-    uint8_t   dl_dst[6];
-    uint8_t   dl_src[6]; 
-    uint16_t  dl_type 
-  } as big_endian
-
-  cstruct arphdr {
-    uint16_t ar_hrd;         
-    uint16_t ar_pro;         
-    uint8_t ar_hln;              
-    uint8_t ar_pln;              
-    uint16_t ar_op;          
-    uint8_t ar_sha[6];  
-    uint32_t nw_src;
-    uint8_t ar_tha[6];  
-    uint32_t nw_dst 
-  } as big_endian
-
-  cstruct nw_header {
-    uint8_t        hlen_version;
-    uint8_t        nw_tos;
-    uint16_t       total_len;
-    uint8_t        pad[5];
-    uint8_t        nw_proto; 
-    uint16_t       csum;
-    uint32_t       nw_src; 
-    uint32_t       nw_dst
-  } as big_endian 
-
-  cstruct tp_header {
-    uint16_t tp_src;
-    uint16_t tp_dst
-  } as big_endian 
-
-  cstruct icmphdr {
-    uint8_t typ;
-    uint8_t code;
-    uint16_t checksum
-  } as big_endian
-
-  (* TODO: Minor util function which I put it here as I have the
-   * header laready defined. Maybe need to make a new module
-   * and include this utils. *)
-  let size_of_raw_packet bits =
-    let dl_type = get_dl_header_dl_type bits in
-    let bits = Cstruct.shift bits sizeof_dl_header in 
-    match (dl_type) with
-    | 0x0800 ->
-      Some( sizeof_dl_header + (get_nw_header_total_len bits))
-    | 0x0806 ->
-      Some(sizeof_dl_header + sizeof_arphdr)
-    | _ ->
-      let _ = ep "dropping packet of ethtype %x\n%!" dl_type in
-(*      let _ = Cstruct.hexdump bits in *)
-        None
-
   (* Assumwe that action are valid. I will not get a flow that sets an ip
    * address unless it defines that the ethType is ip. Need to enforce
    * these rule in the parsing process of the flow_mod packets *)
   let apply_of_actions st in_port bits actions =
-    let apply_of_actions_inner st in_port bits = function
+    let apply_of_actions_inner st in_port bits checksum action =
+    try_lwt 
+      match action with
       | OP.Flow.Output (port, pkt_size) ->
         (* Make a packet copy in case the buffer is modified and multiple
          * outputs are defined? *)
-        forward_frame st in_port bits pkt_size port
+        lwt _ = forward_frame st in_port bits pkt_size checksum port in 
+          return false
       | OP.Flow.Set_dl_src(eaddr) ->
-        return (set_dl_header_dl_src eaddr 6 bits)
+          let _ = set_dl_header_dl_src eaddr 0 bits in 
+            return checksum
       | OP.Flow.Set_dl_dst(eaddr) ->
-        return (set_dl_header_dl_dst eaddr 6 bits)
+          let _ = set_dl_header_dl_dst eaddr 0 bits in 
+            return checksum
         (* TODO: Add for this actions to check when inserted if 
           * the flow is an ip flow *)
       | OP.Flow.Set_nw_tos(tos) -> 
         let ip_data = Cstruct.shift bits sizeof_dl_header in
-          return (set_nw_header_nw_tos ip_data (int_of_char tos))
+        let _ = set_nw_header_nw_tos ip_data (int_of_char tos) in
+          return true
       (* TODO: wHAT ABOUT ARP?
        * *)
       | OP.Flow.Set_nw_src(ip) -> 
         let ip_data = Cstruct.shift bits sizeof_dl_header in
-          return (set_nw_header_nw_src ip_data ip)
+        let _ = set_nw_header_nw_src ip_data ip in 
+          return true
       | OP.Flow.Set_nw_dst(ip) -> 
         let ip_data = Cstruct.shift bits sizeof_dl_header in
-          return (set_nw_header_nw_dst ip_data ip)
+        let _ = set_nw_header_nw_dst ip_data ip in 
+          return true
       | OP.Flow.Set_tp_src(port) ->
         let ip_data = Cstruct.shift bits sizeof_dl_header in
         let len = (get_nw_header_hlen_version bits) land 0xf in 
         let tp_data = Cstruct.shift ip_data (len*4) in 
-          return (set_tp_header_tp_src tp_data port)
+        let _ = set_tp_header_tp_src tp_data port in 
+          return true
       | OP.Flow.Set_tp_dst(port) ->
         let ip_data = Cstruct.shift bits sizeof_dl_header in
         let len = (get_nw_header_hlen_version bits) land 0xf in 
         let tp_data = Cstruct.shift ip_data (len*4) in 
-          return (set_tp_header_tp_dst tp_data port )
+        let _ = set_tp_header_tp_dst tp_data port in 
+          return true
       | OP.Flow.Enqueue(_, _)
       | OP.Flow.Set_vlan_pcp _
       | OP.Flow.Set_vlan_vid _
       | OP.Flow.VENDOR_ACT 
       | OP.Flow.STRIP_VLAN ->
         (* VLAN manupulation actions *)
-        return (pr "Unsupported action STRIP_VLAN\n")
+          let _ = pr "Unsupported action STRIP_VLAN\n" in 
+            return checksum
+    with exn -> 
+      let _ = eprintf "apply of action failed (packet size %d) %s %s\n%!" 
+      (Cstruct.len bits)
+       (OP.Flow.string_of_action action) (Printexc.to_string exn ) in
+        return checksum
     in
-    let rec apply_of_actions_rec st in_port actions = function
-      | [] -> return ()
+    let rec apply_of_actions_rec st in_port bits checksum = function
+      | [] -> return false
       | head :: actions -> 
-        let _ = apply_of_actions_inner st in_port bits head in
-          apply_of_actions_rec st in_port bits actions 
+        lwt checksum = apply_of_actions_inner st in_port bits checksum head in
+          apply_of_actions_rec st in_port bits checksum actions 
     in 
-      apply_of_actions_rec st in_port bits actions
-
+    lwt _ = apply_of_actions_rec st in_port bits false actions in
+      return ()
+      
    let lookup_flow st of_match =
      (* Check first the match table cache
       * NOTE an exact match flow will be found on this step and thus 
@@ -916,11 +934,11 @@ let del_port mgr sw name =
   let _ = Hashtbl.remove sw.Switch.int_to_port port.Switch.port_id in  
   let _ = Hashtbl.remove sw.Switch.dev_to_port port.Switch.ethif in 
   let h,p = OP.Port.create_port_status OP.Port.DEL port.Switch.phy in 
-  let of_match = OP.Match.create_flow_match OP.Wildcards.full_wildcard () in 
+  let of_match = OP.Match.create_flow_match (OP.Wildcards.full_wildcard ()) () in 
   lwt _ = Table.del_flow sw.Switch.table of_match 
             (OP.Port.port_of_int port.Switch.port_id) 
             sw.Switch.controller in 
-  let of_match = OP.Match.create_flow_match OP.Wildcards.in_port_match
+  let of_match = OP.Match.create_flow_match (OP.Wildcards.in_port_match ())
                   ~in_port:(port.Switch.port_id) () in 
   lwt _ = Table.del_flow sw.Switch.table of_match 
             OP.Port.No_port sw.Switch.controller in 
@@ -961,7 +979,10 @@ let add_port_local mgr sw ethif =
    let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw port) in
     return ()
 
-
+let add_flow st fm = Table.add_flow st st.Switch.table fm
+let del_flow st m = 
+  Table.del_flow st.Switch.table m OP.Port.No_port st.Switch.controller
+ 
 let create_switch () = 
   let (packet_queue, push_packet) = Lwt_stream.create () in
   Switch.(
@@ -973,23 +994,27 @@ let create_switch () =
 
 let listen st mgr loc =
   Channel.listen mgr (`TCPv4 (loc, (control_channel st ))) <&>
-    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 6634)
+    (Ofswitch_config.listen_t mgr 
+    (del_port mgr st) (get_flow_stats st) (add_flow st) (del_flow st) 6634)
 
 let connect st mgr loc  =
   Channel.connect mgr (`TCPv4 (None, loc, (control_channel st loc))) <&> 
-    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 6634)
+    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 
+     (add_flow st) (del_flow st) 6634)
 
 let local_connect st mgr input output   =
   let conn = Ofsocket.init_local_conn_state input output in 
   let _ = st.Switch.controller <- (Some conn) in 
   let t, _ = Lwt.task () in 
      (control_channel_run st conn t) <&> 
-    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 6634)
+    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 
+     (add_flow st) (del_flow st) 6634)
 
 let lwt_connect st ?(standalone=true) mgr loc  =
   let of_ctrl = Ofswitch_standalone.init_controller () in 
 
-  let _ = Lwt.ignore_result (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 6634) in 
+  let _ = Lwt.ignore_result (Ofswitch_config.listen_t mgr (del_port mgr st) 
+            (get_flow_stats st)  (add_flow st) (del_flow st) 6634) in 
 (*  let _ = Lwt_unix.setsockopt fd Unix.SO_REUSEADDR true in 
   let _ = Lwt_unix.bind fd (Unix.ADDR_INET(Unix.inet_addr_any, 6633)) in 
   let _ = Lwt_unix.listen fd 1 in *)

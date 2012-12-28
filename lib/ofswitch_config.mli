@@ -17,5 +17,9 @@
 type t 
 
 val connect_client: unit -> t Lwt.t
-val listen_t: Net.Manager.t -> (string -> unit Lwt.t) -> 
-  (Ofpacket.Match.t -> Ofpacket.Flow.stats list) -> int -> unit Lwt.t
+val listen_t: Net.Manager.t -> 
+  (string -> unit Lwt.t) -> 
+  (Ofpacket.Match.t -> Ofpacket.Flow.stats list) -> 
+  (Ofpacket.Flow_mod.t -> unit Lwt.t) ->
+  (Ofpacket.Match.t -> unit Lwt.t) -> 
+  int -> unit Lwt.t

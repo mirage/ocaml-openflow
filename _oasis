@@ -40,7 +40,7 @@ Document openflow
   XOCamlbuildPath:      lib 
   XOCamlbuildModules:   Ofpacket, Ofcontroller, Ofswitch, Ofsocket, Ofswitch_config
 
-Executable ofswitch_ctrl
+Executable "ovs-vsctl"
   Path:                 lib
   MainIs:               ofswitch_ctrl.ml
   Build$:               flag(lwt)

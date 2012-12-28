@@ -322,7 +322,10 @@ module Port = struct
     | Max | In_port | Table | Normal | Flood | All 
     | Controller | Local | No_port
     | Port of int16
-  
+ 
+  let is_num value = 
+    try let _ = int_of_string value in true with _ -> false
+
   let port_of_int = function
     | 0xff00 -> Max
     | 0xfff8 -> In_port
@@ -356,7 +359,19 @@ module Port = struct
     | Local      -> sp "LOCAL"
     | No_port    -> sp "NO_PORT"
     | Port p     -> sp "PORT(%d)" p
-  
+  and port_of_string = function
+    | "MAX"                 -> Some(Max)
+    | "IN_PORT"             -> Some(In_port)
+    | "TABLE"               -> Some(Table)
+    | "NORMAL"              -> Some(Normal)
+    | "FLOOD"               -> Some(Flood)
+    | "ALL"                 -> Some(All)
+    | "CONTROLLER"          -> Some(Controller)
+    | "LOCAL"               -> Some(Local)   
+    | "NO_PORT"             -> Some(No_port) 
+    | num when (is_num num) -> Some(Port(int_of_string num))
+    | _                     -> None
+   
   type config = {
     port_down: bool;
     no_stp: bool;
@@ -853,36 +868,36 @@ module Wildcards = struct
     mutable dl_vlan_pcp: bool;
     mutable nw_tos: bool;
   }
-  let in_port_match = 
+  let in_port_match () = 
     { in_port=false; dl_vlan=true; dl_src=true; 
       dl_dst=true; dl_type=true; nw_proto=true; 
       tp_src=true; tp_dst=true; nw_src=(char_of_int 32); 
       nw_dst=(char_of_int 32); dl_vlan_pcp=true; nw_tos=true;
     }
-   let full_wildcard = 
+   let full_wildcard () = 
     { in_port=true; dl_vlan=true; dl_src=true; 
       dl_dst=true; dl_type=true; nw_proto=true; 
       tp_src=true; tp_dst=true; nw_src=(char_of_int 32); 
       nw_dst=(char_of_int 32); dl_vlan_pcp=true; nw_tos=true;
     }
-  let exact_match = 
+  let exact_match () = 
     { in_port=false; dl_vlan=false; dl_src=false; 
       dl_dst=false; dl_type=false; nw_proto=false; 
       tp_src=false; tp_dst=false; nw_src=(char_of_int 0); 
       nw_dst=(char_of_int 0); dl_vlan_pcp=false; nw_tos=false;
     }
-  let l2_match = 
+  let l2_match () = 
     { in_port=false;dl_vlan=false;dl_src=false;dl_dst=false;
       dl_type=false;nw_proto=true;tp_src=true;tp_dst=true;
       nw_src=(char_of_int 32);nw_dst=(char_of_int 32);dl_vlan_pcp=false; 
       nw_tos=true
     }
-  let l3_match = 
+  let l3_match () = 
     { in_port=false;dl_vlan=false;dl_vlan_pcp=false;dl_src=false;
       dl_dst=false;dl_type=false;nw_proto=false;nw_tos=false;
       nw_src=(char_of_int 0);nw_dst=(char_of_int 0);tp_src=true;tp_dst=true;
     }
-  let arp_match = 
+  let arp_match () = 
     { in_port=false;dl_vlan=false;dl_vlan_pcp=false;dl_src=false;
       dl_dst=false;dl_type=false;nw_proto=false;nw_tos=true;
       nw_src=(char_of_int 32);nw_dst=(char_of_int 32);tp_src=true;tp_dst=true;
@@ -949,7 +964,7 @@ module Match = struct
   }
 
   let wildcard () = 
-    {wildcards=Wildcards.full_wildcard; in_port=Port.No_port; 
+    {wildcards=(Wildcards.full_wildcard ()); in_port=Port.No_port; 
      dl_src="\000\000\000\000\000\000"; 
      dl_dst="\000\000\000\000\000\000";
      dl_vlan=0; dl_vlan_pcp='\000'; dl_type=0; nw_src=0l; nw_dst=0l;
@@ -1086,28 +1101,28 @@ module Match = struct
         match (nw_proto) with
         | 17 
         | 6 ->
-          {wildcards=Wildcards.exact_match; 
+          {wildcards=(Wildcards.exact_match ()); 
           in_port; dl_src; dl_dst; dl_vlan=0xffff;
           dl_vlan_pcp=(char_of_int 0);dl_type; nw_src; 
           nw_dst; nw_tos; 
           nw_proto=(char_of_int nw_proto); tp_src=(get_tp_header_tp_src bits);
           tp_dst=(get_tp_header_tp_dst bits);}
         | 1 ->
-          { wildcards =Wildcards.exact_match; 
+          { wildcards =(Wildcards.exact_match ()); 
           in_port;dl_src; dl_dst; dl_vlan=0xffff;
           dl_vlan_pcp=(char_of_int 0);dl_type; 
           nw_src; nw_dst; nw_tos; 
           nw_proto=(char_of_int nw_proto); tp_src=(get_icmphdr_typ bits); 
           tp_dst=(get_icmphdr_code bits); }        
         | _ ->
-          { wildcards =Wildcards.l3_match; 
+          { wildcards =(Wildcards.l3_match ()); 
           in_port;dl_src; dl_dst; dl_vlan=0xffff;
           dl_vlan_pcp=(char_of_int 0);dl_type; 
           nw_src; nw_dst; nw_tos; 
           nw_proto=(char_of_int nw_proto); tp_src=0; tp_dst=0; }
       end
     | 0x0806 ->
-        {wildcards=Wildcards.arp_match; 
+        {wildcards=(Wildcards.arp_match ()); 
         in_port; dl_src; dl_dst; dl_type;
         dl_vlan=0xffff; dl_vlan_pcp=(char_of_int 0);
         nw_src=(get_arphdr_nw_src bits); 
@@ -1115,7 +1130,7 @@ module Match = struct
         nw_proto=( char_of_int (get_arphdr_ar_op bits)); 
         nw_tos=(char_of_int 0); tp_src=0; tp_dst=0}
     | _ ->  
-      {wildcards=Wildcards.l2_match; 
+      {wildcards=(Wildcards.l2_match ()); 
       in_port; dl_src; dl_dst; dl_type;
       dl_vlan=0xffff; dl_vlan_pcp=(char_of_int 0);
       nw_src=0l; nw_dst=0l; 
@@ -1732,16 +1747,16 @@ module Flow_mod = struct
       {send_flow_rem; overlap; emerg; }
 
   type t = {
-    of_match: Match.t;
+    mutable of_match: Match.t;
     cookie: uint64;
     command: command;
-    idle_timeout: uint16;
-    hard_timeout: uint16;
-    priority: uint16;
+    mutable idle_timeout: uint16;
+    mutable hard_timeout: uint16;
+    mutable priority: uint16;
     buffer_id: int32;
     out_port: Port.t;
     flags: flags;
-    actions: Flow.action list;
+    mutable actions: Flow.action list;
   }
   
   cstruct ofp_flow_mod {
@@ -1759,16 +1774,8 @@ module Flow_mod = struct
       ?(idle_timeout = 60) ?(hard_timeout = 0)
       ?(buffer_id =  -1 ) ?(out_port = Port.No_port) 
       ?(flags ={send_flow_rem=false;emerg=false;overlap=false;}) actions () =
-    
-    let size = ref (sizeof_ofp_flow_mod + Header.sizeof_ofp_header + 
-      Match.sizeof_ofp_match) in 
-    (List.iter (fun a -> size:= !size + (Flow.len_of_action a)) actions);
-    { 
-(*       of_header=(Header.(create FLOW_MOD !size (Int32.of_int 0)));  *)
-      of_match=flow_match; cookie; command=command; 
-      idle_timeout; hard_timeout; priority; 
-      buffer_id=(Int32.of_int buffer_id); out_port;flags; actions; 
-    }
+    {of_match=flow_match; cookie; command=command; idle_timeout; hard_timeout; 
+    priority; buffer_id=(Int32.of_int buffer_id); out_port;flags; actions;}
 
   let marshal_flow_mod ?(xid=(Random.int32 Int32.max_int)) m bits =
     let len = Header.sizeof_ofp_header + Match.sizeof_ofp_match + 

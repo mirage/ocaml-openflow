@@ -26,8 +26,10 @@ let check_cmd_args cmd count =
                 cmd count)
 
 let flow_element = 
-  ["in_port"; "dl_src"; "dl_dst"; "dl_vlan"; "dl_pcp"; "dl_type"; "nw_src";
-   "nw_tos"; "nw_proto"; "tp_src"; "tp_dst"; ]
+  ["in_port"; "dl_src"; "dl_dst"; "dl_vlan"; "dl_pcp"; "dl_type";
+  "nw_src";"nw_dst";
+   "nw_tos"; "nw_proto"; "tp_src"; "tp_dst"; "actions";"priority";
+   "idle_timeout"; "hard_timeout"; ]
 
 let process_flow_description flow = 
   let fields = Re_str.split (Re_str.regexp ",") flow in 
@@ -54,33 +56,43 @@ let send_cmd (input, output) =
      lwt resp = 
        match (Sys.argv.(1)) with
          | "add-port" -> 
-             let _ = check_cmd_args Sys.argv.(1) 1 in 
+             let _ = check_cmd_args Sys.argv.(1) 2 in 
              let cmd = Rpc.({name=Sys.argv.(1); params=[(Rpc.String
-             Sys.argv.(2))];}) in 
+             Sys.argv.(3))];}) in 
              lwt _ = Lwt_io.write_line output (Jsonrpc.string_of_call cmd) in 
              lwt resp = Lwt_io.read_line input in
              let resp = Jsonrpc.response_of_string resp in 
                return (string_of_bool resp.Rpc.success)
          | "del-port" ->
-             let _ = check_cmd_args Sys.argv.(1) 1 in 
+             let _ = check_cmd_args Sys.argv.(1) 2 in 
              let cmd = Rpc.({name=Sys.argv.(1); params=[(Rpc.String
-             Sys.argv.(2))];}) in 
+             Sys.argv.(3))];}) in 
              lwt _ = Lwt_io.write_line output (Jsonrpc.string_of_call cmd) in 
              lwt resp = Lwt_io.read_line input in 
              let resp = Jsonrpc.response_of_string resp in 
                 return (string_of_bool resp.Rpc.success)
          | "dump-flows" -> begin
-             let _ = check_cmd_args Sys.argv.(1) 1 in 
-             let fields = process_flow_description Sys.argv.(2) in  
+             let _ = check_cmd_args Sys.argv.(1) 2 in 
+             let fields = process_flow_description Sys.argv.(3) in  
              let cmd = Rpc.({name=Sys.argv.(1); params=[(Rpc.Dict fields)];}) in
              lwt _ = Lwt_io.write_line output (Jsonrpc.string_of_call cmd) in 
              lwt resp = Lwt_io.read_line input in 
              let resp = Jsonrpc.response_of_string resp in
               match resp.Rpc.contents with
                | Rpc.Enum flows ->
-                   return (List.fold_right 
-                            (fun a r -> sprintf "%s%s\n%!" r (Rpc.string_of_rpc a)) flows "")
+                   return 
+                    (List.fold_right 
+                      (fun a r -> sprintf "%s%s\n%!" r (Rpc.string_of_rpc a)) flows "")
                | _ -> return ""
+         end
+         | "add-flow" -> begin
+             let _ = check_cmd_args Sys.argv.(1) 2 in 
+             let fields = process_flow_description Sys.argv.(3) in  
+             let cmd = Rpc.({name=Sys.argv.(1); params=[(Rpc.Dict fields)];}) in
+             lwt _ = Lwt_io.write_line output (Jsonrpc.string_of_call cmd) in 
+             lwt resp = Lwt_io.read_line input in 
+             let resp = Jsonrpc.response_of_string resp in 
+                return (string_of_bool resp.Rpc.success)
          end
          | _ -> 
              return (sprintf "Fail: unknown cmd: %s\n%!" Sys.argv.(1))
