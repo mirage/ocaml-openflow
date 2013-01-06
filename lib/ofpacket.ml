@@ -1191,7 +1191,8 @@ module Match = struct
               flow_def.dl_vlan_pcp));*)
 
     (((wildcard.Wildcards.in_port)|| ((Port.int_of_port flow.in_port) == (Port.int_of_port flow_def.in_port))) && 
-      ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan)) &&
+(*      ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan))
+    *      &&*)
       ((wildcard.Wildcards.dl_src)  || (flow.dl_src = flow_def.dl_src)) &&
       ((wildcard.Wildcards.dl_dst)  || (flow.dl_dst = flow_def.dl_dst)) &&
       ((wildcard.Wildcards.dl_type) || (flow.dl_type== flow_def.dl_type)) &&
@@ -1605,8 +1606,8 @@ module Packet_out = struct
     let bits = Cstruct.shift bits sizeof_ofp_packet_out in
     let action_bits =  Cstruct.sub bits 0 act_len in
     let (_, actions) = Flow.parse_actions action_bits in
-    let data = Cstruct.shift bits act_len in 
-    { buffer_id; in_port; actions; data; }
+    let data = Cstruct.shift bits act_len in
+      { buffer_id; in_port; actions; data; }
 
   let create ?(xid=0l) ?(buffer_id =(-1l)) ?(actions = [] ) 
       ~data ~in_port () =
