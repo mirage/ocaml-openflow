@@ -65,7 +65,7 @@ Executable basic_switch_lwt
   Build$:               flag(lwt)
   Custom:               true
   CompiledObject:       native
-  Install:              false
+  Install:              true
   BuildDepends:         openflow
 
 (*Executable learning_switch_mirage

@@ -9,7 +9,11 @@ MIRAGE ?= $(shell if ocamlfind query mirage-net >/dev/null 2>&1; then echo --ena
 
 -include Makefile.config
 
-clean: setup.ml setup.data
+setup.data: _oasis
+	oasis setup 
+	ocaml setup.ml -configure $(LWT) --disable-mirage 
+
+clean: setup.data 
 	ocaml setup.ml -clean $(OFLAGS)
 	rm -f setup.data setup.log setup.ml
 
@@ -17,9 +21,11 @@ distclean: setup.ml setup.data
 	ocaml setup.ml -distclean $(OFLAGS)
 	rm -f setup.data setup.log setup.ml
 
-setup: setup.ml setup.data
+setup: setup.data
 
-build: setup.ml setup.data $(wildcard lib/*.ml)
+build: setup.data $(wildcard lib/*.ml)
+	oasis setup 
+	ocaml setup.ml -configure $(LWT) --disable-mirage 
 	ocaml setup.ml -build -j $(J) $(OFLAGS)
 
 doc: setup.data setup.ml
@@ -32,10 +38,4 @@ install:
 test: build
 	ocaml setup.ml -test
 
-##
 
-setup.ml: _oasis
-	oasis setup
-
-setup.data: setup.ml
-	ocaml setup.ml -configure $(LWT) --disable-mirage 
