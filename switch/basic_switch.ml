@@ -54,9 +54,19 @@ let switch_run () =
              lwt _ = lwt_connect sw mgr (dst_ip, 6633) in 
              let _ = printf "connect returned...\n%!" in 
               return ()
-      | _ ->  
-          lwt _ = add_port mgr ~use_mac:(!use_mac) sw id in 
-          let _ = use_mac := false in 
+      | _ -> 
+          let find dev = 
+            try 
+              let _ = Re_str.search_forward (Re_str.regexp "tap") dev 0 in true
+            with Not_found -> false
+          in
+          lwt _ =
+            if (not (find id) ) then 
+              lwt _ = add_port mgr ~use_mac:(!use_mac) sw id in 
+                return (use_mac := false)
+            else
+              add_port mgr ~use_mac:false sw id
+          in 
             return ()
     )
   with e ->

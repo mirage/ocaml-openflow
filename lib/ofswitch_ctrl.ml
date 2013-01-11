@@ -57,8 +57,7 @@ let send_cmd (input, output) =
        match (Sys.argv.(1)) with
          | "add-port" -> 
              let _ = check_cmd_args Sys.argv.(1) 2 in 
-             let cmd = Rpc.({name=Sys.argv.(1); params=[(Rpc.String
-             Sys.argv.(3))];}) in 
+             let cmd = Rpc.({name=Sys.argv.(1); params=[(Rpc.String Sys.argv.(3))];}) in 
              lwt _ = Lwt_io.write_line output (Jsonrpc.string_of_call cmd) in 
              lwt resp = Lwt_io.read_line input in
              let resp = Jsonrpc.response_of_string resp in 
