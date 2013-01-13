@@ -157,7 +157,7 @@ let process_of_packet state conn ofp =
           send_packet conn (OP.Features_req (h) )
      end
       | Echo_req h  -> begin (* Reply to ECHO requests *)
-        cp "ECHO_REQ"; 
+(*         cp "ECHO_REQ";  *)
           let h = OP.Header.(create ~xid:h.xid ECHO_RESP get_len) in
             send_packet conn (OP.Echo_resp h)
      end
@@ -278,7 +278,7 @@ let controller_run st conn =
     while_lwt !continue do
       try_lwt
         lwt pkt = read_packet conn in 
-          process_of_packet st conn pkt 
+          process_of_packet st conn pkt
       with
       | Nettypes.Closed -> begin
         let _ = printf "XXXXX switch disconnected\n%!" in 
@@ -289,11 +289,9 @@ let controller_run st conn =
         let _ = cp (sp "# unparsed! m=%s" m) in 
           return (Cstruct.hexdump bs)
       | Not_found ->  
-        return (Printf.printf "Error: Not found %s\n%!"
-                  (Printexc.get_backtrace ()) ) 
+        return (Printf.printf "Error:Not found\n%!") 
       | exn -> 
-        pp "{OpenFlow-controller} ERROR:%s\n%s\n%!" (Printexc.to_string exn)
-          (Printexc.get_backtrace ()); 
+        pp "{OpenFlow-controller} ERROR:%s\n%!" (Printexc.to_string ()); 
           return (continue := false)
    done
   in
@@ -305,9 +303,7 @@ let controller_run st conn =
         return ()
       else
         return ()
- 
-
-   
+  
 let socket_controller st (remote_addr, remote_port) t =
   let rs = Nettypes.ipv4_addr_to_string remote_addr in
   let _ = pp "OpenFlow Controller+ %s:%d\n%!" rs remote_port in

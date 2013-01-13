@@ -436,12 +436,12 @@ module Switch = struct
         in
           ()
     in 
-    let frame = Net.Frame.of_buffer bits (Cstruct.len bits) in 
     match port with 
     | OP.Port.Port(port) -> 
       if Hashtbl.mem st.int_to_port port then(
         let out_p = (!( Hashtbl.find st.int_to_port port))  in
-          Net.Manager.inject_packet out_p.mgr out_p.ethif frame
+          Net.Manager.inject_packet out_p.mgr out_p.ethif bits
+          (*Net.Ethif.write (Net.Manager.get_netif out_p.mgr out_p.ethif) bits*)
         ) 
       else
         return (Printf.printf "Port %d not registered \n" port)
@@ -452,7 +452,8 @@ module Switch = struct
       (fun port -> 
         if(port.port_id != (OP.Port.int_of_port in_port)) then (
          update_port_tx_stats (Int64.of_int (Cstruct.len bits)) port;
-          Net.Manager.inject_packet port.mgr port.ethif frame
+          Net.Manager.inject_packet port.mgr port.ethif bits 
+(*          Net.Ethif.write (Net.Manager.get_netif port.mgr port.ethif) bits*)
         ) else
           return ()
       ) st.ports
@@ -462,7 +463,8 @@ module Switch = struct
 (*        let _ = printf "sending to port %d\n%!" port in *)
         let out_p = !(Hashtbl.find st.int_to_port port) in
           update_port_tx_stats (Int64.of_int (Cstruct.len bits)) out_p;
-          Net.Manager.inject_packet out_p.mgr out_p.ethif frame
+          Net.Manager.inject_packet out_p.mgr out_p.ethif bits 
+(*          Net.Ethif.write (Net.Manager.get_netif out_p.mgr out_p.ethif) bits*)
       else
         return (Printf.printf "Port %d not registered \n%!" port)
     | OP.Port.Local ->
@@ -470,20 +472,21 @@ module Switch = struct
           if Hashtbl.mem st.int_to_port local_port_id then
             let out_p = !(Hashtbl.find st.int_to_port local_port_id) in
             let _ = update_port_tx_stats (Int64.of_int (Cstruct.len bits)) out_p in
-            let _ = Cstruct.hexdump (Net.Frame.get_whole_buffer frame) in 
-              Net.Manager.inject_packet out_p.mgr out_p.ethif frame
+              Net.Manager.inject_packet out_p.mgr out_p.ethif bits 
+(*              Net.Ethif.write (Net.Manager.get_netif out_p.mgr out_p.ethif)
+ *              bits*)
           else
             return (Printf.printf "Port %d not registered \n%!" local_port_id)
     | OP.Port.Controller -> begin 
       let size = 
-         if (Cstruct.len (Net.Frame.get_whole_buffer frame) > pkt_size) then
+         if (Cstruct.len bits > pkt_size) then
            pkt_size
          else 
-           Cstruct.len (Net.Frame.get_whole_buffer frame)
+           Cstruct.len bits
        in
        let (h, pkt_in) = OP.Packet_in.create_pkt_in ~buffer_id:(-1l) ~in_port 
                       ~reason:OP.Packet_in.ACTION 
-                      ~data:(Cstruct.sub (Net.Frame.get_whole_buffer frame) 0 size) in
+                      ~data:(Cstruct.sub bits 0 size) in
 (*       let _ = printf "[ofswitch] sending packet to controller\n%!" in *)
        match st.controller with
        | None -> return ()
