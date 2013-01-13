@@ -15,26 +15,9 @@
  *)
 
 open Lwt
-open Lwt_unix
 open Printf
 
 module OP = Ofpacket
-
-type t = {
- fd: Lwt_unix.file_descr;
-}
-
-let connect_client  () =
-  try_lwt
-    let sock = socket PF_INET SOCK_STREAM 0 in  
-    let dst = ADDR_INET( (Unix.inet_addr_of_string "127.0.0.1"), 
-                         6634) in 
-    lwt _ = connect sock dst in 
-    let cl = {fd=sock;} in
-      return cl
-  with ex -> 
-    failwith (sprintf "ofswitch_config client failed: %s"
-    (Printexc.to_string ex))
 
 let parse_actions actions =
   let actions = Re_str.split (Re_str.regexp "/") actions in 
@@ -212,9 +195,14 @@ let hashtbl_to_flow_match t =
 
 
 let listen_t mgr del_port get_stats add_flow del_flow port =
-  let listen_inner mgr st (input, output) =
+  let manage (dip,dpt) t =
     try_lwt 
-      lwt req = Lwt_io.read_line input in
+      lwt req = Net.Channel.read_line t in
+      let req = 
+        List.fold_right (
+          fun a r -> 
+            r ^ (Cstruct.to_string a)
+        ) req "" in 
       let req = Jsonrpc.call_of_string req in 
       lwt success = 
         match (req.Rpc.name, req.Rpc.params) with
@@ -279,14 +267,14 @@ let listen_t mgr del_port get_stats add_flow del_flow port =
       in 
       let resp = 
         Jsonrpc.string_of_response (Rpc.success success) in 
-      lwt _ = Lwt_io.write_line output resp in 
-      lwt _ = Lwt_io.close output in 
-      lwt _ = Lwt_io.close input in 
+      let _ = Net.Channel.write_line t resp in
+      lwt _ = Net.Channel.flush t in 
+      lwt _ = Net.Channel.close t in 
         return ()
     with 
     | End_of_file -> return ()
     | exn ->
-      lwt _ = Lwt_log.log  ~exn ~level:Lwt_log.Notice 
+      let _ = OS.Console.log 
                 "[ofswitch_config] server error" in 
 (*      let resp = Jsonrpc.string_of_response 
                   (Rpc.failure (Rpc.Enum [(Rpc.String "false")])) in 
@@ -297,8 +285,6 @@ let listen_t mgr del_port get_stats add_flow del_flow port =
  
  
   in 
-  let addr = Unix.ADDR_INET(Unix.inet_addr_any, 6634) in 
-  let _ = Lwt_io.establish_server addr 
-            (fun a -> Lwt.ignore_result (listen_inner mgr del_port a) ) in 
+  let _ = Net.Channel.listen mgr (`TCPv4 ((None, 6634), manage )) in 
     return ()
 

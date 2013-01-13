@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: c07db1f17ad31bd9de21d6ae41f3283a)
+# DO NOT EDIT (digest: 78cbcfbdbaa70295a1850d67f7c11f8a)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -48,14 +48,6 @@
 "controller/learning_switch.native": pkg_rpclib.json
 "controller/learning_switch.native": pkg_mirage
 "controller/learning_switch.native": pkg_mirage-net
-<controller/*.ml{,i}>: use_openflow
-<controller/*.ml{,i}>: pkg_cstruct
-<controller/*.ml{,i}>: pkg_cstruct.syntax
-<controller/*.ml{,i}>: pkg_re.str
-<controller/*.ml{,i}>: pkg_rpclib
-<controller/*.ml{,i}>: pkg_rpclib.json
-<controller/*.ml{,i}>: pkg_mirage
-<controller/*.ml{,i}>: pkg_mirage-net
 "controller/learning_switch.native": custom
 # Executable basic_switch_lwt
 "switch/basic_switch.native": use_openflow
@@ -75,6 +67,24 @@
 <switch/*.ml{,i}>: pkg_mirage
 <switch/*.ml{,i}>: pkg_mirage-net
 "switch/basic_switch.native": custom
+# Executable learning_switch_mirage.o
+"controller/learning_switch.nobj.o": use_openflow
+"controller/learning_switch.nobj.o": pkg_cstruct
+"controller/learning_switch.nobj.o": pkg_cstruct.syntax
+"controller/learning_switch.nobj.o": pkg_re.str
+"controller/learning_switch.nobj.o": pkg_rpclib
+"controller/learning_switch.nobj.o": pkg_rpclib.json
+"controller/learning_switch.nobj.o": pkg_mirage
+"controller/learning_switch.nobj.o": pkg_mirage-net
+<controller/*.ml{,i}>: use_openflow
+<controller/*.ml{,i}>: pkg_cstruct
+<controller/*.ml{,i}>: pkg_cstruct.syntax
+<controller/*.ml{,i}>: pkg_re.str
+<controller/*.ml{,i}>: pkg_rpclib
+<controller/*.ml{,i}>: pkg_rpclib.json
+<controller/*.ml{,i}>: pkg_mirage
+<controller/*.ml{,i}>: pkg_mirage-net
+"controller/learning_switch.nobj.o": custom
 # OASIS_STOP
 true: annot
 <lib/*>: syntax_camlp4o

@@ -68,22 +68,20 @@ Executable basic_switch_lwt
   Install:              true
   BuildDepends:         openflow
 
-(*Executable learning_switch_mirage
+Executable "learning_switch_mirage.o"
   Path:                 controller
   MainIs:               learning_switch.ml
   Build$:               flag(mirage)
   Custom:               true
-  CompiledObject:       native
-  Target:               xen
+  CompiledObject:       native_object
   Install:              false
   BuildDepends:         cstruct, cstruct.syntax, openflow
 
-Executable basic_switch_mirage
+(*Executable "basic_switch_mirage.o"
   Path:                 switch
   MainIs:               basic_switch.ml
   Build$:               flag(mirage)
   Custom:               true
-  CompiledObject:       native
-  Target:               xen
+  CompiledObject:       native_object
   Install:              false
   BuildDepends:         openflow *)

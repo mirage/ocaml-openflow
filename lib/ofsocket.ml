@@ -27,6 +27,10 @@ let cp = pp "%s\n%!"
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
+let get_new_buffer len = 
+  let buf = OS.Io_page.to_cstruct (OS.Io_page.get ()) in 
+    Cstruct.sub buf 0 len 
+
 module Socket = struct  
 type t = {
   sock: Channel.t;
@@ -56,7 +60,7 @@ let rec read_data t len =
     match (len, !(t.data_cache)) with
     | (0, _) -> 
 (*        pp "| (0, _) ->\n%!";  *)
-      return (Cstruct.create 0)
+      return (get_new_buffer 0)
     | (_, []) ->
 (*        pp " | (_, []) ->\n%!";  *)
       lwt data = Channel.read_some t.sock in
@@ -66,7 +70,7 @@ let rec read_data t len =
         when ((List.fold_right (fun a b ->b+(Cstruct.len a)) tail (Cstruct.len head))>=len) -> (
 (*           pp "| (_, head::tail) when ((List.fold_right (f a b
  *           ->b+(Cstruct.len b)) tail (Cstruct.len head)) >= len) ->\n%!"; *)
-          let ret = Cstruct.create len in 
+          let ret = get_new_buffer len in 
           let ret_len = ref 0 in 
           let rec read_data_inner = function 
             | head::tail when ((!ret_len + (Cstruct.len head)) < len) ->
@@ -104,9 +108,10 @@ let rec read_data t len =
     | (_, _) ->
 (*        pp "| (_, _) ->\n%!";  *)
       Printf.printf "read_data and not match found\n%!";
-      return (Cstruct.create 0 )
+      return (get_new_buffer 0 )
 end
 
+(*
 module Unix_socket = struct  
   type t = {
     sock: Lwt_unix.file_descr;
@@ -191,11 +196,12 @@ module Unix_socket = struct
         raise Net.Nettypes.Closed
 
 end 
+ *)
 
 type conn_type = 
   | Socket of Socket.t
   | Local of OP.t Lwt_stream.t * (OP.t option -> unit) 
-  | Unix of Unix_socket.t
+(*  | Unix of Unix_socket.t *)
 
 type conn_state = {
   mutable dpid : OP.datapath_id;
@@ -206,8 +212,8 @@ let init_socket_conn_state t =
   {dpid=0L;t=(Socket (Socket.create_socket t));}
 let init_local_conn_state input output = 
   {dpid=0L;t=(Local (input, output));}
-let init_unix_conn_state fd = 
-  {dpid=0L;t=(Unix (Unix_socket.create_socket fd));}
+(*let init_unix_conn_state fd = 
+  {dpid=0L;t=(Unix (Unix_socket.create_socket fd));}*)
 
 let read_packet conn =
   match conn.t with
@@ -218,13 +224,13 @@ let read_packet conn =
       lwt dbuf = Socket.read_data t dlen in 
       let ofp  = OP.parse ofh dbuf in
         return ofp
-  | Unix t -> 
+(*  | Unix t -> 
       lwt hbuf = Unix_socket.read_data t OP.Header.sizeof_ofp_header in
       let ofh  = OP.Header.parse_header hbuf in
       let dlen = ofh.OP.Header.len - OP.Header.sizeof_ofp_header in 
       lwt dbuf = Unix_socket.read_data t dlen in 
       let ofp  = OP.parse ofh dbuf in
-        return ofp
+        return ofp *)
   | Local (input, _) ->
     match_lwt (Lwt_stream.get input) with
     | None -> raise Nettypes.Closed 
@@ -233,13 +239,13 @@ let read_packet conn =
 let send_packet conn ofp =
   match conn.t with
   | Socket t -> Socket.write_buffer t (OP.marshal ofp) 
-  | Unix t -> Unix_socket.write_buffer t (OP.marshal ofp)
+(*  | Unix t -> Unix_socket.write_buffer t (OP.marshal ofp) *)
   | Local (_, output) -> return (output (Some ofp ))
 
 let send_data_raw t bits = 
   match t.t with
   | Local _ -> failwith "send_of_data is not supported in Local mode"
-  | Unix t -> Unix_socket.write_buffer t bits 
+(*  | Unix t -> Unix_socket.write_buffer t bits *)
   | Socket t -> Socket.write_buffer t bits 
 
 let close conn = 
@@ -251,12 +257,12 @@ let close conn =
         with exn -> 
           return (printf "[socket] close error: %s\n%!" (Printexc.to_string exn))
           ) 
-  | Unix t -> 
+(*  | Unix t -> 
       resolve (
         try_lwt
            Unix_socket.close t
         with exn -> 
           return (printf "[socket] close error: %s\n%!" (Printexc.to_string exn))
-          ) 
+          ) *)
   | Local (_, output) -> output None 
  

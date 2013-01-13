@@ -28,8 +28,10 @@ val listen : t -> Net.Manager.t -> Net.Nettypes.ipv4_src ->
   unit Lwt.t 
 val connect : t -> Net.Manager.t -> Net.Nettypes.ipv4_dst -> 
   unit Lwt.t
+(*
 val lwt_connect : t -> ?standalone:bool -> Net.Manager.t -> Net.Nettypes.ipv4_dst -> 
   unit Lwt.t
+ *)
 val local_connect : t -> Net.Manager.t -> 
   Ofpacket.t Lwt_stream.t -> (Ofpacket.t option -> unit ) -> 
      unit Lwt.t

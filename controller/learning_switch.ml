@@ -47,7 +47,7 @@ type switch_state = {
 }
 
 let switch_data = 
-  { mac_cache = Hashtbl.create 0;dpid = []; 
+  { mac_cache = Hashtbl.create 1024;dpid = []; 
     of_ctrl = []; req_count=(ref 0);} 
 
 
@@ -62,12 +62,6 @@ let datapath_join_cb controller dpid evt =
 
 let req_count = (ref 0)
 
-let add_entry_in_hashtbl mac_cache ix in_port = 
-  if not (Hashtbl.mem mac_cache ix ) then
-      Hashtbl.add mac_cache ix in_port
-  else  
-      Hashtbl.replace mac_cache ix in_port 
-
 let packet_in_cb controller dpid evt =
   incr switch_data.req_count;
   let (in_port, buffer_id, data, dp) = 
@@ -79,8 +73,8 @@ let packet_in_cb controller dpid evt =
   let m = OP.Match.raw_packet_to_match in_port data in 
 
   (* Store src mac address and incoming port *)
-  let ix = m.OP.Match.dl_src in
-  let _ = Hashtbl.replace switch_data.mac_cache ix in_port in
+(*  let ix = m.OP.Match.dl_src in
+  let _ = Hashtbl.replace switch_data.mac_cache ix in_port in *)
  
   (* check if I know the output port in order to define what type of message
    * we need to send *)
@@ -139,7 +133,8 @@ let run () =
   Net.Manager.create (fun mgr interface id ->
     try_lwt
       let ip = 
-          (ipv4_addr_of_tuple (10l,0l,0l,3l),
+(*          (ipv4_addr_of_tuple (10l,0l,0l,253l), *)
+        ( ipv4_addr_of_tuple (128l, 232l, 32l, 229l),
            ipv4_addr_of_tuple (255l,255l,255l,0l), []) in  
       lwt _ = Manager.configure interface (`IPv4 ip) in
         OC.listen mgr (None, port) init
