@@ -51,7 +51,7 @@ let switch_run () =
              let _ = printf "connecting switch...\n%!" in 
              let _ = add_port_local mgr sw id in 
               let dst_ip = ipv4_addr_of_tuple (0l,0l,0l,0l) in
-             lwt _ = lwt_connect sw mgr (dst_ip, 6633) in 
+             lwt _ = connect sw mgr (dst_ip, 6633) in 
              let _ = printf "connect returned...\n%!" in 
               return ()
       | _ -> 

@@ -47,7 +47,7 @@ type switch_state = {
 }
 
 let switch_data = 
-  { mac_cache = Hashtbl.create 1024;dpid = []; 
+ { mac_cache = Hashtbl.create 2048;dpid = []; 
     of_ctrl = []; req_count=(ref 0);} 
 
 
@@ -73,8 +73,8 @@ let packet_in_cb controller dpid evt =
   let m = OP.Match.raw_packet_to_match in_port data in 
 
   (* Store src mac address and incoming port *)
-(*  let ix = m.OP.Match.dl_src in
-  let _ = Hashtbl.replace switch_data.mac_cache ix in_port in *)
+  let ix = m.OP.Match.dl_src in
+  let _ = Hashtbl.replace switch_data.mac_cache ix in_port in
  
   (* check if I know the output port in order to define what type of message
    * we need to send *)

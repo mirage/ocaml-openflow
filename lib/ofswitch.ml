@@ -451,6 +451,7 @@ module Switch = struct
       if Hashtbl.mem st.int_to_port port then(
         let out_p = (!( Hashtbl.find st.int_to_port port))  in
           Net.Manager.inject_packet out_p.mgr out_p.ethif bits
+         (*Net.Ethif.write (Net.Manager.get_netif out_p.mgr out_p.ethif) bits*)
         ) 
       else
         return (Printf.printf "Port %d not registered \n" port)
@@ -461,7 +462,8 @@ module Switch = struct
       (fun port -> 
         if(port.port_id != (OP.Port.int_of_port in_port)) then (
          update_port_tx_stats (Int64.of_int (Cstruct.len bits)) port;
-          Net.Manager.inject_packet port.mgr port.ethif bits
+         Net.Manager.inject_packet port.mgr port.ethif bits 
+(*          Net.Ethif.write (Net.Manager.get_netif port.mgr port.ethif) bits*)
         ) else
           return ()
       ) st.ports
@@ -471,7 +473,8 @@ module Switch = struct
 (*        let _ = printf "sending to port %d\n%!" port in *)
         let out_p = !(Hashtbl.find st.int_to_port port) in
           update_port_tx_stats (Int64.of_int (Cstruct.len bits)) out_p;
-          Net.Manager.inject_packet out_p.mgr out_p.ethif bits
+         Net.Manager.inject_packet out_p.mgr out_p.ethif bits 
+(*          Net.Ethif.write (Net.Manager.get_netif out_p.mgr out_p.ethif) bits*)
       else
         return (Printf.printf "Port %d not registered \n%!" port)
     | OP.Port.Local ->
@@ -479,7 +482,9 @@ module Switch = struct
           if Hashtbl.mem st.int_to_port local_port_id then
             let out_p = !(Hashtbl.find st.int_to_port local_port_id) in
             let _ = update_port_tx_stats (Int64.of_int (Cstruct.len bits)) out_p in
-              Net.Manager.inject_packet out_p.mgr out_p.ethif bits
+             Net.Manager.inject_packet out_p.mgr out_p.ethif bits 
+(*              Net.Ethif.write (Net.Manager.get_netif out_p.mgr out_p.ethif)
+ *              bits*)
           else
             return (Printf.printf "Port %d not registered \n%!" local_port_id)
     | OP.Port.Controller -> begin 
