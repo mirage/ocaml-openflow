@@ -34,79 +34,45 @@ let get_new_buffer len =
 module Socket = struct  
 type t = {
   sock: Channel.t;
-  mutable data_cache: Cstruct.t list; 
+  data_cache: Cstruct.t ref; 
 }
 
 let create_socket sock = 
-  { sock; data_cache=[];}
+  { sock; data_cache=ref (get_new_buffer 0);}
 
 let write_buffer t bits =
-(*
-  match (Cstruct.len bits) with
-    | l when l <= 1400 -> 
- *)
-        let _ = Channel.write_buffer t.sock bits in 
-        Channel.flush t.sock
-(*
-    | _ -> 
-        let buf = Cstruct.sub bits 0 1400 in 
-        let _ = Channel.write_buffer t.sock buf in 
-        let buf = Cstruct.sub bits 1400 ((Cstruct.len bits) - 1400) in 
-        let _ = Channel.write_buffer t.sock buf in
-        lwt _ = Channel.flush t.sock in 
-          return ()
- *)
-
+  let _ = Channel.write_buffer t.sock bits in  
+    Channel.flush t.sock
+ 
 let close t = Channel.close t.sock
 
-  let cache_size t =
+(*  let cache_size t =
     List.fold_right (
       fun a r -> 
-        r + (Cstruct.len a) ) t.data_cache 0
+        r + (Cstruct.len a) ) t.data_cache 0*)
 
-let rec read_data t len = 
+let read_data t len = 
 (*     Printf.printf "let rec read_data t data_cache %d = \n%!" len;  *)
-    match (len, t.data_cache) with
-    | (0, _) -> 
-(*        pp "| (0, _) ->\n%!";  *)
-      return (get_new_buffer 0)
-   | (_, head::tail) when ((cache_size t) >=len) -> (
-(*           pp "| (_, head::tail) when ((List.fold_right (f a b
- *           ->b+(Cstruct.len b)) tail (Cstruct.len head)) >= len) ->\n%!"; *)
-          let ret = Cstruct.create len in 
-          let rec read_data_inner off = function 
-            | head::tail when ((off + (Cstruct.len head)) < len) ->
-                let sz = Cstruct.len head in 
-                let _ = Cstruct.blit head 0 ret off sz in
-                  read_data_inner (off + sz) tail
-            | head::tail when ((off + (Cstruct.len head)) = len) -> 
-                let sz = Cstruct.len head in 
-                let _ = Cstruct.blit head 0 ret off sz in
-                  t.data_cache <- tail
-            | head::tail when ((off + (Cstruct.len head)) > len) -> 
-                let len_rest = len - off in 
-                let _ = Cstruct.blit head 0 ret off len_rest in
-                let head = Cstruct.shift head len_rest in 
-                  t.data_cache <- head::tail
-            | rest -> 
-                pp "read_data:Invalid state(req_len:%d,read_len:%d,avail_data:%d)\n%!"
-                  len off (List.fold_right (fun a b -> b + (Cstruct.len a)) rest 0);
-                raise ReadError
-          in 
-          let _ = read_data_inner 0 t.data_cache in
-          let ret = Cstruct.sub ret 0 len in  
-            return (ret)
-        )
-    | (_, _) -> begin 
-(*        pp "| (_, head::tail) when ((List.fold_right (f a b ->b+(Cstruct.len
- *        b)) tail (Cstruct.len head)) < len) ->\n%!"; *)
+  match (len, (Cstruct.len !(t.data_cache) ) ) with
+    | (0, _) -> return (get_new_buffer 0)
+    | (_, 0) -> 
       lwt data = Channel.read_some t.sock in
-      let _ = t.data_cache <- data::t.data_cache in 
-        read_data t len
-
-      end
+      let ret = Cstruct.sub data 0 len in 
+      let _ = t.data_cache := (Cstruct.shift data len) in 
+        return ret
+    | (_, l) when (l >= len) -> 
+      let ret = !(t.data_cache) in 
+      let ret = Cstruct.sub !(t.data_cache) 0 len in
+      let _ = t.data_cache := (Cstruct.shift !(t.data_cache) len) in  
+        return ret 
+    | (_, l) when (l < len) -> 
+      let len_rest = len - l in 
+      let ret = Cstruct.set_len !(t.data_cache) len in 
+      lwt data = Channel.read_some t.sock in
+      let _ = Cstruct.blit data 0 ret l len_rest in 
+      let _ = t.data_cache := (Cstruct.shift data len_rest) in 
+        return (ret)
 end
-
 (*
 module Unix_socket = struct  
   type t = {
@@ -215,18 +181,15 @@ let init_local_conn_state input output =
 let read_packet conn =
   match conn.t with
   | Socket t -> 
-      lwt hbuf = Socket.read_data t OP.Header.sizeof_ofp_header in 
-(*      lwt hbuf = Channel.read_some ~len:OP.Header.sizeof_ofp_header
- *      t.Socket.sock in *)
+      lwt hbuf = Channel.read_exactly t.Socket.sock OP.Header.sizeof_ofp_header in  
       let ofh  = OP.Header.parse_header hbuf in
       let dlen = ofh.OP.Header.len - OP.Header.sizeof_ofp_header in 
-      lwt dbuf = Socket.read_data t dlen in 
-(*      lwt dbuf = 
+      lwt dbuf = 
         if (dlen = 0) then 
           return (Cstruct.create 0)
         else
-          Channel.read_some ~len:dlen t.Socket.sock 
-      in*)
+          Channel.read_exactly t.Socket.sock dlen 
+      in 
       let ofp  = OP.parse ofh dbuf in
         return ofp
 (*  | Unix t -> 
@@ -243,7 +206,9 @@ let read_packet conn =
 
 let send_packet conn ofp =
   match conn.t with
-  | Socket t -> Socket.write_buffer t (OP.marshal ofp) 
+  | Socket t -> 
+      let buf = OP.marshal ofp in 
+      Socket.write_buffer t buf
 (*  | Unix t -> Unix_socket.write_buffer t (OP.marshal ofp) *)
  | Local (_, output) -> return (output (Some ofp ))
 

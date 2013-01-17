@@ -152,12 +152,12 @@ let process_of_packet state conn ofp =
     match ofp with
       | Hello (h) -> begin (* Reply to HELLO with a HELLO and a feature request *)
         let _ = cp "HELLO" in
-        lwt _ = send_packet conn (OP.Hello (h)) in
+          lwt _ = send_packet conn (OP.Hello (h)) in  
         let h = OP.Header.create OP.Header.FEATURES_REQ OP.Header.get_len  in 
-          send_packet conn (OP.Features_req (h) )
+            send_packet conn (OP.Features_req (h) )  
      end
       | Echo_req h  -> begin (* Reply to ECHO requests *)
-(*         cp "ECHO_REQ";  *)
+          let _ = cp "ECHO_REQ" in
           let h = OP.Header.(create ~xid:h.xid ECHO_RESP get_len) in
             send_packet conn (OP.Echo_resp h)
      end
@@ -165,6 +165,7 @@ let process_of_packet state conn ofp =
         cp "FEATURES_RESP";
         let dpid = sfs.Switch.datapath_id in 
         let _ = conn.dpid <- dpid in
+
         let evt = Event.Datapath_join (dpid, sfs.Switch.ports) in
         let _ = 
           if (Hashtbl.mem state.dp_db dpid) then 
@@ -172,17 +173,22 @@ let process_of_packet state conn ofp =
         in 
         let _ = Hashtbl.replace state.dp_db dpid conn in 
           Lwt_list.iter_p (fun cb -> cb state dpid evt) state.datapath_join_cb
+ 
+(*           return () *)
       end
       | Packet_in (h, p) -> begin (* Generate a packet_in event *) 
 (*          cp (sp "+ %s|%s" 
                   (OP.Header.header_to_string h)
                   (OP.Packet_in.packet_in_to_string p)); *)
-            let evt = Event.Packet_in (
+(*
+           let evt = Event.Packet_in (
               p.Packet_in.in_port, p.Packet_in.buffer_id,
               p.Packet_in.data, conn.dpid) 
-            in
+            in 
              iter_p (fun cb -> cb state conn.dpid evt)
                      state.packet_in_cb
+ *)
+              return ()  
       end
       | Flow_removed (h, p)
         -> (cp (sp "+ %s|%s" 
@@ -247,7 +253,7 @@ let process_of_packet state conn ofp =
             in
             Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) state.port_status_cb
       end
-      | _ -> 
+      | ofp -> 
           let _ = OS.Console.log (sp "Packet type not supported %s"
           (OP.to_string ofp)) in 
             return () 
@@ -263,7 +269,7 @@ let send_data controller dpid ofp =
 
 
 let mem_dbg name =
-(*   Gc.compact ();  *)
+   Gc.compact ();  
   let s = Gc.stat () in
   Printf.printf "blocks %s: l=%d f=%d \n %!" name s.Gc.live_blocks s.Gc.free_blocks
 
@@ -272,28 +278,46 @@ let terminate st =
     (fun _ c -> Ofsocket.close c ) st.dp_db in 
     Printf.printf "Terminating controller...\n%!"
  
+
+let main_loop st conn = 
+  while_lwt true do 
+    lwt ofp = read_packet conn in 
+    lwt _ =   
+      process_of_packet st conn ofp 
+    in
+      return ()
+  done
+
 let controller_run st conn =
-  let continue = ref true in
+    lwt ofp = read_packet conn in 
+    lwt _ =   
+      process_of_packet st conn ofp 
+    in
+     lwt ofp = read_packet conn in 
+    lwt _ =   
+      process_of_packet st conn ofp 
+    in
   lwt _ = 
-    while_lwt !continue do
-      try_lwt
-        lwt pkt = read_packet conn in 
-          process_of_packet st conn pkt
-      with
+(*     try_lwt   *)
+      main_loop st conn
+
+(*
+    with
       | Nettypes.Closed -> begin
-        let _ = printf "XXXXX switch disconnected\n%!" in 
-          return (continue := false)
+          let _ = printf "XXXXX switch disconnected\n%!" in 
+            return ()
       end
       | OP.Unparsed(m, bs) 
       | OP.Unparsable(m, bs) -> 
-        let _ = cp (sp "# unparsed! m=%s" m) in 
-          return (Cstruct.hexdump bs)
-      | Not_found ->  
-        return (Printf.printf "Error:Not found\n%!") 
-      | exn -> 
-        pp "{OpenFlow-controller} ERROR:%s\n%!" (Printexc.to_string exn); 
-          return (continue := false)
-   done
+          let _ = cp (sp "# unparsed! m=%s" m) in 
+          let _ = Cstruct.hexdump bs in 
+            return ()
+(*            main_loop st conn *)
+       | exn -> 
+          pp "{OpenFlow-controller} ERROR:%s\n%!" (Printexc.to_string exn); 
+          return ()
+ *)
+(*           main_loop st conn *)
   in
     if (conn.dpid > 0L) then
       let evt = Event.Datapath_leave (conn.dpid) in

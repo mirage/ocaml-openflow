@@ -1,7 +1,7 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: 37a5173c93faee9d5357566cf874a3b7) *)
+(* DO NOT EDIT (digest: 61f654469bb09f01f7251ebcd6388c82) *)
 module OASISGettext = struct
-(* # 21 "/home/cr409/.opam/4.00.1+mirage-unix/build/oasis-mirage.0.3.0a/src/oasis/OASISGettext.ml" *)
+(* # 21 "/home/cr409/.opam/4.00.1+mirage-xen/build/oasis-mirage.0.3.0a/src/oasis/OASISGettext.ml" *)
 
   let ns_ str =
     str
@@ -24,7 +24,7 @@ module OASISGettext = struct
 end
 
 module OASISExpr = struct
-(* # 21 "/home/cr409/.opam/4.00.1+mirage-unix/build/oasis-mirage.0.3.0a/src/oasis/OASISExpr.ml" *)
+(* # 21 "/home/cr409/.opam/4.00.1+mirage-xen/build/oasis-mirage.0.3.0a/src/oasis/OASISExpr.ml" *)
 
 
 
@@ -116,7 +116,7 @@ end
 
 # 117 "myocamlbuild.ml"
 module BaseEnvLight = struct
-(* # 21 "/home/cr409/.opam/4.00.1+mirage-unix/build/oasis-mirage.0.3.0a/src/base/BaseEnvLight.ml" *)
+(* # 21 "/home/cr409/.opam/4.00.1+mirage-xen/build/oasis-mirage.0.3.0a/src/base/BaseEnvLight.ml" *)
 
   module MapString = Map.Make(String)
 
@@ -214,7 +214,7 @@ end
 
 # 215 "myocamlbuild.ml"
 module MyOCamlbuildFindlib = struct
-(* # 21 "/home/cr409/.opam/4.00.1+mirage-unix/build/oasis-mirage.0.3.0a/src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml" *)
+(* # 21 "/home/cr409/.opam/4.00.1+mirage-xen/build/oasis-mirage.0.3.0a/src/plugins/ocamlbuild/MyOCamlbuildFindlib.ml" *)
 
   (** OCamlbuild extension, copied from 
     * http://brion.inria.fr/gallium/index.php/Using_ocamlfind_with_ocamlbuild
@@ -335,7 +335,7 @@ module MyOCamlbuildFindlib = struct
 end
 
 module MyOCamlbuildBase = struct
-(* # 21 "/home/cr409/.opam/4.00.1+mirage-unix/build/oasis-mirage.0.3.0a/src/plugins/ocamlbuild/MyOCamlbuildBase.ml" *)
+(* # 21 "/home/cr409/.opam/4.00.1+mirage-xen/build/oasis-mirage.0.3.0a/src/plugins/ocamlbuild/MyOCamlbuildBase.ml" *)
 
   (** Base functions for writing myocamlbuild.ml
       @author Sylvain Le Gall
@@ -351,7 +351,7 @@ module MyOCamlbuildBase = struct
   type name = string 
   type tag = string 
 
-(* # 56 "/home/cr409/.opam/4.00.1+mirage-unix/build/oasis-mirage.0.3.0a/src/plugins/ocamlbuild/MyOCamlbuildBase.ml" *)
+(* # 56 "/home/cr409/.opam/4.00.1+mirage-xen/build/oasis-mirage.0.3.0a/src/plugins/ocamlbuild/MyOCamlbuildBase.ml" *)
 
   type t =
       {

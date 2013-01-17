@@ -2690,4 +2690,4 @@ let marshal msg =
   | Queue_get_config_req of Header.h * Port.t
   | Queue_get_config_resp of Header.h * Port.t * Queue.t array
  *)
-    marshal_and_sub marshal (Cstruct.of_bigarray (OS.Io_page.get ()))
+    marshal_and_sub marshal (OS.Io_page.to_cstruct (OS.Io_page.get ()))
