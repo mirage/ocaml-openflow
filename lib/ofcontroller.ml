@@ -180,14 +180,13 @@ let process_of_packet state conn ofp =
 (*          cp (sp "+ %s|%s" 
                   (OP.Header.header_to_string h)
                   (OP.Packet_in.packet_in_to_string p)); *)
-(*
+
            let evt = Event.Packet_in (
               p.Packet_in.in_port, p.Packet_in.buffer_id,
               p.Packet_in.data, conn.dpid) 
             in 
-             iter_p (fun cb -> cb state conn.dpid evt)
-                     state.packet_in_cb
- *)
+           lwt _ = iter_p (fun cb -> cb state conn.dpid evt)
+                     state.packet_in_cb in 
               return ()  
       end
       | Flow_removed (h, p)
