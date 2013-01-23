@@ -61,7 +61,6 @@ let read_data t len =
       let _ = t.data_cache := (Cstruct.shift data len) in 
         return ret
     | (_, l) when (l >= len) -> 
-      let ret = !(t.data_cache) in 
       let ret = Cstruct.sub !(t.data_cache) 0 len in
       let _ = t.data_cache := (Cstruct.shift !(t.data_cache) len) in  
         return ret 
@@ -72,6 +71,7 @@ let read_data t len =
       let _ = Cstruct.blit data 0 ret l len_rest in 
       let _ = t.data_cache := (Cstruct.shift data len_rest) in 
         return (ret)
+    | _ -> failwith "invalid read data operation"
 end
 (*
 module Unix_socket = struct  

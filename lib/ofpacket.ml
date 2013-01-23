@@ -536,6 +536,14 @@ module Port = struct
     advertised=init_port_features; supported=init_port_features; 
     peer=init_port_features;}
 
+  let translate_port_phy port new_port_id = 
+    {port_no=new_port_id; hw_addr=port.hw_addr; 
+     name=port.name; config=port.config; 
+     state=port.state; curr=port.curr; 
+    advertised=port.advertised; supported=port.supported; 
+    peer=port.peer;}
+
+
    let marshal_phy phy bits =
      let _ = set_ofp_phy_port_port_no bits phy.port_no in
      let _ = set_ofp_phy_port_hw_addr phy.hw_addr 0 bits in
@@ -1759,7 +1767,7 @@ module Flow_mod = struct
     flags: flags;
     mutable actions: Flow.action list;
   }
-  
+  (* {of_m with of_match=x; } *)  
   cstruct ofp_flow_mod {
     uint64_t cookie;         
     uint16_t command;        
@@ -2145,7 +2153,7 @@ module Stats = struct
           create_port_stat_req ~xid ~port bits 
       | Queue_req (_, port, queue_id) -> 
           create_queue_stat_req ~xid ~queue_id ~port bits
-(*      | Vendor_req _ -> failwith "Vendor queue req not supported" *)
+      | Vendor_req _ -> failwith "Vendor queue req not supported" 
 
 
   let parse_stats_req bits =
@@ -2219,22 +2227,19 @@ module Stats = struct
   } as big_endian 
 
   let rec parse_table_stats_reply bits =
-    match (Cstruct.len bits ) with 
-    | l -> 
-      let table_id = table_id_of_int (get_ofp_table_stats_table_id bits) in 
-      let name = get_ofp_table_stats_name bits in 
-      let name = Cstruct.copy name 0 (Cstruct.len name) in 
-      let wildcards = Wildcards.parse_wildcards (get_ofp_table_stats_wildcards
-      bits) in
-      let max_entries = get_ofp_table_stats_max_entries bits in 
-      let active_count = get_ofp_table_stats_active_count bits in 
-      let lookup_count = get_ofp_table_stats_lookup_count bits in 
-      let matched_count = get_ofp_table_stats_matched_count bits in 
-      let ret = {table_id; name; wildcards; max_entries; active_count; lookup_count;
-                  matched_count;} in
-      let _ = Cstruct.shift bits sizeof_ofp_table_stats in 
-        [ret] @ (parse_table_stats_reply bits)
-    | 0 -> []
+    let table_id = table_id_of_int (get_ofp_table_stats_table_id bits) in 
+    let name = get_ofp_table_stats_name bits in 
+    let name = Cstruct.copy name 0 (Cstruct.len name) in 
+    let wildcards = Wildcards.parse_wildcards 
+                    (get_ofp_table_stats_wildcards bits) in
+    let max_entries = get_ofp_table_stats_max_entries bits in 
+    let active_count = get_ofp_table_stats_active_count bits in 
+    let lookup_count = get_ofp_table_stats_lookup_count bits in 
+    let matched_count = get_ofp_table_stats_matched_count bits in 
+    let ret = {table_id; name; wildcards; max_entries; active_count; 
+               lookup_count; matched_count;} in
+    let _ = Cstruct.shift bits sizeof_ofp_table_stats in 
+      [ret] @ (parse_table_stats_reply bits)
           
   let rec string_of_table_stats_reply tables =
     match tables with
@@ -2629,13 +2634,13 @@ let parse h bits =
   )
 
 let to_string  = function
-  | Features_req h
-  | Get_config_req h
-  | Barrier_req h
-  | Barrier_resp h
-  | Echo_req h
-  | Echo_resp h
-  | Get_config_req h
+  | Features_req (h)
+  | Get_config_req (h)
+  | Barrier_req (h)
+  | Barrier_resp (h)
+  | Echo_req (h)
+  | Echo_resp (h)
+  | Get_config_req (h)
   | Get_config_resp (h, _)
   | Set_config (h, _) 
   | Flow_removed (h, _) 
@@ -2653,14 +2658,14 @@ let to_string  = function
 let marshal msg =
   let marshal = 
     match msg with
-        | Features_req h
-        | Get_config_req h
-        | Barrier_req h
-        | Barrier_resp h
-        | Echo_req h
-        | Echo_resp h
-        | Get_config_req h
-        | Hello h -> Header.marshal_header h 
+        | Features_req (h)
+        | Get_config_req (h)
+        | Barrier_req (h)
+        | Barrier_resp (h)
+        | Echo_req (h)
+        | Echo_resp (h)
+        | Get_config_req (h)
+        | Hello (h) -> Header.marshal_header h 
         | Flow_removed (h, frm) ->
             Flow_removed.marshal_flow_removed ~xid:(h.Header.xid) frm
         | Packet_in (h, pkt_in) -> 

@@ -25,8 +25,6 @@ distclean: setup.ml setup.data
 setup: setup.data
 
 build: setup.data $(wildcard lib/*.ml)
-	oasis setup 
-	ocaml setup.ml -configure $(LWT) $(MIRAGE)
 	ocaml setup.ml -build -j $(J) $(OFLAGS)
 
 doc: setup.data setup.ml

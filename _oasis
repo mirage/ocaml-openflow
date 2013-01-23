@@ -29,9 +29,9 @@ Library openflow
   Path:                 lib
   Findlibname:          openflow
   CompiledObject:       native
-  Modules:              Ofpacket,  Ofcontroller, Ofswitch_config, Ofswitch, Ofsocket, Ofswitch_standalone
+  Modules:              Ofpacket,  Ofcontroller, Ofswitch_config, Ofswitch, Ofsocket, Ofswitch_standalone, Flowvisor, Flowvisor_topology, Lldp
   Pack:                 True
-  BuildDepends:         cstruct, cstruct.syntax, rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0), re.str
+  BuildDepends:         cstruct, cstruct.syntax, rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0), re.str, ocamlgraph
 
 Document openflow
   Title:                OpenFlow docs

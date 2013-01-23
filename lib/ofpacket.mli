@@ -56,7 +56,7 @@ module Header :
       | BARRIER_RESP
       | QUEUE_GET_CONFIG_REQ
       | QUEUE_GET_CONFIG_RESP
-    type h = { ver : uint8; ty : msg_code; len : uint16; xid : uint32; }
+    type h = {ver:uint8;ty:msg_code;len:uint16;xid:uint32;}
     val get_len : int
     val parse_header : Cstruct.t -> h
     val header_to_string : h -> string
@@ -128,7 +128,8 @@ module Port :
       peer : features;
     }
     val init_port_phy: ?port_no:int -> ?hw_addr:eaddr -> 
-      ?name:string -> unit -> phy 
+      ?name:string -> unit -> phy
+      val translate_port_phy : phy -> int -> phy
     val string_of_phy : phy -> string
     type stats = {
       mutable port_id : uint16;

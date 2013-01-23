@@ -337,8 +337,8 @@ module Switch = struct
  let supported_capabilities () = 
    OP.Switch.({flow_stats=true;table_stats=true;port_stats=true;stp=true;
    ip_reasm=false;queue_stats=false;arp_match_ip=true;})
- let switch_features () = 
-   OP.Switch.({datapath_id=1L; n_buffers=0l; n_tables=(char_of_int 1); 
+ let switch_features datapath_id = 
+   OP.Switch.({datapath_id; n_buffers=0l; n_tables=(char_of_int 1); 
    capabilities=(supported_capabilities ()); actions=(supported_actions ()); 
    ports=[];})
 
@@ -464,9 +464,7 @@ module Switch = struct
          update_port_tx_stats (Int64.of_int (Cstruct.len bits)) port;
          Net.Manager.inject_packet port.mgr port.ethif bits 
 (*          Net.Ethif.write (Net.Manager.get_netif port.mgr port.ethif) bits*)
-        ) else
-          return ()
-      ) st.ports
+        ) else return ()) st.ports
     | OP.Port.In_port ->
       let port = (OP.Port.int_of_port in_port) in 
       if Hashtbl.mem st.int_to_port port then
@@ -617,13 +615,12 @@ type t = Switch.t
 (* 
  * let process_frame_depr intf_name frame =  *)
 let process_frame_inner st p intf frame =
-  match frame with
-  | Net.Ethif.Output _ -> return ()
+ match frame with
+  | Net.Ethif.Output (frame::_) -> return ()
   | Net.Ethif.Input frame -> begin
     try_lwt
-     let in_port = (OP.Port.port_of_int p.Switch.port_id) in 
-     let tupple = (OP.Match.raw_packet_to_match in_port frame ) in
-
+      let in_port = (OP.Port.port_of_int p.Switch.port_id) in 
+      let tupple = (OP.Match.raw_packet_to_match in_port frame ) in
      (* Update port rx statistics *)
      let _ = Switch.update_port_rx_stats (Int64.of_int (Cstruct.len frame)) p in
 
@@ -635,10 +632,12 @@ let process_frame_inner st p intf frame =
        let buffer_id = st.Switch.packet_buffer_id in
          (*TODO Move this code in the Switch module *)
        st.Switch.packet_buffer_id <- Int32.add st.Switch.packet_buffer_id 1l;
-       let (_, pkt_in) = OP.Packet_in.create_pkt_in ~buffer_id ~in_port 
+       let (h, pkt_in) = OP.Packet_in.create_pkt_in ~buffer_id ~in_port 
                       ~reason:OP.Packet_in.NO_MATCH ~data:frame in 
        let _ = st.Switch.packet_buffer <- st.Switch.packet_buffer @ [pkt_in] in
-       let size = 
+
+       (* Disable for now packet trimming for buffered packets *)
+(*       let size = 
          if (Cstruct.len frame > 92) then
            92
          else 
@@ -646,10 +645,12 @@ let process_frame_inner st p intf frame =
        in
        let (h, pkt_in) = OP.Packet_in.create_pkt_in ~buffer_id ~in_port 
                       ~reason:OP.Packet_in.NO_MATCH 
-                      ~data:(Cstruct.sub frame 0 size) in
-       match st.Switch.controller with
-       | None -> return ()
-       | Some conn -> Ofsocket.send_packet conn (OP.Packet_in (h, pkt_in))
+                      ~data:(Cstruct.sub frame 0 size) in*)
+       return (ignore_result (
+         match st.Switch.controller with
+          | None -> return ()
+          | Some conn -> Ofsocket.send_packet conn (OP.Packet_in (h, pkt_in))
+       ))
     end
        (* generate a packet in event *)
      | Switch.Found(entry) ->
@@ -826,7 +827,7 @@ let process_openflow st t msg =
         Ofsocket.send_packet t (OP.Barrier_resp(resp_h)) 
 
  | OP.Packet_out(h, pkt) ->
-    cp (sp "PACKET_OUT: %s" (OP.Packet_out.packet_out_to_string pkt)); 
+(*    cp (sp "PACKET_OUT: %s" (OP.Packet_out.packet_out_to_string pkt)); *)
     if (pkt.OP.Packet_out.buffer_id = -1l) then
       Switch.apply_of_actions st pkt.OP.Packet_out.in_port
                 pkt.OP.Packet_out.data pkt.OP.Packet_out.actions
@@ -1063,13 +1064,13 @@ let add_flow st fm = Table.add_flow st st.Switch.table fm
 let del_flow st m = 
   Table.del_flow st.Switch.table m OP.Port.No_port st.Switch.controller
  
-let create_switch () = 
+let create_switch dpid = 
   let (packet_queue, push_packet) = Lwt_stream.create () in
   Switch.(
     { ports = []; int_to_port = (Hashtbl.create 64); dev_to_port=(Hashtbl.create 64); 
       p_sflow = 0_l; controller=None; errornum = 0l; portnum=0; packet_queue; push_packet; 
       queue_len = 0; stats={n_frags=0L; n_hits=0L;n_missed=0L;n_lost=0L;};
-    table = (Table.init_table ()); features=(Switch.switch_features ()); 
+    table = (Table.init_table ()); features=(Switch.switch_features dpid); 
     packet_buffer=[]; packet_buffer_id=0l;})
 
 let listen st mgr loc =
