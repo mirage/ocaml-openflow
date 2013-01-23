@@ -184,7 +184,7 @@ let process_of_packet state conn ofp =
           Event.Packet_in (p.Packet_in.in_port, p.Packet_in.reason, 
                            p.Packet_in.buffer_id, p.Packet_in.data, conn.dpid) in 
           iter_p (fun cb -> cb state conn.dpid evt) state.packet_in_cb
-      end
+     end
       | Flow_removed (h, p) -> 
         let _ = pp "+ %s|%s\n%!" 
                   (OP.Header.header_to_string h)
