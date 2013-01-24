@@ -47,8 +47,8 @@ module Event = struct
       * OP.datapath_id 
     | Flow_stats_reply of int32 * bool * OP.Flow.stats list * OP.datapath_id
     | Aggr_flow_stats_reply of int32 * int64 * int64 * int32 * OP.datapath_id
-    | Port_stats_reply of int32 * OP.Port.stats list *  OP.datapath_id
-    | Table_stats_reply of int32 * OP.Stats.table list * OP.datapath_id 
+    | Port_stats_reply of int32 * bool * OP.Port.stats list *  OP.datapath_id
+    | Table_stats_reply of int32 * bool * OP.Stats.table list * OP.datapath_id 
     | Desc_stats_reply of
         string * string * string * string * string
       * OP.datapath_id
@@ -77,10 +77,10 @@ module Event = struct
       -> (sp "aggr flow stats reply: dpid:%012Lx packets:%Ld bytes:%Ld \
               flows:%ld xid:%ld" 
             dpid packet_count byte_count flow_count xid)
-    | Port_stats_reply (xid, ports, dpid) 
+    | Port_stats_reply (xid, _, ports, dpid) 
       -> (sp "port stats reply: dpid:%012Lx ports:%d xid%ld" 
             dpid (List.length ports) xid)
-    | Table_stats_reply (xid, tables, dpid) 
+    | Table_stats_reply (xid, _, tables, dpid) 
       -> (sp "table stats reply: dpid:%012Lx tables:%d xid%ld" 
             dpid (List.length tables) xid)
     | Desc_stats_reply (mfr_desc, hw_desc, sw_desc, serial_num, dp_desc, dpid)
@@ -201,7 +201,7 @@ let process_of_packet state conn ofp =
         match resp with 
               | OP.Stats.Flow_resp(resp_h, flows) -> begin
                 let evt = Event.Flow_stats_reply(
-                   h.Header.xid, resp_h.Stats.more_to_follow, flows, conn.dpid) 
+                   h.Header.xid, resp_h.Stats.more, flows, conn.dpid) 
                  in
                  Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) 
                    state.flow_stats_reply_cb
@@ -225,14 +225,18 @@ let process_of_packet state conn ofp =
               end
                   
               | OP.Stats.Port_resp (resp_h, ports) -> begin
-                 let evt = Event.Port_stats_reply(h.Header.xid, ports, conn.dpid) 
+                 let evt = 
+                   Event.Port_stats_reply(h.Header.xid, resp_h.OP.Stats.more, 
+                                          ports, conn.dpid) 
                  in
                  Lwt_list.iter_p (fun cb -> cb state conn.dpid evt)
                    state.port_stats_reply_cb
               end
                   
               | OP.Stats.Table_resp (resp_h, tables) -> begin
-                let evt = Event.Table_stats_reply(h.Header.xid, tables, conn.dpid) in
+                let evt = 
+                  Event.Table_stats_reply(h.Header.xid, resp_h.OP.Stats.more, 
+                                          tables, conn.dpid) in
                  Lwt_list.iter_p (fun cb -> cb state conn.dpid evt)
                    state.table_stats_reply_cb
               end

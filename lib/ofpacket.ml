@@ -1945,9 +1945,9 @@ module Stats = struct
 
  
   type aggregate = {
-    packet_count: uint64;
-    byte_count: uint64;
-    flow_count: uint32;
+    mutable packet_count: uint64;
+    mutable byte_count: uint64;
+    mutable flow_count: uint32;
   }
 
   type table = {
@@ -1959,6 +1959,10 @@ module Stats = struct
     mutable lookup_count: uint64;
     mutable matched_count: uint64;
   }
+
+  let init_table_stats table_id name wildcards =
+    {table_id; name; wildcards; max_entries=0l;active_count=0l;
+    lookup_count=(0L); matched_count=(0L);}
 
   type queue = {
     port_no: uint16;
@@ -2184,7 +2188,7 @@ module Stats = struct
 
   type resp_hdr = {
     st_ty: stats_type;
-    more_to_follow: bool;
+    more: bool;
   }
 
   let int_of_stats_type = function
@@ -2290,8 +2294,8 @@ module Stats = struct
 
   let parse_stats_resp bits =
     let typ = stats_type_of_int  (get_ofp_stats_reply_typ bits) in 
-    let more_to_follow = ((get_ofp_stats_reply_flags bits) = 1) in 
-    let resp = {st_ty=typ;more_to_follow;} in 
+    let more = ((get_ofp_stats_reply_flags bits) = 1) in 
+    let resp = {st_ty=typ;more;} in 
     let _ = Cstruct.shift bits sizeof_ofp_stats_reply in 
 
     match typ with
@@ -2345,7 +2349,7 @@ module Stats = struct
                               bits in
       let _ = set_ofp_stats_reply_typ bits (int_of_stats_type DESC) in 
       let _ = set_ofp_stats_reply_flags bits (int_of_bool
-      resp_hdr.more_to_follow) in 
+      resp_hdr.more) in 
       let bits = Cstruct.shift bits sizeof_ofp_stats_reply in 
       let _ = set_ofp_desc_stats_mfr_desc desc.imfr_desc 0 bits in  
       let _ = set_ofp_desc_stats_hw_desc desc.hw_desc 0 bits in  
@@ -2363,7 +2367,7 @@ module Stats = struct
                               bits in
       let _ = set_ofp_stats_reply_typ bits (int_of_stats_type FLOW) in 
       let _ = set_ofp_stats_reply_flags bits (int_of_bool
-      resp_h.more_to_follow) in 
+      resp_h.more) in 
       let bits = Cstruct.shift bits sizeof_ofp_stats_reply in 
       let (flows_len, bits) = marshal_and_shift (Flow.marshal_flow_stats
       flows) bits in 
@@ -2377,7 +2381,7 @@ module Stats = struct
                               bits in
       let _ = set_ofp_stats_reply_typ bits (int_of_stats_type AGGREGATE) in 
       let _ = set_ofp_stats_reply_flags bits (int_of_bool
-                resp.more_to_follow) in 
+                resp.more) in 
       let bits = Cstruct.shift bits sizeof_ofp_stats_reply in 
       let _ = set_ofp_aggregate_stats_reply_packet_count bits stats.packet_count in 
       let _ = set_ofp_aggregate_stats_reply_byte_count bits stats.byte_count in 

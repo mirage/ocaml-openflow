@@ -41,8 +41,8 @@ module Event : sig
           int32 * int32 * int64 * int64 * datapath_id
       | Flow_stats_reply of int32 * bool * Flow.stats list * datapath_id
       | Aggr_flow_stats_reply of int32 * int64 * int64 * int32 * datapath_id
-      | Port_stats_reply of int32 * Port.stats list * datapath_id
-      | Table_stats_reply of int32 * Stats.table list * datapath_id
+      | Port_stats_reply of int32 * bool * Port.stats list * datapath_id
+      | Table_stats_reply of int32 * bool * Stats.table list * datapath_id
       | Desc_stats_reply of string * string * string * string * string * datapath_id
       | Port_status of Port.reason * Port.phy * datapath_id
     val string_of_event : e -> string

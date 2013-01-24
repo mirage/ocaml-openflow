@@ -403,9 +403,9 @@ module Stats :
     val string_of_table_id : table_id -> string
     
     type aggregate = {
-      packet_count : uint64;
-      byte_count : uint64;
-      flow_count : uint32;
+      mutable packet_count : uint64;
+      mutable byte_count : uint64;
+      mutable flow_count : uint32;
     }
     type table = {
       mutable table_id : table_id;
@@ -416,6 +416,7 @@ module Stats :
       mutable lookup_count : uint64;
       mutable matched_count : uint64;
     }
+    val init_table_stats : table_id -> string -> Wildcards.t -> table 
     type queue = {
       port_no : uint16;
       queue_id : uint32;
@@ -459,7 +460,7 @@ module Stats :
       | Vendor_req of req_hdr
     val marshal_stats_req : ?xid:int32 -> req -> Cstruct.t -> int
     
-    type resp_hdr = { st_ty : stats_type; more_to_follow : bool; }
+    type resp_hdr = { st_ty : stats_type; more : bool; }
     val int_of_stats_type : stats_type -> int
     val stats_type_of_int : int -> stats_type
     type resp =

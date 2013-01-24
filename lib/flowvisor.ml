@@ -44,6 +44,21 @@ type port = {
   origin_port_id: int;
 }
 
+type cached_reply = 
+  | Flows of OP.Flow.stats list
+  | Aggr of OP.Stats.aggregate
+  | Table of OP.Stats.table 
+  | Port of OP.Port.stats list
+  | No_reply 
+
+type xid_state = {
+  xid : int32;
+  src : int64;
+  mutable dst : int64 list;
+  ts : float;
+  mutable cache : cached_reply;
+}
+
 type t = {
   (* counters *)
   mutable errornum : int32; 
@@ -56,13 +71,16 @@ type t = {
   switches : (int64, Ofcontroller.t) Hashtbl.t;
    
   (* Mapping transients id values *)
-  xid_map : (int32, (int64 * int64 list * float)) Hashtbl.t;
+  xid_map : (int32, xid_state) Hashtbl.t;
   port_map : (int, (int64 * int * OP.Port.phy)) Hashtbl.t;
   buffer_id_map : (int32, (OP.Packet_in.t * int64)) Hashtbl.t;
  
   (* topology managment module *)
   flv_topo: Flowvisor_topology.t;
 }
+
+(* timeout pending queries after 3 minutes *)
+let timeout = 180.
 
 let supported_actions () = 
   OP.Switch.(
@@ -100,15 +118,33 @@ let match_dpid_buffer_id st dpid buffer_id =
     let (_, dst_dpid) = Hashtbl.find st.buffer_id_map buffer_id in 
       (dpid = dst_dpid)
   with Not_found -> false
-let get_new_xid st dpid dst_dpid = 
+let get_new_xid old_xid st src dst cache = 
   let xid = st.xid_count in 
   let _ = st.xid_count <- Int32.add st.xid_count 1l in 
-  let now = OS.Clock.time () in 
-  let _ = Hashtbl.replace st.xid_map xid (dpid, dst_dpid, now) in
+  let r = {xid; src; dst; ts=(OS.Clock.time ()); cache;} in 
+  let _ = Hashtbl.replace st.xid_map xid r in
     xid
 
+let handle_xid st xid = return ()
+
+let timeout_xid st = 
+  while_lwt true do
+    lwt _ = OS.Time.sleep 120.0 in 
+    let time = OS.Clock.time () in
+    let xid = 
+      Hashtbl.fold (
+        fun xid r ret ->
+          if (r.ts+.timeout>time) then 
+            let _ = Hashtbl.remove st.xid_map xid in 
+            r :: ret 
+          else ret
+      ) st.xid_map [] in 
+    lwt _ = Lwt_list.iter_p (handle_xid st) xid in 
+      OS.Time.sleep 600.  
+  done
+
 (* communication primitives *)
-let get_all_switch_dpid flv = Hashtbl.fold (fun dpid _ r -> r@[dpid]) flv.switches []
+let switch_dpid flv = Hashtbl.fold (fun dpid _ r -> r@[dpid]) flv.switches []
 let send_all_switches st msg =
   Lwt_list.iter_p (
     fun (dpid, ch) -> Ofcontroller.send_data ch dpid msg) 
@@ -319,7 +355,7 @@ let process_openflow st dpid t msg =
         OP.Stats.({ imfr_desc="Mirage"; hw_desc="Mirage";
         sw_desc="Mirage_flowvisor"; serial_num="0.1";
         dp_desc="Mirage";}) in
-      let resp_h = OP.Stats.({st_ty=DESC;more_to_follow=false;}) in
+      let resp_h = OP.Stats.({st_ty=DESC;more=false;}) in
       send_controller t
           (OP.Stats_resp(h, (OP.Stats.Desc_resp(resp_h,desc)))) 
     | OP.Stats.Flow_req(req_h, of_match, table_id, out_port) -> begin
@@ -331,7 +367,7 @@ let process_openflow st dpid t msg =
             | (false, OP.Port.Port(p)) ->
                 let (dst_dpid, out_port, _) = 
                   Hashtbl.find st.port_map p in
-                let xid = get_new_xid st dst_dpid [dpid] in 
+                let xid = get_new_xid h.OP.Header.xid st dst_dpid [dpid] (Flows [])in 
                 let h = OP.Header.(create STATS_RESP 
                           ~xid sizeof_ofp_header) in
                  let out_port = OP.Port.Port(out_port) in 
@@ -347,18 +383,20 @@ let process_openflow st dpid t msg =
            | (_, _) -> 
                 let req = OP.Stats.(Flow_req(req_h, of_match,
                        table_id, out_port)) in
-                 let xid = get_new_xid st dpid (get_all_switch_dpid st) in 
+                 let xid = get_new_xid h.OP.Header.xid st dpid (switch_dpid st) (Flows []) in 
                  let h = OP.Header.(create STATS_RESP 
                           ~xid sizeof_ofp_header) in
-                   send_all_switches st (OP.Stats_req(h, req))
+                 send_all_switches st (OP.Stats_req(h, req))
      end
     | OP.Stats.Aggregate_req (req_h, of_match, table_id, out_port) -> 
       begin
+        let cache = (Aggr (OP.Stats.({packet_count=0L; byte_count=0L;
+        flow_count=0l;}))) in 
         match (of_match.OP.Match.wildcards.OP.Wildcards.in_port,  
         (of_match.OP.Match.in_port)) with
         | (false, OP.Port.Port(p)) ->
           let (dst_dpid, port, _) = Hashtbl.find st.port_map p in 
-          let xid = get_new_xid st dpid [dst_dpid] in 
+          let xid = get_new_xid h.OP.Header.xid st dpid [dst_dpid] cache in 
           let h = OP.Header.({ h with xid;}) in
           let _ = of_match.in_port <-OP.Port.Port(port) in 
           (* TODO out_port needs processing. if dpid are between 
@@ -368,23 +406,26 @@ let process_openflow st dpid t msg =
                     table_id, out_port)) in
              send_switch st dst_dpid (OP.Stats_req(h, m))
        | (_, _) ->
-          let h = OP.Header.({h with xid=(get_new_xid st dpid
-                            (get_all_switch_dpid st));}) in
+          let h = OP.Header.({h with xid=(get_new_xid h.OP.Header.xid st dpid
+                            (switch_dpid st) cache);}) in
             send_all_switches st  (OP.Stats_req(h, req))
      end
     | OP.Stats.Table_req(req_h) ->
-        let xid = get_new_xid st dpid (get_all_switch_dpid st) in 
+        let cache = Table (OP.Stats.init_table_stats (OP.Stats.table_id_of_int 1) 
+                    "mirage" (OP.Wildcards.full_wildcard ()) ) in 
+        let xid = get_new_xid h.OP.Header.xid st dpid (switch_dpid st) cache in 
         let h = OP.Header.({h with xid;}) in
         send_all_switches st (OP.Stats_req(h, req))
     | OP.Stats.Port_req(req_h, port) -> begin
       match port with
       | OP.Port.No_port -> 
-          let xid = get_new_xid st dpid (get_all_switch_dpid st) in 
+          let xid = get_new_xid h.OP.Header.xid st dpid (switch_dpid st) (Port
+          []) in 
           let h = OP.Header.({h with xid;}) in  
             send_all_switches st (OP.Stats_req(h, req))
       | OP.Port.Port(port) when (Hashtbl.mem st.port_map port) -> 
           let (dst_dpid, port, _) = Hashtbl.find st.port_map port in 
-          let xid = get_new_xid st dpid [dst_dpid] in 
+          let xid = get_new_xid h.OP.Header.xid st dpid [dst_dpid] (Port []) in 
           let h = OP.Header.({h with xid;}) in
           let m = OP.Stats.(Port_req(req_h, OP.Port.Port(port))) in
           send_all_switches st (OP.Stats_req(h, m)) 
@@ -417,7 +458,7 @@ let process_openflow st dpid t msg =
   | OP.Flow_mod(h,fm)  -> begin
     let _ = pr "[flowvisor-switch] FLOW_MOD: %s\n%!"
             (OP.Flow_mod.flow_mod_to_string fm) in 
-    let xid = get_new_xid st dpid (get_all_switch_dpid st) in 
+    let xid = get_new_xid h.OP.Header.xid st dpid (switch_dpid st) No_reply in 
          match (fm.OP.Flow_mod.command) with
           | OP.Flow_mod.ADD 
           | OP.Flow_mod.MODIFY 
@@ -502,12 +543,14 @@ let del_flowvisor_port flv desc =
 
 let map_flv_port flv dpid port = 
   (* map the new port *)
-  OP.Port.Port (
-    Hashtbl.fold (
-      fun flv_port (sw_dpid, sw_port, _) r -> 
-        if ((dpid = sw_dpid) && 
-        (sw_port = port)) then flv_port
-        else r ) flv.port_map 0 )  
+  let port = 
+      Hashtbl.fold (
+        fun flv_port (sw_dpid, sw_port, _) r -> 
+          if ((dpid = sw_dpid) && 
+              (sw_port = port)) then flv_port
+          else r ) flv.port_map (-1) in
+  if (port < 0) then raise Not_found
+  else OP.Port.Port (port)
 
 let process_switch_channel flv st dpid e = 
   match e with 
@@ -572,14 +615,75 @@ let process_switch_channel flv st dpid e =
        let h = OP.Header.(create FLOW_REMOVED 0) in 
        inform_controllers flv of_match  (OP.Flow_removed(h, pkt))
     (* TODO: Need to write code to handle stats replies *)
-    | OE.Flow_stats_reply(xid, more, flows, dpid) ->
-          (* Group reply separation *)
-        return ()
-    | OE.Aggr_flow_stats_reply(xid, pkts, bytes, flows, dpid) -> 
-        return ()
-    | OE.Port_stats_reply(xid, ports, dpid) -> 
-        return ()
-    | OE.Table_stats_reply(xid, tables, dpid) -> 
+  | OE.Flow_stats_reply(xid, more, flows, dpid) -> begin
+      try_lwt
+        let xid_st = Hashtbl.find flv.xid_map xid in 
+        match xid_st.cache with
+        | Flows fl -> 
+            (* Group reply separation *)
+            let _ = xid_st.cache <- (Flows (fl @ flows)) in 
+            let _ = 
+              if not more then 
+                xid_st.dst <- List.filter (fun a -> a <> dpid) xid_st.dst 
+            in 
+              if (List.length xid_st.dst = 0 ) then 
+                let _ = Hashtbl.remove flv.xid_map xid in 
+                handle_xid st xid_st
+              else
+                let _ = Hashtbl.replace flv.xid_map xid xid_st in 
+                return ()
+        | _ -> return ()
+      with Not_found -> return ()
+      end
+  | OE.Aggr_flow_stats_reply(xid, pkts, bytes, flows, dpid) -> begin
+      try_lwt
+        let xid_st = Hashtbl.find flv.xid_map xid in 
+        match xid_st.cache with
+        | Aggr aggr -> 
+            (* Group reply separation *)
+            let aggr = 
+              OP.Stats.({packet_count=(Int64.add pkts aggr.packet_count);
+                        byte_count=(Int64.add bytes aggr.byte_count);
+                        flow_count=(Int32.add flows aggr.flow_count);}) in
+            let _ = xid_st.cache <- (Aggr aggr) in 
+            let _ = 
+                xid_st.dst <- List.filter (fun a -> a <> dpid) xid_st.dst
+            in 
+              if (List.length xid_st.dst = 0 ) then 
+                let _ = Hashtbl.remove flv.xid_map xid in 
+                handle_xid st xid_st
+              else 
+                let _ = Hashtbl.replace flv.xid_map xid xid_st in 
+                return ()
+        | _ -> return ()
+      with Not_found -> return ()
+    end
+    | OE.Port_stats_reply(xid, more, ports, dpid) ->  begin
+        try_lwt
+        let xid_st = Hashtbl.find flv.xid_map xid in 
+        match xid_st.cache with
+        | Port p -> 
+            (* Group reply separation *)
+          let ports = 
+            List.map (
+              fun port -> 
+                let port_id = map_flv_port flv dpid port.OP.Port.port_id in 
+                OP.Port.({port with port_id=(OP.Port.int_of_port port_id);})) ports in 
+          let _ = xid_st.cache <- (Port (p @ ports)) in 
+          let _ = 
+            if not more then 
+              xid_st.dst <- List.filter (fun a -> a <> dpid) xid_st.dst
+          in 
+            if (List.length xid_st.dst = 0 ) then
+              let _ = Hashtbl.remove flv.xid_map xid in 
+              handle_xid st xid_st
+            else 
+              let _ = Hashtbl.replace flv.xid_map xid xid_st in
+                return ()
+        | _ -> return ()
+      with Not_found -> return ()
+    end
+    | OE.Table_stats_reply(xid, more, tables, dpid) -> 
         return ()
     | OE.Port_status(reason, port, dpid) -> 
     (* TODO: send a port withdrawal to all controllers *)
