@@ -22,6 +22,8 @@ open Net
 open Nettypes
 open Ofswitch_config
 open Printf
+open Jsonrpc
+
 
 module OP = Ofpacket
 
@@ -145,9 +147,22 @@ module Table = struct
     let _ = 
       Console.log 
       (sprintf "Adding flow %s" (OP.Match.match_to_string t.OP.Flow_mod.of_match)) in 
-     let entry = Entry.({actions=t.OP.Flow_mod.actions; counters=(init_flow_counters t); 
+    let entry = Entry.({actions=t.OP.Flow_mod.actions; counters=(init_flow_counters t); 
              cache_entries=[];}) in  
-    let _ = Hashtbl.replace table.entries t.OP.Flow_mod.of_match entry in
+
+    (* log data to the visualisation server *)
+    let Some(node_name) = Lwt.get OS.Topology.node_name in
+    let flow_str = OP.Match.match_to_string t.OP.Flow_mod.of_match in
+    let action_str = OP.Flow.string_of_actions t.OP.Flow_mod.actions in
+    let msg = Rpc.Dict [ 
+      ("name", (Rpc.String node_name));
+      ("type", (Rpc.String "add"));
+      ("flow", (Rpc.String flow_str)); 
+      ("action", (Rpc.String action_str));
+    ] in
+        
+    let _ = OS.Console.broadcast "flow" (Jsonrpc.to_string msg) in
+     let _ = Hashtbl.replace table.entries t.OP.Flow_mod.of_match entry in
     (* In the fast path table, I need to delete any conflicting entries *)
     let _ = 
       Hashtbl.iter (
@@ -181,7 +196,20 @@ module Table = struct
               ((out_port = OP.Port.No_port) || 
                (is_output_port out_port flow.Entry.actions))) then ( 
             let _ = Hashtbl.remove table.entries of_match in 
-              ret @ [(of_match, flow)]
+            
+            (* log removal of flow *)
+            let Some(node_name) = Lwt.get OS.Topology.node_name in
+            let flow_str = OP.Match.match_to_string of_match in
+            let action_str = OP.Flow.string_of_actions flow.Entry.actions in
+            let msg = Rpc.Dict [ 
+              ("name", (Rpc.String node_name));
+              ("type", (Rpc.String "del"));
+              ("flow", (Rpc.String flow_str)); 
+              ("action", (Rpc.String action_str));
+            ] in
+        
+            let _ = OS.Console.broadcast "flow" (Jsonrpc.to_string msg) in
+               ret @ [(of_match, flow)]
           ) else 
             ret
           ) table.entries [] in
