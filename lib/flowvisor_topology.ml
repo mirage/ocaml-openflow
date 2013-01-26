@@ -108,7 +108,8 @@ let send_port_lldp t dpid port mac =
   let ch = Hashtbl.find t.channels dpid in 
     Ofcontroller.send_data ch dpid (OP.Packet_out(h, m))
 
-let add_port t dpid port mac = 
+let add_port t dpid port mac =
+  let _ = printf "[flowvisor-topo] adding port %Ld:%d\n%!" dpid port in 
   let _ = Hashtbl.replace t.ports (dpid, port) (mac, false) in 
     send_port_lldp t dpid port mac 
 
@@ -162,14 +163,17 @@ let process_lldp_packet t src_dpid src_port pkt =
               ) bits in
                 (!dpid, port, mac)
           | _ -> (dpid, port, mac)
-    ) tlvs (0L, 0, Net.Nettypes.ethernet_mac_broadcast) in 
-    let v = (src_dpid, (src_dpid, src_port, dst_dpid, dst_port, 1), dst_dpid) in
-    let _ = printf "[flowvisor-topo] adding link  %Ld:%d-%Ld:%d\n%!" 
-            src_dpid src_port dst_dpid dst_port in 
-    let _ = Graph.add_edge_e t.topo v in
-    let _ = mark_port_down t src_dpid src_port true in 
-    let _ = mark_port_down t dst_dpid dst_port true in 
-      ()
+    ) tlvs (0L, 0, Net.Nettypes.ethernet_mac_broadcast) in
+    match (Hashtbl.mem t.channels dst_dpid) with
+    | false -> false
+    | true -> 
+        let v = (src_dpid, (src_dpid, src_port, dst_dpid, dst_port, 1), dst_dpid) in
+        let _ = printf "[flowvisor-topo] adding link  %Ld:%d-%Ld:%d\n%!" 
+                  src_dpid src_port dst_dpid dst_port in 
+        let _ = Graph.add_edge_e t.topo v in
+        let _ = mark_port_down t src_dpid src_port true in 
+        let _ = mark_port_down t dst_dpid dst_port true in 
+          true
  
 let remove_dpid t dpid =
   let _ = Graph.remove_vertex t.topo dpid in 

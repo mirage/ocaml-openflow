@@ -329,11 +329,8 @@ let connect mgr loc init =
     Net.Channel.connect mgr (`TCPv4 (None, loc, 
       (socket_controller st loc) ))
 
-let init_controller init =
-  let st = init_controller () in
-  let _ = init st in
-    st
+let init_controller () = init_controller ()
 
-let local_connect mgr st (input, output) init =
- let conn = init_local_conn_state input output in 
-    controller_run st conn 
+let local_connect st conn init = 
+  let _ = init st in 
+  controller_run st conn 

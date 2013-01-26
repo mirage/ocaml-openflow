@@ -494,7 +494,7 @@ module Switch = struct
       Lwt_list.iter_p  
       (fun port -> 
         if(port.port_id != (OP.Port.int_of_port in_port)) then (
-         update_port_tx_stats (Int64.of_int (Cstruct.len bits)) port;
+          update_port_tx_stats (Int64.of_int (Cstruct.len bits)) port;
          Net.Manager.inject_packet port.mgr port.ethif bits 
 (*          Net.Ethif.write (Net.Manager.get_netif port.mgr port.ethif) bits*)
         ) else return ()) st.ports
@@ -1122,8 +1122,7 @@ let connect st mgr loc  =
     (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 
      (add_flow st) (del_flow st) 6634)
 
-let local_connect st mgr input output   =
-  let conn = Ofsocket.init_local_conn_state input output in 
+let local_connect st mgr conn =
   let _ = st.Switch.controller <- (Some conn) in 
   let t, _ = Lwt.task () in 
      (control_channel_run st conn t) <&> 

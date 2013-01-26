@@ -15,5 +15,4 @@
  *)
 
 val init_controller : unit -> Ofcontroller.t 
-val run_controller : Net.Manager.t -> Ofcontroller.t -> 
-  (Ofpacket.t Lwt_stream.t * (Ofpacket.t option -> unit)) Lwt.t
+val run_controller : Net.Manager.t -> Ofcontroller.t -> Ofsocket.conn_state Lwt.t

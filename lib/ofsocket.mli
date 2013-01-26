@@ -26,8 +26,7 @@ type conn_state = {
 
 val init_socket_conn_state : Channel.t -> conn_state
 (* val init_unix_conn_state : Lwt_unix.file_descr -> conn_state *)
-val init_local_conn_state: Ofpacket.t Lwt_stream.t -> 
-  (Ofpacket.t option -> unit) -> conn_state
+val init_local_conn_state: unit -> (conn_state * conn_state)
 val read_packet : conn_state -> Ofpacket.t Lwt.t
 val send_packet : conn_state -> Ofpacket.t -> unit Lwt.t
 val send_data_raw : conn_state -> Cstruct.t -> unit Lwt.t
