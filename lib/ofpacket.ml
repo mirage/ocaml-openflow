@@ -977,6 +977,13 @@ module Match = struct
      dl_dst="\000\000\000\000\000\000";
      dl_vlan=0; dl_vlan_pcp='\000'; dl_type=0; nw_src=0l; nw_dst=0l;
       nw_tos='\000';nw_proto='\000';tp_src=0; tp_dst=0;}
+  let arp () = 
+    {wildcards=(Wildcards.full_wildcard ()); in_port=Port.No_port; 
+     dl_src="\000\000\000\000\000\000"; 
+     dl_dst="\000\000\000\000\000\000";
+     dl_vlan=0; dl_vlan_pcp='\000'; dl_type=0; nw_src=0l; nw_dst=0l;
+      nw_tos='\000';nw_proto='\000';tp_src=0; tp_dst=0;}
+
 
   cstruct ofp_match {
     uint32_t wildcards;        
@@ -1046,6 +1053,43 @@ module Match = struct
       dl_src; dl_dst; dl_vlan; dl_vlan_pcp; dl_type; 
       nw_src; nw_dst; nw_tos; nw_proto; tp_src; tp_dst; 
     }
+
+  let create_match ?(in_port=None) ?(dl_vlan=None) ?(dl_src=None) ?(dl_dst=None)
+      ?(dl_type=None) ?(nw_proto=None) ?(tp_dst=None) ?(tp_src=None)
+      ?(nw_dst=None) ?(nw_dst_len=32) ?(nw_src=None) ?(nw_src_len=32)
+      ?(dl_vlan_pcp=None) ?(nw_tos=None) () =
+
+    let is_none = function
+      | None -> true
+      | Some _ -> false
+    in 
+    let option_default v d = 
+      match v with
+      | None -> d 
+      | Some v -> v 
+    in
+    let zero_mac = (* Net.Nettypes.ethernet_mac_of_bytes *)
+                    "\x00\x00\x00\x00\x00\x00" in 
+    let flow_wild = Wildcards.({
+      in_port=(is_none in_port); dl_vlan=(is_none dl_vlan); 
+      dl_src=(is_none dl_src); dl_dst=(is_none dl_dst);
+      dl_type=(is_none dl_type); nw_proto=(is_none nw_proto); 
+      tp_dst=(is_none tp_dst); tp_src=(is_none tp_src);
+      nw_dst=(char_of_int nw_dst_len); nw_src=(char_of_int nw_src_len);
+      dl_vlan_pcp=(is_none dl_vlan_pcp); nw_tos=(is_none nw_tos);}) in
+  create_flow_match flow_wild 
+    ~in_port:(option_default in_port 0)
+    ~dl_src:(option_default dl_src zero_mac)
+    ~dl_dst:(option_default dl_dst zero_mac)
+    ~dl_vlan:(option_default dl_vlan 0xffff)
+    ~dl_vlan_pcp:(option_default dl_vlan_pcp (char_of_int 0))
+    ~dl_type:(option_default dl_type 0)
+    ~nw_tos:(option_default nw_tos (char_of_int 0))
+    ~nw_proto:(option_default nw_proto (char_of_int 0))
+    ~nw_src:(option_default nw_src 0l)
+    ~nw_dst:(option_default nw_dst 0l)
+    ~tp_src:(option_default tp_src 0)
+    ~tp_dst:(option_default tp_dst 0) () 
 
   let translate_port m p = 
     {wildcards=m.wildcards; in_port=p; dl_src=m.dl_src; dl_dst=m.dl_dst;
@@ -1197,24 +1241,30 @@ module Match = struct
       (string_of_bool ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos == flow_def.nw_tos)) )
       (string_of_bool ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp ==
               flow_def.dl_vlan_pcp));*)
-
-    (((wildcard.Wildcards.in_port)|| ((Port.int_of_port flow.in_port) == (Port.int_of_port flow_def.in_port))) && 
+  let nw_src_mask = 0x20 - (int_of_char wildcard.Wildcards.nw_src) in 
+  let nw_dst_mask = 0x20 - (int_of_char wildcard.Wildcards.nw_dst) in 
+  let _ = printf 
+  "%lx/%d - %lx:%d , %lx = %lx\n%!"
+  flow.nw_src nw_src_mask flow_def.nw_src nw_src_mask 
+  (Int32.shift_right_logical flow.nw_src nw_src_mask)
+  (Int32.shift_right_logical flow_def.nw_src nw_src_mask) in
+    (((wildcard.Wildcards.in_port)|| ((Port.int_of_port flow.in_port) = (Port.int_of_port flow_def.in_port))) && 
 (*      ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan))
     *      &&*)
       ((wildcard.Wildcards.dl_src)  || (flow.dl_src = flow_def.dl_src)) &&
       ((wildcard.Wildcards.dl_dst)  || (flow.dl_dst = flow_def.dl_dst)) &&
-      ((wildcard.Wildcards.dl_type) || (flow.dl_type== flow_def.dl_type)) &&
-      ((wildcard.Wildcards.nw_proto)|| (flow.nw_proto==flow_def.nw_proto)) &&
-      ((wildcard.Wildcards.tp_src)  || (flow.tp_src == flow_def.tp_src)) &&
-      ((wildcard.Wildcards.tp_dst)  || (flow.tp_dst == flow_def.tp_dst)) &&
-      ((wildcard.Wildcards.nw_src >= '\x20') ||
-        (Int32.shift_right_logical flow.nw_src (int_of_char wildcard.Wildcards.nw_src)) =
-        (Int32.shift_right_logical flow_def.nw_src (int_of_char wildcard.Wildcards.nw_src))) &&
-      ((wildcard.Wildcards.nw_dst >= '\x20') ||
-        (Int32.shift_right_logical flow.nw_dst (int_of_char wildcard.Wildcards.nw_dst)) =
-        (Int32.shift_right_logical flow_def.nw_dst (int_of_char wildcard.Wildcards.nw_dst))) &&
-      ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos == flow_def.nw_tos)) &&
-      ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp ==
+      ((wildcard.Wildcards.dl_type) || (flow.dl_type= flow_def.dl_type)) &&
+      ((wildcard.Wildcards.nw_proto)|| (flow.nw_proto = flow_def.nw_proto)) &&
+      ((wildcard.Wildcards.tp_src)  || (flow.tp_src = flow_def.tp_src)) &&
+      ((wildcard.Wildcards.tp_dst)  || (flow.tp_dst = flow_def.tp_dst)) &&
+      ((nw_src_mask <= 0) ||
+        (Int32.shift_right_logical flow.nw_src nw_src_mask) =
+        (Int32.shift_right_logical flow_def.nw_src nw_src_mask)) &&
+      ((nw_dst_mask <= 0) ||
+        (Int32.shift_right_logical flow.nw_dst nw_dst_mask) =
+        (Int32.shift_right_logical flow_def.nw_dst nw_dst_mask)) &&
+      ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos = flow_def.nw_tos)) &&
+      ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp =
               flow_def.dl_vlan_pcp))
 
 end

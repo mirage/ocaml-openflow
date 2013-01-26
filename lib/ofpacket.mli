@@ -238,7 +238,16 @@ module Match :
     }
 
     val wildcard: unit -> t
-    val flow_match_compare : t -> t -> Wildcards.t -> bool
+    val create_match : ?in_port:int option -> ?dl_vlan:int option -> 
+      ?dl_src:(* Net.Nettypes.ethernet_mac *) eaddr option -> 
+      ?dl_dst:(* Net.Nettypes.ethernet_mac *) eaddr option ->
+      ?dl_type:int option -> ?nw_proto:char option ->
+      ?tp_dst:int option -> ?tp_src:int option ->
+      ?nw_dst:int32 option -> ?nw_dst_len:int ->
+      ?nw_src:int32 option -> ?nw_src_len:int ->
+      ?dl_vlan_pcp:char option -> ?nw_tos:char option -> unit -> t
+
+   val flow_match_compare : t -> t -> Wildcards.t -> bool
     val create_flow_match :
       Wildcards.t ->
       ?in_port:int16 ->
