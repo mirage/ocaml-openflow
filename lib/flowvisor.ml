@@ -159,8 +159,11 @@ let send_controller t msg =  Ofsocket.send_packet t msg
 let inform_controllers flv m msg =  
   (* find the controller that should handle the packet in *)
     Lwt_list.iter_p
-    (fun (_, rule, t) -> 
-      if (OP.Match.flow_match_compare m rule rule.OP.Match.wildcards) then
+    (fun (_, rule, t) ->
+      let _ = pp "\nrule:%s\nin:%s\n\n%!" (OP.Match.match_to_string rule)
+      (OP.Match.match_to_string m) in 
+      if (OP.Match.flow_match_compare rule m rule.OP.Match.wildcards) then
+        let _ = pp "matched flow\n%!" in 
         Ofsocket.send_packet t msg
       else return ()) flv.controllers 
 
@@ -170,15 +173,23 @@ let inform_controllers flv m msg =
 let packet_out_create st msg xid in_port bid data actions =
   let data = 
     match (bid) with
-    | -1l -> data 
+    | -1l -> data
       (* if no buffer id included, send the data section of the
        * packet_out*)
    | bid when (Hashtbl.mem st.buffer_id_map bid) -> 
         (* if we have a buffer id in cache, use those data *)
         let (pkt, _ ) = Hashtbl.find st.buffer_id_map bid in
-        pkt.OP.Packet_in.data
+        let _ = Hashtbl.remove st.buffer_id_map bid in 
+          pkt.OP.Packet_in.data
    | _ -> raise (Ofcontroller_error(xid, OP.REQUEST_BUFFER_UNKNOWN, msg) )
   in 
+    let in_port = 
+      try 
+        let (_, in_port, _) = Hashtbl.find st.port_map (OP.Port.int_of_port
+        in_port) in
+          OP.Port.Port(in_port)
+      with Not_found -> OP.Port.No_port
+    in 
     let m = OP.Packet_out.create ~buffer_id:(-1l) 
             ~actions ~in_port ~data () in
     let h = OP.Header.create ~xid OP.Header.PACKET_OUT 0 in 
@@ -190,7 +201,7 @@ let packet_out_create st msg xid in_port bid data actions =
     let actions = acts @  [OP.Flow.Output(OP.Port.All, len)] in
     (* OP.Port.None is not the appropriate way to handle this. Need to find the
      * port that connects the two switches probably. *)
-    let msg = packet_out_create st msg xid OP.Port.No_port bid data actions in 
+    let msg = packet_out_create st msg xid inp bid data actions in
     lwt _ = send_all_switches st msg in 
       pkt_out_process st xid inp bid data msg acts tail 
   end
@@ -206,7 +217,7 @@ let packet_out_create st msg xid in_port bid data actions =
     (* output packet to the last hop of the path *)
     let (dpid, out_p, _)  = Hashtbl.find st.port_map p in 
     let actions = acts @  [OP.Flow.Output((OP.Port.port_of_int out_p), len)] in
-    let msg = packet_out_create st msg xid OP.Port.No_port bid data actions in 
+    let msg = packet_out_create st msg xid inp bid data actions in 
     lwt _ = send_switch st dpid msg in 
       pkt_out_process st xid inp bid data msg acts tail 
     end
@@ -490,11 +501,7 @@ let process_openflow st dpid t msg =
       let bits = OP.marshal msg in  
         send_controller t (OP.Error(h, OP.REQUEST_BAD_TYPE, bits) )
 
-let switch_channel st dpid of_m (remote_addr, remote_port) t =
-  let rs = Nettypes.ipv4_addr_to_string remote_addr in
-  let _ = pp "[flowvisor-switch]+ controller %s:%d\n%!" rs remote_port in 
-  (* Trigger the dance between the 2 nodes *)
-  let sock = Ofsocket.init_socket_conn_state t in
+let switch_channel st dpid of_m sock =
   let h = OP.Header.(create ~xid:1l HELLO sizeof_ofp_header) in
   lwt _ = Ofsocket.send_packet sock (OP.Hello h) in  
   let _ = st.controllers <- (dpid, of_m, sock)::st.controllers in
@@ -520,11 +527,11 @@ let switch_channel st dpid of_m (remote_addr, remote_port) t =
 let add_flowvisor_port flv dpid port =
   let port_id = flv.portnum in 
   let _ = flv.portnum <- flv.portnum + 1 in
-  lwt _ = Flowvisor_topology.add_port flv.flv_topo dpid port.OP.Port.port_no
-        (Net.Nettypes.ethernet_mac_of_bytes port.OP.Port.hw_addr) in
-   let phy = OP.Port.translate_port_phy port port_id in 
+  let phy = OP.Port.translate_port_phy port port_id in 
   let _ = Hashtbl.add flv.port_map port_id 
             (dpid, port.OP.Port.port_no, phy) in 
+  lwt _ = Flowvisor_topology.add_port flv.flv_topo dpid port.OP.Port.port_no
+        (Net.Nettypes.ethernet_mac_of_bytes port.OP.Port.hw_addr) in
   let h = OP.Header.(create PORT_STATUS 0 ) in 
   let status = OP.Port_status(h, (OP.Port.({reason=OP.Port.ADD; desc=phy;}))) in 
     Lwt_list.iter_p 
@@ -552,14 +559,15 @@ let map_flv_port flv dpid port =
   if (port < 0) then raise Not_found
   else OP.Port.Port (port)
 
-let process_switch_channel flv st dpid e = 
+let process_switch_channel flv st dpid e =
+  try_lwt
   match e with 
   | OE.Datapath_join(dpid, ports) ->
       let _ = pr "[flowvisor-ctrl]+ switch dpid:%Ld\n%!" dpid in 
       let _ = Flowvisor_topology.add_channel flv.flv_topo dpid st in
       (* Update local state *)
       let _ = Hashtbl.add flv.switches dpid st in
-        Lwt_list.iter_s (add_flowvisor_port flv dpid) ports
+        Lwt_list.iter_p (add_flowvisor_port flv dpid) ports
   | OE.Datapath_leave(dpid) ->
       let _ = pr "[flowvisor-ctrl]- switch dpid:%Ld\n%!" dpid in 
       let _ = Flowvisor_topology.remove_dpid flv.flv_topo dpid in
@@ -574,18 +582,25 @@ let process_switch_channel flv st dpid e =
        lwt _ = 
          Lwt_list.iter_p (del_flowvisor_port flv) removed in 
         return ()
-   | OE.Packet_in(p, reason, buffer_id, data, dpid) -> begin
-    let m = OP.Match.raw_packet_to_match p data in 
-      match (p, m.OP.Match.dl_type) with 
-      | (OP.Port.Port(p), 0x88cc) -> 
-        let _ = Flowvisor_topology.process_lldp_packet 
-                  flv.flv_topo dpid p data in 
-        return ()
+   | OE.Packet_in(in_port, reason, buffer_id, data, dpid) -> begin
+    let m = OP.Match.raw_packet_to_match in_port data in 
+      match (in_port, m.OP.Match.dl_type) with 
+      | (OP.Port.Port(p), 0x88cc) -> begin 
+        match (Flowvisor_topology.process_lldp_packet 
+                  flv.flv_topo dpid p data) with
+        | true -> return ()
+        | false ->
+            let in_port = map_flv_port flv dpid p in
+            let h = OP.Header.(create PACKET_IN 0) in 
+            let pkt = OP.Packet_in.({buffer_id=(-1l);in_port;reason;data;}) in 
+            inform_controllers flv m (OP.Packet_in(h, pkt)) 
+      end
       | (OP.Port.Port(p), _) when 
-          not (Flowvisor_topology.is_transit_port flv.flv_topo dpid p) ->
+          not (Flowvisor_topology.is_transit_port flv.flv_topo dpid p) -> begin
         (* translate the buffer id information *)
         let buffer_id = flv.buffer_id_count in 
         let _ = flv.buffer_id_count <- Int32.add flv.buffer_id_count 1l in
+
         (* generate packet bits *)
         let in_port = map_flv_port flv dpid p in
         let h = OP.Header.(create PACKET_IN 0) in 
@@ -593,6 +608,7 @@ let process_switch_channel flv st dpid e =
         let _ = Hashtbl.add flv.buffer_id_map buffer_id (pkt, dpid) in
         lwt _ = inform_controllers flv m (OP.Packet_in(h, pkt)) in 
           return ()
+          end
       | (OP.Port.Port(p), _) ->
           return ((*pp "XXXXX supress disable transit port"*))
       | _ -> 
@@ -687,9 +703,10 @@ let process_switch_channel flv st dpid e =
         return ()
     | OE.Port_status(reason, port, dpid) -> 
     (* TODO: send a port withdrawal to all controllers *)
-        return ()
+      add_flowvisor_port flv dpid port
     | _ -> 
         return (pp "[flowvisor-ctrl] Unsupported event\n%!")
+  with Not_found -> return (pr "[flowvisor-ctrl] ignore pkt of non existing state\n%!")
 
   let init flv st = 
     (* register all the required handlers *)
@@ -710,23 +727,38 @@ let create_flowvisor dpid =
   let _ = ignore_result (Flowvisor_topology.discover ret.flv_topo) in
     ret
 
-let listen st mgr loc = Ofcontroller.listen mgr loc (init st) 
-
-let remove_slice _ _ = return ()
-let add_slice mgr flv of_m  dst dpid =
-  let _ =
-    (* TODO Need to store thread for termination on remove_slice *)
+let add_slice mgr flv of_m dst dpid =
+  let _ = 
     ignore_result ( 
       while_lwt true do
         try_lwt 
-          Net.Channel.connect mgr 
-            ( `TCPv4 (None, dst, (switch_channel flv dpid of_m dst) ) )
+          let switch_connect (addr, port) t = 
+            let rs = Nettypes.ipv4_addr_to_string addr in
+            let _ = pp "[flowvisor-switch]+ controller %s:%d\n%!" rs port in 
+            (* Trigger the dance between the 2 nodes *)
+            let sock = Ofsocket.init_socket_conn_state t in
+              switch_channel flv dpid of_m sock
+          in
+            Net.Channel.connect mgr 
+              ( `TCPv4 (None, dst, (switch_connect dst) ) )
         with exn -> 
           let _ = pp "[flowvisor-ctrl] controller error %s\n%!" 
                     (Printexc.to_string exn) in 
             return ()
-      done 
- 
+      done  
     ) in 
     return ()
+
+let listen st mgr loc = Ofcontroller.listen mgr loc (init st) 
+let local_listen st conn = 
+  let t = Ofcontroller.init_controller () in 
+  Ofcontroller.local_connect t conn (init st) 
+
+let remove_slice _ _ = return ()
+let add_local_slice flv of_m  conn dpid =
+  let _ =
+    (* TODO Need to store thread for termination on remove_slice *)
+    ignore_result ( switch_channel flv dpid of_m conn) in 
+    return ()
+
 
