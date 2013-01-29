@@ -1066,7 +1066,7 @@ let local_connect st mgr input output   =
     (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 
      (add_flow st) (del_flow st) 6634)
 
-let lwt_connect st ?(standalone=true) mgr loc  =
+(* let lwt_connect st ?(standalone=true) mgr loc  =
   let of_ctrl = Ofswitch_standalone.init_controller () in 
 
   let _ = Lwt.ignore_result (Ofswitch_config.listen_t mgr (del_port mgr st) 
@@ -1106,4 +1106,4 @@ let lwt_connect st ?(standalone=true) mgr loc  =
         lwt _ = log ~level:Notice "Remote controller started..." in 
           control_channel_run st conn t
       ))
-    done
+    done *)

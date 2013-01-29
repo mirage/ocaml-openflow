@@ -291,7 +291,7 @@ let controller_run st conn =
       | Not_found ->  
         return (Printf.printf "Error:Not found\n%!") 
       | exn -> 
-        pp "{OpenFlow-controller} ERROR:%s\n%!" (Printexc.to_string ()); 
+        pp "{OpenFlow-controller} ERROR:%s\n%!" (Printexc.to_string exn); 
           return (continue := false)
    done
   in

@@ -59,7 +59,7 @@ Executable learning_switch_lwt
   Install:              true
   BuildDepends:         cstruct, cstruct.syntax, openflow
 
-Executable basic_switch_lwt
+(* Executable basic_switch_lwt
   Path:                 switch
   MainIs:               basic_switch.ml
   Build$:               flag(lwt)
@@ -68,7 +68,7 @@ Executable basic_switch_lwt
   Install:              true
   BuildDepends:         openflow
 
-(*Executable learning_switch_mirage
+Executable learning_switch_mirage
   Path:                 controller
   MainIs:               learning_switch.ml
   Build$:               flag(mirage)

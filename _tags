@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: c07db1f17ad31bd9de21d6ae41f3283a)
+# DO NOT EDIT (digest: 75a0f2248e819616790024f00e8078e7)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -57,24 +57,6 @@
 <controller/*.ml{,i}>: pkg_mirage
 <controller/*.ml{,i}>: pkg_mirage-net
 "controller/learning_switch.native": custom
-# Executable basic_switch_lwt
-"switch/basic_switch.native": use_openflow
-"switch/basic_switch.native": pkg_cstruct
-"switch/basic_switch.native": pkg_cstruct.syntax
-"switch/basic_switch.native": pkg_re.str
-"switch/basic_switch.native": pkg_rpclib
-"switch/basic_switch.native": pkg_rpclib.json
-"switch/basic_switch.native": pkg_mirage
-"switch/basic_switch.native": pkg_mirage-net
-<switch/*.ml{,i}>: use_openflow
-<switch/*.ml{,i}>: pkg_cstruct
-<switch/*.ml{,i}>: pkg_cstruct.syntax
-<switch/*.ml{,i}>: pkg_re.str
-<switch/*.ml{,i}>: pkg_rpclib
-<switch/*.ml{,i}>: pkg_rpclib.json
-<switch/*.ml{,i}>: pkg_mirage
-<switch/*.ml{,i}>: pkg_mirage-net
-"switch/basic_switch.native": custom
 # OASIS_STOP
 true: annot
 <lib/*>: syntax_camlp4o
