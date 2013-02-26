@@ -1243,12 +1243,7 @@ module Match = struct
               flow_def.dl_vlan_pcp));*)
   let nw_src_mask = 0x20 - (int_of_char wildcard.Wildcards.nw_src) in 
   let nw_dst_mask = 0x20 - (int_of_char wildcard.Wildcards.nw_dst) in 
-  let _ = printf 
-  "%lx/%d - %lx:%d , %lx = %lx\n%!"
-  flow.nw_src nw_src_mask flow_def.nw_src nw_src_mask 
-  (Int32.shift_right_logical flow.nw_src nw_src_mask)
-  (Int32.shift_right_logical flow_def.nw_src nw_src_mask) in
-    (((wildcard.Wildcards.in_port)|| ((Port.int_of_port flow.in_port) = (Port.int_of_port flow_def.in_port))) && 
+   (((wildcard.Wildcards.in_port)|| ((Port.int_of_port flow.in_port) = (Port.int_of_port flow_def.in_port))) && 
 (*      ((wildcard.Wildcards.dl_vlan) || (flow.dl_vlan == flow_def.dl_vlan))
     *      &&*)
       ((wildcard.Wildcards.dl_src)  || (flow.dl_src = flow_def.dl_src)) &&

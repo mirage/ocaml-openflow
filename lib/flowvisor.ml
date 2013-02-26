@@ -160,10 +160,7 @@ let inform_controllers flv m msg =
   (* find the controller that should handle the packet in *)
     Lwt_list.iter_p
     (fun (_, rule, t) ->
-      let _ = pp "\nrule:%s\nin:%s\n\n%!" (OP.Match.match_to_string rule)
-      (OP.Match.match_to_string m) in 
       if (OP.Match.flow_match_compare rule m rule.OP.Match.wildcards) then
-        let _ = pp "matched flow\n%!" in 
         Ofsocket.send_packet t msg
       else return ()) flv.controllers 
 
@@ -241,14 +238,15 @@ let map_path flv in_dpid in_port out_dpid out_port =
     else
       let path = Flowvisor_topology.find_dpid_path flv.flv_topo 
       in_dpid in_port out_dpid out_port in
-(*      let _ = 
+(*      let path = List.rev path in *)
+      let _ = 
         List.iter (
           fun (dp, in_p, out_p) ->
             pp "%s:%Ld:%s -> " 
             (OP.Port.string_of_port in_p)
             dp (OP.Port.string_of_port out_p)
         ) path in 
-      let _ = pp "\n%!" in *)
+      let _ = pp "\n%!" in 
       path
 
 let map_spanning_tree flv in_dpid in_port = []
