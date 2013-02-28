@@ -300,6 +300,7 @@ module Switch = struct
     port_name: string;
     counter: OP.Port.stats;
     phy: OP.Port.phy;
+    queue: Cstruct.t Queue.t; 
   }
   let init_port mgr port_no ethif = 
     let name = Manager.get_intf_name mgr ethif in 
@@ -328,7 +329,8 @@ module Switch = struct
       state= port_state; curr=features; advertised=features; 
       supported=features; peer=features;}) in
     
-      {port_id=port_no; mgr; port_name=name; counter; ethif;phy;}
+      {port_id=port_no; mgr; port_name=name; counter;
+      ethif;phy;queue=(Queue.create ())}
 
   type stats = {
     mutable n_frags: uint64;
@@ -361,7 +363,8 @@ module Switch = struct
     mutable queue_len : int;
     features : OP.Switch.features;
     mutable packet_buffer: OP.Packet_in.t list;
-    mutable packet_buffer_id: int32; 
+    mutable packet_buffer_id: int32;
+    ready : unit Lwt_condition.t ;
   }
  let supported_actions () = 
    OP.Switch.({ output=true; set_vlan_id=true; set_vlan_pcp=true; strip_vlan=true;
@@ -647,10 +650,7 @@ type t = Switch.t
 
 (* 
  * let process_frame_depr intf_name frame =  *)
-let process_frame_inner st p intf frame =
- match frame with
-  | Net.Ethif.Output _ -> return ()
-  | Net.Ethif.Input frame -> begin
+let process_frame_inner st p frame =
     try_lwt
       let in_port = (OP.Port.port_of_int p.Switch.port_id) in 
       let tupple = (OP.Match.raw_packet_to_match in_port frame ) in
@@ -695,12 +695,31 @@ let process_frame_inner st p intf frame =
       pp "control channel error: %s\nbt: %s\n%!" 
         (Printexc.to_string exn) (Printexc.get_backtrace ());
       return ()
-  end
 
-let process_frame p st intf_name frame =
+let forward_thread st = 
+  while_lwt true do
+    lwt _ = Lwt_condition.wait st.Switch.ready in 
+      Lwt_list.iter_s (
+        fun p ->
+        if (Queue.is_empty p.Switch.queue) then
+          return ()
+        else 
+          let frame = Queue.take p.Switch.queue in 
+          process_frame_inner st p frame
+      ) st.Switch.ports 
+  done 
+
+let process_frame st p _ frame =
   try_lwt 
     (*let p = Hashtbl.find st.Switch.dev_to_port intf_name in *)
-    process_frame_inner st p intf_name frame
+  match frame with
+  | Net.Ethif.Output _ -> return ()
+  | Net.Ethif.Input frame -> begin
+(*    process_frame_inner st p intf_name frame *)
+    let _ = Queue.push frame p.Switch.queue in 
+    let _ = Lwt_condition.signal st.Switch.ready () in 
+      return ()
+  end
 (*    if (st.Switch.queue_len < 256) then (
       st.Switch.queue_len <- st.Switch.queue_len + 1;
 
@@ -1017,7 +1036,7 @@ let add_port mgr ?(use_mac=false) sw ethif =
   Hashtbl.add sw.Switch.dev_to_port ethif (ref port);
   sw.Switch.features.OP.Switch.ports  <- 
     sw.Switch.features.OP.Switch.ports @ [port.Switch.phy];
-  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw port) in
+  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame sw port) in
   let h,p = OP.Port.create_port_status OP.Port.ADD port.Switch.phy in 
   lwt _ = 
     match sw.Switch.controller with
@@ -1096,7 +1115,7 @@ let add_port_local mgr sw ethif =
  *)
   let _ = Console.log (sprintf "Adding port %s (port_id=%d)" ethif
             local_port_id) in 
-   let _ = Net.Manager.set_promiscuous mgr ethif (process_frame_inner sw port) in
+   let _ = Net.Manager.set_promiscuous mgr ethif (process_frame sw port) in
     return ()
 
 let add_flow st fm = Table.add_flow st st.Switch.table fm
@@ -1110,15 +1129,17 @@ let create_switch dpid =
       p_sflow = 0_l; controller=None; errornum = 0l; portnum=0; packet_queue; push_packet; 
       queue_len = 0; stats={n_frags=0L; n_hits=0L;n_missed=0L;n_lost=0L;};
     table = (Table.init_table ()); features=(Switch.switch_features dpid); 
-    packet_buffer=[]; packet_buffer_id=0l;})
+    packet_buffer=[]; packet_buffer_id=0l;ready=(Lwt_condition.create ());})
 
 let listen st mgr loc =
   Channel.listen mgr (`TCPv4 (loc, (control_channel st ))) <&>
+  (forward_thread st) <&>
     (Ofswitch_config.listen_t mgr 
     (del_port mgr st) (get_flow_stats st) (add_flow st) (del_flow st) 6634)
 
 let connect st mgr loc  =
   Channel.connect mgr (`TCPv4 (None, loc, (control_channel st loc))) <&> 
+  (forward_thread st) <&>
     (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 
      (add_flow st) (del_flow st) 6634)
 
@@ -1126,6 +1147,7 @@ let local_connect st mgr conn =
   let _ = st.Switch.controller <- (Some conn) in 
   let t, _ = Lwt.task () in 
      (control_channel_run st conn t) <&> 
+  (forward_thread st) <&>
     (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 
      (add_flow st) (del_flow st) 6634)
 (*
