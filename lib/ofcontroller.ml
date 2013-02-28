@@ -114,6 +114,7 @@ type t = {
     (t -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
   mutable port_status_cb:
     (t -> OP.datapath_id -> Event.e -> unit Lwt.t) list;
+  verbose : bool; 
 }
 
 let register_cb controller e cb =
@@ -154,18 +155,18 @@ let process_of_packet state conn ofp =
   OP.(
     match ofp with
       | Hello (h) -> begin (* Reply to HELLO with a HELLO and a feature request *)
-        let _ = pp "[controller] HELLO\n%!" in
+        let _ = if state.verbose then pp "[controller] HELLO\n%!" in
         lwt _ = send_packet conn (OP.Hello (h)) in  
         let h = OP.Header.create OP.Header.FEATURES_REQ OP.Header.get_len  in 
             send_packet conn (OP.Features_req (h) )  
      end
       | Echo_req h  -> begin (* Reply to ECHO requests *)
-        let _ = pp "[controller] ECHO_REQ\n%!" in
+        let _ =  if state.verbose then pp "[controller] ECHO_REQ\n%!" in
         let h = OP.Header.(create ~xid:h.xid ECHO_RESP get_len) in
           send_packet conn (OP.Echo_resp h)
      end
       | Features_resp (h, sfs) -> begin (* Generate a datapath join event *)
-        let _ = pp "[controller] FEATURES_RESP\n%!" in 
+        let _ =  if state.verbose then pp "[controller] FEATURES_RESP\n%!" in 
         let _ = conn.dpid <- sfs.Switch.datapath_id  in
         let evt = Event.Datapath_join (sfs.Switch.datapath_id, sfs.Switch.ports) in
         let _ = 
@@ -177,7 +178,7 @@ let process_of_packet state conn ofp =
             state.datapath_join_cb
       end
       | Packet_in (h, p) -> begin (* Generate a packet_in event *) 
-        let _ = pp "[controller]+ %s|%s\n%!" 
+        let _ =  if state.verbose then pp "[controller]+ %s|%s\n%!" 
                   (OP.Header.header_to_string h)
                   (OP.Packet_in.packet_in_to_string p) in 
         let evt = 
@@ -186,7 +187,7 @@ let process_of_packet state conn ofp =
           iter_p (fun cb -> cb state conn.dpid evt) state.packet_in_cb
      end
       | Flow_removed (h, p) -> 
-        let _ = pp "+ %s|%s\n%!" 
+        let _ =  if state.verbose then pp "+ %s|%s\n%!" 
                   (OP.Header.header_to_string h)
                   (OP.Flow_removed.string_of_flow_removed p) in 
         let evt = Event.Flow_removed (
@@ -196,8 +197,9 @@ let process_of_packet state conn ofp =
         in
           Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) state.flow_removed_cb
       | Stats_resp(h, resp) -> begin  
-        let _ = pp "[controller] + %s|%s\n%!" (OP.Header.header_to_string h)
-                (OP.Stats.string_of_stats resp) in 
+        let _ =  if state.verbose then 
+          pp "[controller] + %s|%s\n%!" (OP.Header.header_to_string h)
+          (OP.Stats.string_of_stats resp) in 
         match resp with 
               | OP.Stats.Flow_resp(resp_h, flows) -> begin
                 let evt = Event.Flow_stats_reply(
@@ -244,7 +246,7 @@ let process_of_packet state conn ofp =
       end
 
       | Port_status(h, st) -> begin 
-        let _ = pp "[controller] + %s|%s" (OP.Header.header_to_string h)
+        let _ =  if state.verbose then pp "[controller] + %s|%s" (OP.Header.header_to_string h)
                   (OP.Port.string_of_status st) in 
             let evt = Event.Port_status (st.Port.reason, st.Port.desc, conn.dpid) in
             Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) state.port_status_cb
@@ -305,8 +307,9 @@ let socket_controller st (remote_addr, remote_port) t =
   let conn = init_socket_conn_state t in 
     controller_run st conn 
 
-let init_controller () = 
-  { dp_db                    = Hashtbl.create 0; 
+let init_controller ?(verbose=false) () = 
+  { verbose;
+    dp_db                    = Hashtbl.create 0; 
     datapath_join_cb         = []; 
     datapath_leave_cb        = []; 
     packet_in_cb             = [];
@@ -318,19 +321,16 @@ let init_controller () =
     table_stats_reply_cb     = [];
     port_status_cb           = []; } 
 
-let listen mgr loc init =
-  let st = init_controller () in
+let listen mgr ?(verbose=false) loc init =
+  let st = init_controller ~verbose () in
   let _ = init st in 
     (Channel.listen mgr (`TCPv4 (loc, (socket_controller st) ))) 
 
-let connect mgr loc init = 
-  let st = init_controller () in
+let connect mgr ?(verbose=false) loc init = 
+  let st = init_controller ~verbose () in
   let _ = init st in 
     Net.Channel.connect mgr (`TCPv4 (None, loc, 
       (socket_controller st loc) ))
 
-let init_controller () = init_controller ()
-
 let local_connect st conn init = 
-  let _ = init st in 
-  controller_run st conn 
+  let _ = init st in  controller_run st conn 

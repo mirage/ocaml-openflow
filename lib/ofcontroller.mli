@@ -52,9 +52,9 @@ type t
 val register_cb : t -> Event.t -> (t -> Ofpacket.datapath_id -> Event.e -> unit  Lwt.t) -> unit
 val send_of_data : t -> Ofpacket.datapath_id -> Cstruct.t  -> unit Lwt.t
 val send_data : t -> Ofpacket.datapath_id -> Ofpacket.t  -> unit Lwt.t
-val listen : Manager.t -> Nettypes.ipv4_src -> 
+val listen : Manager.t -> ?verbose:bool -> Nettypes.ipv4_src -> 
   (t -> 'a) -> unit Lwt.t
-val connect : Manager.t -> Nettypes.ipv4_dst -> 
+val connect : Manager.t -> ?verbose:bool -> Nettypes.ipv4_dst -> 
   (t -> 'a) -> unit Lwt.t
-val init_controller : unit -> t 
+val init_controller : ?verbose:bool -> unit -> t 
 val local_connect : t -> Ofsocket.conn_state -> (t -> 'a) -> unit Lwt.t

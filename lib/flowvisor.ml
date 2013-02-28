@@ -60,6 +60,7 @@ type xid_state = {
 }
 
 type t = {
+  verbose : bool;
   (* counters *)
   mutable errornum : int32; 
   mutable portnum : int;
@@ -98,8 +99,8 @@ let switch_features datapath_id ports =
               capabilities=(supported_capabilities ()); 
               actions=(supported_actions ()); ports;})
 
-let init_flowvisor flv_topo =
-  {errornum=0l; portnum=10; xid_count=0l;
+let init_flowvisor verbose flv_topo =
+  {verbose; errornum=0l; portnum=10; xid_count=0l;
    port_map=(Hashtbl.create 64);
    controllers=[]; buffer_id_map=(Hashtbl.create 64);
    buffer_id_count=0l; xid_map=(Hashtbl.create 64); 
@@ -239,14 +240,14 @@ let map_path flv in_dpid in_port out_dpid out_port =
       let path = Flowvisor_topology.find_dpid_path flv.flv_topo 
       in_dpid in_port out_dpid out_port in
 (*      let path = List.rev path in *)
-      let _ = 
+(*      let _ = 
         List.iter (
           fun (dp, in_p, out_p) ->
             pp "%s:%Ld:%s -> " 
             (OP.Port.string_of_port in_p)
             dp (OP.Port.string_of_port out_p)
         ) path in 
-      let _ = pp "\n%!" in 
+      let _ = pp "\n%!" in  *)
       path
 
 let map_spanning_tree flv in_dpid in_port = []
@@ -341,14 +342,14 @@ let flow_mod_del_translate st msg xid pkt =
 let process_openflow st dpid t msg =
   match msg with
   | OP.Hello (h) -> 
-      let _ = cp "[flowvisor-switch] HELLO\n%!" in 
+      let _ = if st.verbose then cp "[flowvisor-switch] HELLO\n%!" in 
         return ()
   | OP.Echo_req (h) -> (* Reply to ECHO requests *)
-      let _ = cp "[flowvisor-switch] ECHO_REQ\n%!" in 
+      let _ =  if st.verbose then cp "[flowvisor-switch] ECHO_REQ\n%!" in 
       let h = OP.Header.(create ECHO_RESP ~xid:h.xid sizeof_ofp_header) in
         send_controller t (OP.Echo_resp h)
   | OP.Features_req (h)  -> 
-      let _ = cp "[flowvisor-switch] FEATURES_REQ\n%!" in 
+      let _ =  if st.verbose then cp "[flowvisor-switch] FEATURES_REQ\n%!" in 
       let h = OP.Header.(create FEATURES_RESP 
               ~xid:h.OP.Header.xid sizeof_ofp_header) in
       let feat = switch_features dpid 
@@ -357,7 +358,7 @@ let process_openflow st dpid t msg =
     send_controller t (OP.Features_resp(h, feat))
   | OP.Stats_req(h, req) -> begin
       (* TODO Need to translate the xid here *)
-    let _ = cp "[flowvisor-switch] STATS_REQ\n%!" in 
+    let _ =  if st.verbose then cp "[flowvisor-switch] STATS_REQ\n%!" in 
     match req with
     | OP.Stats.Desc_req(req) ->
       let desc = 
@@ -454,7 +455,7 @@ let process_openflow st dpid t msg =
       let _ = pr "BARRIER_REQ: %s\n%!" (OP.Header.header_to_string h) in
       send_controller t (OP.Barrier_resp (OP.Header.({h with ty=BARRIER_RESP;})) )
   | OP.Packet_out(h, pkt) -> begin
-    let _ = pr "[flowvisor-switch] PACKET_OUT: %s\n%!" 
+    let _ = if st.verbose then pr "[flowvisor-switch] PACKET_OUT: %s\n%!" 
             (OP.Packet_out.packet_out_to_string pkt) in
     (* Check if controller has the right to send traffic on the specific subnet *)
     try_lwt
@@ -465,7 +466,7 @@ let process_openflow st dpid t msg =
         (Printexc.to_string exn))
   end
   | OP.Flow_mod(h,fm)  -> begin
-    let _ = pr "[flowvisor-switch] FLOW_MOD: %s\n%!"
+    let _ =  if st.verbose then pr "[flowvisor-switch] FLOW_MOD: %s\n%!"
             (OP.Flow_mod.flow_mod_to_string fm) in 
     let xid = get_new_xid h.OP.Header.xid st dpid (switch_dpid st) No_reply in 
          match (fm.OP.Flow_mod.command) with
@@ -720,8 +721,8 @@ let process_switch_channel flv st dpid e =
     let _ = OC.register_cb st OE.PORT_STATUS_CHANGE fn in 
       ()
 
-let create_flowvisor dpid =
-  let ret = init_flowvisor (Flowvisor_topology.init_topology ()) in 
+let create_flowvisor ?(verbose=false) () =
+  let ret = init_flowvisor verbose (Flowvisor_topology.init_topology ()) in 
   let _ = ignore_result (Flowvisor_topology.discover ret.flv_topo) in
     ret
 
