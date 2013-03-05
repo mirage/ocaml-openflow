@@ -718,7 +718,6 @@ let process_switch_channel flv st dpid e =
     let _ = OC.register_cb st OE.AGGR_FLOW_STATS_REPLY fn in 
     let _ = OC.register_cb st OE.PORT_STATUS_CHANGE fn in 
     let _ = OC.register_cb st OE.TABLE_STATS_REPLY fn in 
-    let _ = OC.register_cb st OE.PORT_STATUS_CHANGE fn in 
       ()
 
 let create_flowvisor ?(verbose=false) () =
