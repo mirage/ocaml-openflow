@@ -126,9 +126,33 @@ let get_new_xid old_xid st src dst cache =
   let _ = Hashtbl.replace st.xid_map xid r in
     xid
 
-let handle_xid st xid = return ()
+let handle_xid flv st xid_st = 
+  match xid_st.cache with 
+  | Flows flows -> 
+    let stats = OP.Stats.({st_ty=FLOW; more=true;}) in
+    let (_, _, t) = List.find (
+      fun (dpid, _, _) -> dpid = xid_st.src )
+      flv.controllers in 
+    lwt (_, flows) = 
+      Lwt_list. fold_right_s (
+        fun fl (sz, flows) ->
+          let fl_sz = OP.Flow.flow_stats_len fl in 
+          if (sz + fl_sz > 0xffff) then 
+            let r = OP.Stats.Flow_resp(stats, flows) in
+            let h = OP.Header.create ~xid:(xid_st.xid) OP.Header.STATS_RESP 0 in 
+            lwt _ = Ofsocket.send_packet t (OP.Stats_resp (h, r)) in
+            return ((OP.Header.get_len + OP.Stats.get_resp_hdr_size + fl_sz), [fl])
+          else
+            return ((sz + fl_sz), (fl::flows)) )
+      flows ((OP.Header.get_len + OP.Stats.get_resp_hdr_size), []) in 
+    let stats = OP.Stats.({st_ty=FLOW; more=false;}) in 
+    let r = OP.Stats.Flow_resp(stats, flows) in
+    let h = OP.Header.create ~xid:xid_st.xid OP.Header.STATS_RESP 0 in 
+    let _ = pr "XXXXX flowvisor controller received stats\n%!" in 
+      Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
+  | _ -> return ()
 
-let timeout_xid st = 
+let timeout_xid flv st = 
   while_lwt true do
     lwt _ = OS.Time.sleep 120.0 in 
     let time = OS.Clock.time () in
@@ -140,7 +164,7 @@ let timeout_xid st =
             r :: ret 
           else ret
       ) st.xid_map [] in 
-    lwt _ = Lwt_list.iter_p (handle_xid st) xid in 
+    lwt _ = Lwt_list.iter_p (handle_xid flv st) xid in 
       OS.Time.sleep 600.  
   done
 
@@ -358,7 +382,7 @@ let process_openflow st dpid t msg =
     send_controller t (OP.Features_resp(h, feat))
   | OP.Stats_req(h, req) -> begin
       (* TODO Need to translate the xid here *)
-    let _ =  if st.verbose then cp "[flowvisor-switch] STATS_REQ\n%!" in 
+    let _ =  if st.verbose then cp "[flowvisor-switch] STATS_REQ" in 
     match req with
     | OP.Stats.Desc_req(req) ->
       let desc = 
@@ -640,15 +664,15 @@ let process_switch_channel flv st dpid e =
             let _ = 
               if not more then 
                 xid_st.dst <- List.filter (fun a -> a <> dpid) xid_st.dst 
-            in 
+            in
               if (List.length xid_st.dst = 0 ) then 
                 let _ = Hashtbl.remove flv.xid_map xid in 
-                handle_xid st xid_st
+                handle_xid flv st xid_st
               else
                 let _ = Hashtbl.replace flv.xid_map xid xid_st in 
                 return ()
         | _ -> return ()
-      with Not_found -> return ()
+      with Not_found -> return (pr "[flowvisor-ctrl] Unknown stats reply xid\n%!")
       end
   | OE.Aggr_flow_stats_reply(xid, pkts, bytes, flows, dpid) -> begin
       try_lwt
@@ -666,7 +690,7 @@ let process_switch_channel flv st dpid e =
             in 
               if (List.length xid_st.dst = 0 ) then 
                 let _ = Hashtbl.remove flv.xid_map xid in 
-                handle_xid st xid_st
+                handle_xid flv st xid_st
               else 
                 let _ = Hashtbl.replace flv.xid_map xid xid_st in 
                 return ()
@@ -691,7 +715,7 @@ let process_switch_channel flv st dpid e =
           in 
             if (List.length xid_st.dst = 0 ) then
               let _ = Hashtbl.remove flv.xid_map xid in 
-              handle_xid st xid_st
+              handle_xid flv st xid_st
             else 
               let _ = Hashtbl.replace flv.xid_map xid xid_st in
                 return ()

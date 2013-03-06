@@ -304,6 +304,7 @@ module Flow :
     }
     val marshal_flow_stats : stats list -> Cstruct.t -> int 
     val string_of_flow_stat : stats -> string
+    val flow_stats_len : stats -> int 
   end
 module Packet_in :
   sig
@@ -472,6 +473,7 @@ module Stats :
     type resp_hdr = { st_ty : stats_type; more : bool; }
     val int_of_stats_type : stats_type -> int
     val stats_type_of_int : int -> stats_type
+    val get_resp_hdr_size : int 
     type resp =
         Desc_resp of resp_hdr * desc
       | Flow_resp of resp_hdr * Flow.stats list

@@ -2305,6 +2305,8 @@ module Stats = struct
     uint16_t flags
   } as big_endian
 
+  let get_resp_hdr_size = sizeof_ofp_stats_reply 
+
   cstruct ofp_desc_stats {
     uint8_t mfr_desc[256];    
     uint8_t hw_desc[256];     

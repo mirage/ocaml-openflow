@@ -795,10 +795,24 @@ let process_openflow st t msg =
       (*TODO Need to consider the  table_id and the out_port and 
        * split reply over multiple openflow packets if they don't
        * fit a single packet. *)
-      let flows = get_flow_stats st of_match in 
+      let flows = get_flow_stats st of_match in
+      let stats = OP.Stats.({st_ty=FLOW; more=true;}) in 
+
+      lwt (_, flows) = 
+        Lwt_list. fold_right_s (
+          fun fl (sz, flows) ->
+            let fl_sz = OP.Flow.flow_stats_len fl in 
+              if (sz + fl_sz > 0xffff) then 
+                let r = OP.Stats.Flow_resp(stats, flows) in
+                let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len r) in 
+                lwt _ = Ofsocket.send_packet t (OP.Stats_resp (h, r)) in
+                  return ((OP.Header.get_len + OP.Stats.get_resp_hdr_size + fl_sz), [fl])
+              else
+                return ((sz + fl_sz), (fl::flows)) )
+            flows ((OP.Header.get_len + OP.Stats.get_resp_hdr_size), []) in 
       let stats = OP.Stats.({st_ty=FLOW; more=false;}) in 
       let r = OP.Stats.Flow_resp(stats, flows) in
-      let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len r) in 
+      let h = OP.Header.create ~xid OP.Header.STATS_RESP (OP.Stats.resp_get_len r) in
         Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
    | OP.Stats.Aggregate_req (req_h, of_match, table, port) -> 
       let aggr_flow_bytes = ref 0L in
