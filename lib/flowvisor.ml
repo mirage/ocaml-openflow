@@ -148,7 +148,6 @@ let handle_xid flv st xid_st =
     let stats = OP.Stats.({st_ty=FLOW; more=false;}) in 
     let r = OP.Stats.Flow_resp(stats, flows) in
     let h = OP.Header.create ~xid:xid_st.xid OP.Header.STATS_RESP 0 in 
-    let _ = pr "XXXXX flowvisor controller received stats\n%!" in 
       Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
   | _ -> return ()
 
@@ -573,14 +572,35 @@ let del_flowvisor_port flv desc =
 
 let map_flv_port flv dpid port = 
   (* map the new port *)
-  let port = 
+  let p = 
       Hashtbl.fold (
         fun flv_port (sw_dpid, sw_port, _) r -> 
           if ((dpid = sw_dpid) && 
               (sw_port = port)) then flv_port
           else r ) flv.port_map (-1) in
-  if (port < 0) then raise Not_found
-  else OP.Port.Port (port)
+  if (p < 0) then  OP.Port.Port(port)
+  else OP.Port.Port (p)
+
+let translate_stat flv dpid f = 
+  (* Translate match *)
+  let _ = 
+    match (f.OP.Flow.of_match.OP.Match.wildcards.OP.Wildcards.in_port,
+            f.OP.Flow.of_match.OP.Match.in_port) with
+    | (false, OP.Port.Port(p) ) -> 
+      f.OP.Flow.of_match.OP.Match.in_port <- map_flv_port flv dpid p
+    | _ -> ()
+  in
+
+  let _ = 
+    f.OP.Flow.action <- List.map 
+    (fun act -> 
+    match act with
+    | OP.Flow.Output(OP.Port.Port(p), len ) -> 
+      let p = map_flv_port flv dpid p in 
+      OP.Flow.Output(p, len )
+    | _ -> act) f.OP.Flow.action in 
+  (* Translate actions *)
+  f
 
 let process_switch_channel flv st dpid e =
   try_lwt
@@ -661,6 +681,7 @@ let process_switch_channel flv st dpid e =
         | Flows fl -> 
             (* Group reply separation *)
             let _ = xid_st.cache <- (Flows (fl @ flows)) in 
+            let flows = List.map (translate_stat flv dpid) flows in 
             let _ = 
               if not more then 
                 xid_st.dst <- List.filter (fun a -> a <> dpid) xid_st.dst 
