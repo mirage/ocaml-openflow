@@ -56,7 +56,7 @@ module Header :
       | BARRIER_RESP
       | QUEUE_GET_CONFIG_REQ
       | QUEUE_GET_CONFIG_RESP
-    type h = { ver : uint8; ty : msg_code; len : uint16; xid : uint32; }
+    type h = {ver:uint8;ty:msg_code;len:uint16;xid:uint32;}
     val get_len : int
     val parse_header : Cstruct.t -> h
     val header_to_string : h -> string
@@ -128,7 +128,8 @@ module Port :
       peer : features;
     }
     val init_port_phy: ?port_no:int -> ?hw_addr:eaddr -> 
-      ?name:string -> unit -> phy 
+      ?name:string -> unit -> phy
+      val translate_port_phy : phy -> int -> phy
     val string_of_phy : phy -> string
     type stats = {
       mutable port_id : uint16;
@@ -237,7 +238,16 @@ module Match :
     }
 
     val wildcard: unit -> t
-    val flow_match_compare : t -> t -> Wildcards.t -> bool
+    val create_match : ?in_port:int option -> ?dl_vlan:int option -> 
+      ?dl_src:(* Net.Nettypes.ethernet_mac *) eaddr option -> 
+      ?dl_dst:(* Net.Nettypes.ethernet_mac *) eaddr option ->
+      ?dl_type:int option -> ?nw_proto:char option ->
+      ?tp_dst:int option -> ?tp_src:int option ->
+      ?nw_dst:int32 option -> ?nw_dst_len:int ->
+      ?nw_src:int32 option -> ?nw_src_len:int ->
+      ?dl_vlan_pcp:char option -> ?nw_tos:char option -> unit -> t
+
+   val flow_match_compare : t -> t -> Wildcards.t -> bool
     val create_flow_match :
       Wildcards.t ->
       ?in_port:int16 ->
@@ -294,6 +304,7 @@ module Flow :
     }
     val marshal_flow_stats : stats list -> Cstruct.t -> int 
     val string_of_flow_stat : stats -> string
+    val flow_stats_len : stats -> int 
   end
 module Packet_in :
   sig
@@ -402,9 +413,9 @@ module Stats :
     val string_of_table_id : table_id -> string
     
     type aggregate = {
-      packet_count : uint64;
-      byte_count : uint64;
-      flow_count : uint32;
+      mutable packet_count : uint64;
+      mutable byte_count : uint64;
+      mutable flow_count : uint32;
     }
     type table = {
       mutable table_id : table_id;
@@ -415,6 +426,7 @@ module Stats :
       mutable lookup_count : uint64;
       mutable matched_count : uint64;
     }
+    val init_table_stats : table_id -> string -> Wildcards.t -> table 
     type queue = {
       port_no : uint16;
       queue_id : uint32;
@@ -458,9 +470,10 @@ module Stats :
       | Vendor_req of req_hdr
     val marshal_stats_req : ?xid:int32 -> req -> Cstruct.t -> int
     
-    type resp_hdr = { st_ty : stats_type; more_to_follow : bool; }
+    type resp_hdr = { st_ty : stats_type; more : bool; }
     val int_of_stats_type : stats_type -> int
     val stats_type_of_int : int -> stats_type
+    val get_resp_hdr_size : int 
     type resp =
         Desc_resp of resp_hdr * desc
       | Flow_resp of resp_hdr * Flow.stats list

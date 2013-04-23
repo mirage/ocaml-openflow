@@ -41,14 +41,14 @@ type mac_switch = {
 type switch_state = {
 (*   mutable mac_cache: (mac_switch, OP.Port.t) Hashtbl.t; *)
   mutable mac_cache: (OP.eaddr, OP.Port.t) Hashtbl.t; 
-  mutable dpid: OP.datapath_id list;
-  mutable of_ctrl: OC.t list; 
+(*  mutable dpid: OP.datapath_id list;
+  mutable of_ctrl: OC.t list; *)
   req_count: int ref; 
 }
 
 let switch_data = 
-  { mac_cache = Hashtbl.create 2048;dpid = []; 
-    of_ctrl = []; req_count=(ref 0);} 
+ { mac_cache = Hashtbl.create 2048; (* dpid = []; 
+    of_ctrl = []; *) req_count=(ref 0);} 
 
 
 let datapath_join_cb controller dpid evt =
@@ -57,22 +57,16 @@ let datapath_join_cb controller dpid evt =
       | OE.Datapath_join (c, _) -> c
       | _ -> invalid_arg "bogus datapath_join event match!" 
   in
-  switch_data.dpid <- switch_data.dpid @ [dp];
+(*   switch_data.dpid <- switch_data.dpid @ [dp]; *)
   return (pp "+ datapath:0x%012Lx\n" dp)
 
 let req_count = (ref 0)
-
-let add_entry_in_hashtbl mac_cache ix in_port = 
-  if not (Hashtbl.mem mac_cache ix ) then
-      Hashtbl.add mac_cache ix in_port
-  else  
-      Hashtbl.replace mac_cache ix in_port 
 
 let packet_in_cb controller dpid evt =
   incr switch_data.req_count;
   let (in_port, buffer_id, data, dp) = 
     match evt with
-      | OE.Packet_in (inp, buf, dat, dp) -> (inp, buf, dat, dp)
+      | OE.Packet_in (inp, _, buf, dat, dp) -> (inp, buf, dat, dp)
       | _ -> invalid_arg "bogus datapath_join event match!"
   in
   (* Parse Ethernet header *)
@@ -80,7 +74,7 @@ let packet_in_cb controller dpid evt =
 
   (* Store src mac address and incoming port *)
   let ix = m.OP.Match.dl_src in
-  let _ = Hashtbl.add switch_data.mac_cache ix in_port in
+  let _ = Hashtbl.replace switch_data.mac_cache ix in_port in
  
   (* check if I know the output port in order to define what type of message
    * we need to send *)
@@ -126,8 +120,8 @@ let packet_in_cb controller dpid evt =
  )
 
 let init controller = 
-  if (not (List.mem controller switch_data.of_ctrl)) then
-    switch_data.of_ctrl <- (([controller] @ switch_data.of_ctrl));
+(*  if (not (List.mem controller switch_data.of_ctrl)) then
+    switch_data.of_ctrl <- (([controller] @ switch_data.of_ctrl));*)
   pp "test controller register datapath cb\n";
   OC.register_cb controller OE.DATAPATH_JOIN datapath_join_cb;
   pp "test controller register packet_in cb\n";
@@ -139,7 +133,8 @@ let run () =
   Net.Manager.create (fun mgr interface id ->
     try_lwt
       let ip = 
-          (ipv4_addr_of_tuple (10l,0l,0l,3l),
+(*           (ipv4_addr_of_tuple (10l,0l,0l,253l),  *)
+         ( ipv4_addr_of_tuple (128l, 232l, 32l, 230l), 
            ipv4_addr_of_tuple (255l,255l,255l,0l), []) in  
       lwt _ = Manager.configure interface (`IPv4 ip) in
         OC.listen mgr (None, port) init

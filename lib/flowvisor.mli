@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2012 Haris Rotsos <cr409@cl.cam.ac.uk>
+ * Copyright (c) 2011 Charalampos Rotsos <cr409@cl.cam.ac.uk> 
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,21 +14,20 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-exception ReadError
+open Lwt
+open Net
+open Net.Nettypes
 
-open Net 
+type t 
 
-type conn_type 
-type conn_state = {
-  mutable dpid : Ofpacket.datapath_id;
-  t : conn_type; 
-}
+val listen: t -> Manager.t -> ipv4_src -> unit Lwt.t
+val local_listen: t -> Ofsocket.conn_state -> unit Lwt.t
+val create_flowvisor: ?verbose:bool -> unit -> t
+val remove_slice : t -> Ofpacket.Match.t ->  unit Lwt.t
+val add_local_slice : Net.Manager.t -> t -> Ofpacket.Match.t -> 
+  Ofsocket.conn_state -> int64 -> unit Lwt.t 
+val add_slice : Net.Manager.t -> t -> Ofpacket.Match.t -> 
+  ipv4_dst -> int64 -> unit Lwt.t 
+val add_local_slice : t -> Ofpacket.Match.t -> 
+  Ofsocket.conn_state -> int64 -> unit Lwt.t 
 
-val init_socket_conn_state : Channel.t -> conn_state
-
-(* val init_unix_conn_state : Lwt_unix.file_descr -> conn_state *)
-val init_local_conn_state: unit -> (conn_state * conn_state)
-val read_packet : conn_state -> Ofpacket.t Lwt.t
-val send_packet : conn_state -> Ofpacket.t -> unit Lwt.t
-val send_data_raw : conn_state -> Cstruct.t -> unit Lwt.t
-val close : conn_state -> unit 

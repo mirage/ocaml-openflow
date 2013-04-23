@@ -5,13 +5,14 @@ NAME=openflow
 J=4
 
 LWT ?= $(shell if ocamlfind query lwt.ssl >/dev/null 2>&1; then echo --enable-lwt; fi)
-MIRAGE ?= $(shell if ocamlfind query mirage-net >/dev/null 2>&1; then echo --enable-mirage; fi)
+MIRAGE ?= $(shell if [ $MIRAGE_OS = "xen" ]; then echo --enable-mirage; fi)
+MIRAGE = --enable-mirage
 
 -include Makefile.config
 
 setup.data: _oasis
 	oasis setup 
-	ocaml setup.ml -configure $(LWT) --disable-mirage 
+	ocaml setup.ml -configure $(LWT) $(MIRAGE)
 
 clean: setup.data 
 	ocaml setup.ml -clean $(OFLAGS)
@@ -24,8 +25,6 @@ distclean: setup.ml setup.data
 setup: setup.data
 
 build: setup.data $(wildcard lib/*.ml)
-	oasis setup 
-	ocaml setup.ml -configure $(LWT) --disable-mirage 
 	ocaml setup.ml -build -j $(J) $(OFLAGS)
 
 doc: setup.data setup.ml

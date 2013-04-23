@@ -86,7 +86,7 @@ let packet_in_cb controller dpid evt =
   incr switch_data.req_count;
   let (in_port, buffer_id, data, dp) = 
     match evt with
-      | OE.Packet_in (inp, buf, dat, dp) -> (inp, buf, dat, dp)
+      | OE.Packet_in (inp, _, buf, dat, dp) -> (inp, buf, dat, dp)
       | _ -> invalid_arg "bogus datapath_join event match!"
   in
   (* Parse Ethernet header *)
@@ -144,17 +144,15 @@ let init controller =
   OC.register_cb controller OE.PORT_STATUS_CHANGE port_status_cb
 
 
-let init_controller () =
-  OC.init_controller init
+let init_controller () = OC.init_controller ()
 
 let run_controller mgr st = 
-  let (controller_input, switch_output) = Lwt_stream.create () in 
-  let (switch_input, controller_output) = Lwt_stream.create () in 
+  let (controller, switch) = Ofsocket.init_local_conn_state () in 
   let _ = Lwt.ignore_result (
     try_lwt 
-      OC.local_connect mgr st (controller_input, controller_output) init
+      OC.local_connect st controller init
     with exn ->
       return (printf "[switch] standalone controller dailed %s\n%!" (Printexc.to_string
       exn))
       ) in
-    return (switch_input, switch_output)
+    return switch

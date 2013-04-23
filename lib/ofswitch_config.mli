@@ -14,9 +14,6 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-type t 
-
-val connect_client: unit -> t Lwt.t
 val listen_t: Net.Manager.t -> 
   (string -> unit Lwt.t) -> 
   (Ofpacket.Match.t -> Ofpacket.Flow.stats list) -> 

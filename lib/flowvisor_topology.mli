@@ -1,5 +1,5 @@
 (*
- * Copyright (c) 2012 Haris Rotsos <cr409@cl.cam.ac.uk>
+ * Copyright (c) 2011 Charalampos Rotsos <cr409@cl.cam.ac.uk> 
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,21 +14,17 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-exception ReadError
+open Net.Nettypes
 
-open Net 
+type t 
 
-type conn_type 
-type conn_state = {
-  mutable dpid : Ofpacket.datapath_id;
-  t : conn_type; 
-}
+val init_topology: unit -> t
+val add_port: t -> int64 -> int -> ethernet_mac -> unit Lwt.t
+val add_channel: t -> int64 -> Ofcontroller.t -> unit
+val discover: t-> unit Lwt.t
+val process_lldp_packet: t -> int64 -> int -> Cstruct.t -> bool
+val find_dpid_path: t -> int64 -> Ofpacket.Port.t -> int64 -> 
+  Ofpacket.Port.t -> (int64 * Ofpacket.Port.t * Ofpacket.Port.t) list
+val remove_dpid: t -> int64 -> unit
+val is_transit_port : t -> int64 -> int -> bool
 
-val init_socket_conn_state : Channel.t -> conn_state
-
-(* val init_unix_conn_state : Lwt_unix.file_descr -> conn_state *)
-val init_local_conn_state: unit -> (conn_state * conn_state)
-val read_packet : conn_state -> Ofpacket.t Lwt.t
-val send_packet : conn_state -> Ofpacket.t -> unit Lwt.t
-val send_data_raw : conn_state -> Cstruct.t -> unit Lwt.t
-val close : conn_state -> unit 
