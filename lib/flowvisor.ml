@@ -219,11 +219,27 @@ let packet_out_create st msg xid in_port bid data actions =
  let rec pkt_out_process st xid inp bid data msg acts = function
   | (OP.Flow.Output(OP.Port.All, len))::tail 
   | (OP.Flow.Output(OP.Port.Flood, len))::tail -> begin
-    let actions = acts @  [OP.Flow.Output(OP.Port.All, len)] in
+    let actions = acts @  [OP.Flow.Output(OP.Port.Flood, len)] in
     (* OP.Port.None is not the appropriate way to handle this. Need to find the
      * port that connects the two switches probably. *)
-    let msg = packet_out_create st msg xid inp bid data actions in
-    lwt _ = send_all_switches st msg in 
+    let in_dpid =     
+      try 
+        let (in_dpid, _, _) = Hashtbl.find st.port_map (OP.Port.int_of_port
+        inp)  in in_dpid
+      with Not_found -> 0L
+    in
+(*    let _ = pp "sending packet from port %d to port %d\n%!"
+ *    (OP.Port.int_of_port inp) (in_p) in  *)
+    let msg = packet_out_create st msg xid OP.Port.No_port (-1l) data actions in
+    lwt _ =
+      Lwt_list.iter_p (
+        fun (dpid, ch) -> 
+          if (dpid = in_dpid) then
+            Ofcontroller.send_data ch dpid  
+              (packet_out_create st msg xid inp (-1l) data actions) 
+          else
+            Ofcontroller.send_data ch dpid msg
+        ) (Hashtbl.fold (fun dpid ch c -> c @[(dpid, ch)]) st.switches []) in 
       pkt_out_process st xid inp bid data msg acts tail 
   end
   | (OP.Flow.Output(OP.Port.In_port, len))::tail -> begin
@@ -549,7 +565,7 @@ let switch_channel st dpid of_m sock =
 let add_flowvisor_port flv dpid port =
   let port_id = flv.portnum in 
   let _ = flv.portnum <- flv.portnum + 1 in
-  let phy = OP.Port.translate_port_phy port port_id in 
+  let phy = OP.Port.translate_port_phy port port_id in
   let _ = Hashtbl.add flv.port_map port_id 
             (dpid, port.OP.Port.port_no, phy) in 
   lwt _ = Flowvisor_topology.add_port flv.flv_topo dpid port.OP.Port.port_no
