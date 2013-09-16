@@ -35,14 +35,14 @@ type lldp_tvl =
   | Tlv_chassis_id_chassis_comp of string
   | Tlv_chassis_id_intf_alias of string
   | Tlv_chassis_id_port_comp of string
-  | Tlv_chassis_id_mac of ethernet_mac
-  | Tlv_chassis_id_net of ipv4_addr 
+  | Tlv_chassis_id_mac of Macaddr.t 
+  | Tlv_chassis_id_net of Ipaddr.V4.t 
   | Tlv_chassis_id_intf_name of string
   | Tlv_chassis_id_local of string
   | Tlv_port_id_intf_alias of string
   | Tlv_port_id_port_comp of string
-  | Tlv_port_id_mac of ethernet_mac
-  | Tlv_port_id_net of ipv4_addr
+  | Tlv_port_id_mac of Macaddr.t
+  | Tlv_port_id_net of Ipaddr.V4.t
   | Tlv_port_id_intf_name of string
   | Tlv_port_id_circ_id of string
   | Tlv_port_id_local of string
@@ -52,4 +52,4 @@ type lldp_tvl =
   | Tlv_unk of int * string
 
 val parse_lldp_tlvs: t -> lldp_tvl list
-val marsal_lldp_tlvs: ethernet_mac -> lldp_tvl list -> t -> int 
+val marsal_lldp_tlvs:  Macaddr.t -> lldp_tvl list -> t -> int 

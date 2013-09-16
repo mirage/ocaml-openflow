@@ -54,14 +54,10 @@ type uint64 = int64
 
 let uint8_of_int i = Char.chr i
 
+let zero_mac = Macaddr.of_bytes_exn "\x00\x00\x00\x00\x00\x00"
+let zero_ip = Ipaddr.V4.of_int32 0l
+
 (* XXX network specific types that should have a proper home *)
-
-type ipv4 = uint32
-let ipv4_to_string i =   
-  sp "%ld.%ld.%ld.%ld" 
-    ((i &&& 0x0_ff000000_l) >>> 24) ((i &&& 0x0_00ff0000_l) >>> 16)
-    ((i &&& 0x0_0000ff00_l) >>>  8) ((i &&& 0x0_000000ff_l)       )
-
 type byte = uint8
 let byte (i:int) : byte = Char.chr i
 let int_of_byte b = int_of_char b
@@ -69,26 +65,8 @@ let int32_of_byte b = b |> int_of_char |> Int32.of_int
 let int32_of_int (i:int) = Int32.of_int i
 
 type bytes = string
-type eaddr = bytes
 let bytes_to_hex_string bs = 
   bs |> Array.map (fun b -> sp "%02x." (int_of_byte b))
-
-let eaddr_to_string s = 
-  let l = String.length s in
-  let hp s i = sp "%02x" (int_of_char s.[i]) in
-  String.concat ":" (Array.init l (fun i -> hp s i) |> Array.to_list)
-
-external ipv4_addr_of_uint32: int32 -> Net.Nettypes.ipv4_addr = "%identity"
-external ipv4_addr_to_uint32: Net.Nettypes.ipv4_addr -> int32 = "%identity"
-
-let eaddr_is_broadcast s =
-  match s with
-    | "\xFF\xFF\xFF\xFF\xFF\xFF" -> true
-    | _ -> false
-
-let ipv4_addr_of_bytes bs = 
-  ((bs.[0] |> int32_of_byte <<< 24) ||| (bs.[1] |> int32_of_byte <<< 16) 
-    ||| (bs.[2] |> int32_of_byte <<< 8) ||| (bs.[3] |> int32_of_byte))
 
 (*********************************************************************** *)
 
@@ -148,7 +126,7 @@ module Header = struct
     uint32_t xid
   } as big_endian
 
-  (*cenum msg_code {
+  cenum msg_code {
     HELLO                 =  0;
     ERROR                 =  1;
     ECHO_REQ              =  2;
@@ -171,108 +149,9 @@ module Header = struct
     BARRIER_RESP          = 19;
     QUEUE_GET_CONFIG_REQ  = 20;
     QUEUE_GET_CONFIG_RESP = 21
-  } as uint8_t *)
-    type msg_code =
-      HELLO
-      | ERROR
-      | ECHO_REQ
-      | ECHO_RESP
-      | VENDOR
-      | FEATURES_REQ
-      | FEATURES_RESP
-      | GET_CONFIG_REQ
-      | GET_CONFIG_RESP
-      | SET_CONFIG
-      | PACKET_IN
-      | FLOW_REMOVED
-      | PORT_STATUS
-      | PACKET_OUT
-      | FLOW_MOD
-      | PORT_MOD
-      | STATS_REQ
-      | STATS_RESP
-      | BARRIER_REQ
-      | BARRIER_RESP
-      | QUEUE_GET_CONFIG_REQ
-      | QUEUE_GET_CONFIG_RESP
-    
-    let msg_code_of_int =
-      function
-      | 0 -> Some HELLO
-      | 1 -> Some ERROR
-      | 2 -> Some ECHO_REQ
-      | 3 -> Some ECHO_RESP
-      | 4 -> Some VENDOR
-      | 5 -> Some FEATURES_REQ
-      | 6 -> Some FEATURES_RESP
-      | 7 -> Some GET_CONFIG_REQ
-      | 8 -> Some GET_CONFIG_RESP
-      | 9 -> Some SET_CONFIG
-      | 10 -> Some PACKET_IN
-      | 11 -> Some FLOW_REMOVED
-      | 12 -> Some PORT_STATUS
-      | 13 -> Some PACKET_OUT
-      | 14 -> Some FLOW_MOD
-      | 15 -> Some PORT_MOD
-      | 16 -> Some STATS_REQ
-      | 17 -> Some STATS_RESP
-      | 18 -> Some BARRIER_REQ
-      | 19 -> Some BARRIER_RESP
-      | 20 -> Some QUEUE_GET_CONFIG_REQ
-      | 21 -> Some QUEUE_GET_CONFIG_RESP
-      | _ -> None
-      
-    let msg_code_to_int =
-      function
-      | HELLO -> 0
-      | ERROR -> 1
-      | ECHO_REQ -> 2
-      | ECHO_RESP -> 3
-      | VENDOR -> 4
-      | FEATURES_REQ -> 5
-      | FEATURES_RESP -> 6
-      | GET_CONFIG_REQ -> 7
-      | GET_CONFIG_RESP -> 8
-      | SET_CONFIG -> 9
-      | PACKET_IN -> 10
-      | FLOW_REMOVED -> 11
-      | PORT_STATUS -> 12
-      | PACKET_OUT -> 13
-      | FLOW_MOD -> 14
-      | PORT_MOD -> 15
-      | STATS_REQ -> 16
-      | STATS_RESP -> 17
-      | BARRIER_REQ -> 18
-      | BARRIER_RESP -> 19
-      | QUEUE_GET_CONFIG_REQ -> 20
-      | QUEUE_GET_CONFIG_RESP -> 21
-      
-    let msg_code_to_string =
-      function
-      | HELLO -> "HELLO"
-      | ERROR -> "ERROR"
-      | ECHO_REQ -> "ECHO_REQ"
-      | ECHO_RESP -> "ECHO_RESP"
-      | VENDOR -> "VENDOR"
-      | FEATURES_REQ -> "FEATURES_REQ"
-      | FEATURES_RESP -> "FEATURES_RESP"
-      | GET_CONFIG_REQ -> "GET_CONFIG_REQ"
-      | GET_CONFIG_RESP -> "GET_CONFIG_RESP"
-      | SET_CONFIG -> "SET_CONFIG"
-      | PACKET_IN -> "PACKET_IN"
-      | FLOW_REMOVED -> "FLOW_REMOVED"
-      | PORT_STATUS -> "PORT_STATUS"
-      | PACKET_OUT -> "PACKET_OUT"
-      | FLOW_MOD -> "FLOW_MOD"
-      | PORT_MOD -> "PORT_MOD"
-      | STATS_REQ -> "STATS_REQ"
-      | STATS_RESP -> "STATS_RESP"
-      | BARRIER_REQ -> "BARRIER_REQ"
-      | BARRIER_RESP -> "BARRIER_RESP"
-      | QUEUE_GET_CONFIG_REQ -> "QUEUE_GET_CONFIG_REQ"
-      | QUEUE_GET_CONFIG_RESP -> "QUEUE_GET_CONFIG_RESP"
- 
-  type h = {
+  } as uint8_t
+
+type h = {
     ver: uint8;
     ty: msg_code;
     len: uint16;
@@ -283,7 +162,7 @@ module Header = struct
 
   let parse_header bits = 
     match ((get_ofp_header_version bits), 
-      (msg_code_of_int (get_ofp_header_typ bits))) with
+      (int_to_msg_code (get_ofp_header_typ bits))) with
       | (1, Some(ty))
         -> let ret = 
           { ver=(char_of_int (get_ofp_header_version bits)); 
@@ -480,7 +359,7 @@ module Port = struct
 
   type phy = {
     port_no: uint16;
-    hw_addr: eaddr;
+    hw_addr: Macaddr.t;
     name: string;
     config: config;  
     state: state;    
@@ -506,7 +385,7 @@ module Port = struct
   let phy_len = 48
   let parse_phy bits = 
     let port_no = (get_ofp_phy_port_port_no bits) in
-    let hw_addr=(Cstruct.to_string (get_ofp_phy_port_hw_addr bits)) in 
+    let hw_addr=Macaddr.of_bytes_exn (Cstruct.to_string (get_ofp_phy_port_hw_addr bits)) in 
     let name=(Cstruct.to_string  (get_ofp_phy_port_name bits)) in
     let config = (parse_config (get_ofp_phy_port_config bits)) in 
     let state = (parse_state (get_ofp_phy_port_state bits)) in
@@ -529,7 +408,7 @@ module Port = struct
     in 
       aux [] bits
   
-  let init_port_phy ?(port_no = 0) ?(hw_addr="\x11\x11\x11\x11\x11\x11") 
+  let init_port_phy ?(port_no = 0) ?(hw_addr=Macaddr.broadcast) 
                       ?(name="") () = 
     {port_no; hw_addr; name; config=init_port_config; 
      state=init_port_state; curr=init_port_features; 
@@ -546,7 +425,7 @@ module Port = struct
 
    let marshal_phy phy bits =
      let _ = set_ofp_phy_port_port_no bits phy.port_no in
-     let _ = set_ofp_phy_port_hw_addr phy.hw_addr 0 bits in
+     let _ = set_ofp_phy_port_hw_addr (Macaddr.to_bytes phy.hw_addr) 0 bits in
      let name = String.make 16 (char_of_int 0) in
      let _ = String.blit phy.name 0 name 0 (String.length phy.name) in 
      let _ = set_ofp_phy_port_name name 0 bits in
@@ -560,7 +439,7 @@ module Port = struct
 
   let string_of_phy ph = 
     (sp "port_no:%d,hw_addr:%s,name:%s" 
-       ph.port_no (eaddr_to_string ph.hw_addr) ph.name)
+       ph.port_no (Macaddr.to_string ph.hw_addr) ph.name)
 
   type stats = {
     mutable port_id: uint16;
@@ -629,37 +508,11 @@ module Port = struct
           h.rx_frame_err h.rx_over_err h.rx_crc_err h.collisions
           (string_of_port_stats_reply q))
 
-(*  cenum reason {
+  cenum reason {
     ADD = 0;
     DEL = 1;
     MOD = 2
-  } as uint8_t*)
-
-    type reason = ADD | DEL | MOD
-    
-    let reason_of_int =
-      function | 0 -> Some ADD | 1 -> Some DEL | 2 -> Some MOD | _ -> None
-      
-    let reason_to_int = function | ADD -> 0 | DEL -> 1 | MOD -> 2
-      
-    let reason_to_string =
-      function | ADD -> "ADD" | DEL -> "DEL" | MOD -> "MOD"
-      
- 
-(*  type reason = ADD | DEL | MOD
-  let reason_of_int = function
-    | 0 -> ADD
-    | 1 -> DEL
-    | 2 -> MOD
-    | _ -> invalid_arg "reason_of_int"
-  and int_of_reason = function
-    | ADD -> 0
-    | DEL -> 1
-    | MOD -> 2
-  and string_of_reason = function
-    | ADD -> sp "ADD"
-    | DEL -> sp "DEL"
-    | MOD -> sp "MOD"*)
+  } as uint8_t
 
   type status = {
     reason: reason;
@@ -681,7 +534,7 @@ module Port = struct
 
   let parse_status bits =
     let reason = 
-      match (reason_of_int (get_ofp_port_status_reason bits)) with
+      match (int_to_reason (get_ofp_port_status_reason bits)) with
       | Some(reason) -> reason 
       | None -> raise(Unparsable("reason_of_int", bits))
     in
@@ -958,13 +811,13 @@ module Match = struct
   type t = {
     mutable wildcards: Wildcards.t;
     mutable in_port: Port.t;
-    mutable dl_src: eaddr;
-    mutable dl_dst: eaddr;
+    mutable dl_src: Macaddr.t;
+    mutable dl_dst: Macaddr.t;
     mutable dl_vlan: uint16;
     mutable dl_vlan_pcp: byte;
     mutable dl_type: uint16;
-    mutable nw_src: uint32;
-    mutable nw_dst: uint32;
+    mutable nw_src: Ipaddr.V4.t;
+    mutable nw_dst: Ipaddr.V4.t;
     mutable nw_tos: byte;
     mutable nw_proto: byte;
     mutable tp_src: uint16;
@@ -973,16 +826,16 @@ module Match = struct
 
   let wildcard () = 
     {wildcards=(Wildcards.full_wildcard ()); in_port=Port.No_port; 
-     dl_src="\000\000\000\000\000\000"; 
-     dl_dst="\000\000\000\000\000\000";
-     dl_vlan=0; dl_vlan_pcp='\000'; dl_type=0; nw_src=0l; nw_dst=0l;
+     dl_src=zero_mac; dl_dst=zero_mac;
+     dl_vlan=0; dl_vlan_pcp='\000'; dl_type=0; 
+     nw_src=zero_ip; nw_dst=zero_ip;
       nw_tos='\000';nw_proto='\000';tp_src=0; tp_dst=0;}
   let arp () = 
     {wildcards=(Wildcards.full_wildcard ()); in_port=Port.No_port; 
-     dl_src="\000\000\000\000\000\000"; 
-     dl_dst="\000\000\000\000\000\000";
-     dl_vlan=0; dl_vlan_pcp='\000'; dl_type=0; nw_src=0l; nw_dst=0l;
-      nw_tos='\000';nw_proto='\000';tp_src=0; tp_dst=0;}
+     dl_src=zero_mac; dl_dst=zero_mac;
+     dl_vlan=0; dl_vlan_pcp='\000'; dl_type=0; nw_src=zero_ip; 
+     nw_dst=zero_ip; nw_tos='\000';nw_proto='\000';tp_src=0; 
+     tp_dst=0;}
 
 
   cstruct ofp_match {
@@ -1008,15 +861,15 @@ module Match = struct
     let _ = set_ofp_match_wildcards bits
     (Wildcards.marshal_wildcard m.wildcards) in
     let _ = set_ofp_match_in_port bits (Port.int_of_port m.in_port) in
-    let _ = set_ofp_match_dl_src m.dl_src 0 bits in 
-    let _ = set_ofp_match_dl_dst m.dl_dst 0 bits in 
+    let _ = set_ofp_match_dl_src (Macaddr.to_bytes m.dl_src) 0 bits in 
+    let _ = set_ofp_match_dl_dst (Macaddr.to_bytes m.dl_dst) 0 bits in 
     let _ = set_ofp_match_dl_vlan bits m.dl_vlan in
     let _ = set_ofp_match_dl_vlan_pcp bits (int_of_char m.dl_vlan_pcp) in
     let _ = set_ofp_match_dl_type bits m.dl_type in
     let _ = set_ofp_match_nw_tos bits  (int_of_char m.nw_tos) in
     let _ = set_ofp_match_nw_proto bits (int_of_char m.nw_proto) in
-    let _ = set_ofp_match_nw_src bits m.nw_src in 
-    let _ = set_ofp_match_nw_dst bits m.nw_dst in
+    let _ = set_ofp_match_nw_src bits (Ipaddr.V4.to_int32 m.nw_src) in 
+    let _ = set_ofp_match_nw_dst bits (Ipaddr.V4.to_int32 m.nw_dst) in
     let _ = set_ofp_match_tp_src bits m.tp_src in
     let _ = set_ofp_match_tp_dst bits m.tp_dst in 
       sizeof_ofp_match 
@@ -1024,15 +877,15 @@ module Match = struct
   let parse_match bits = 
     let wildcards = Wildcards.parse_wildcards (get_ofp_match_wildcards bits) in
     let in_port = Port.port_of_int (get_ofp_match_in_port bits) in 
-    let dl_src = Cstruct.to_string (get_ofp_match_dl_src bits)  in
-    let dl_dst = Cstruct.to_string (get_ofp_match_dl_dst bits) in 
+    let dl_src = Macaddr.of_bytes_exn (Cstruct.to_string (get_ofp_match_dl_src bits)) in
+    let dl_dst = Macaddr.of_bytes_exn (Cstruct.to_string (get_ofp_match_dl_dst bits)) in 
     let dl_vlan = get_ofp_match_dl_vlan bits in 
     let dl_vlan_pcp = char_of_int (get_ofp_match_dl_vlan_pcp bits) in
     let dl_type = get_ofp_match_dl_type bits in
     let nw_tos = char_of_int (get_ofp_match_nw_tos bits) in
     let nw_proto = char_of_int (get_ofp_match_nw_proto bits) in
-    let nw_src = get_ofp_match_nw_src bits in 
-    let nw_dst = get_ofp_match_nw_dst bits in
+    let nw_src = Ipaddr.V4.of_int32 (get_ofp_match_nw_src bits) in 
+    let nw_dst = Ipaddr.V4.of_int32 (get_ofp_match_nw_dst bits) in
     let tp_src = get_ofp_match_tp_src bits in
     let tp_dst = get_ofp_match_tp_dst bits in 
     let _ = Cstruct.shift bits sizeof_ofp_match  in 
@@ -1040,13 +893,11 @@ module Match = struct
        dl_type; nw_tos; nw_proto; nw_src; nw_dst; tp_src; tp_dst;}
 
   (* Check if the flow object is include in flow_def match *)
-  let null_eaddr = "\x00\x00\x00\x00\x00\x00"
   let create_flow_match wildcards
-      ?(in_port = 0) ?(dl_src=null_eaddr) ?(dl_dst=null_eaddr) 
+      ?(in_port = 0) ?(dl_src=zero_mac) ?(dl_dst=zero_mac) 
       ?(dl_vlan=0xffff) ?(dl_vlan_pcp=(char_of_int 0)) ?(dl_type=0) 
-      ?(nw_tos=(char_of_int 0)) 
-      ?(nw_proto=(char_of_int 0)) 
-      ?(nw_src=(Int32.of_int 0)) ?(nw_dst=(Int32.of_int 0)) 
+      ?(nw_tos=(char_of_int 0)) ?(nw_proto=(char_of_int 0)) 
+      ?(nw_src=zero_ip) ?(nw_dst=zero_ip) 
       ?(tp_src=0) ?(tp_dst=0) 
       () = 
     { wildcards; in_port=(Port.port_of_int in_port); 
@@ -1068,8 +919,6 @@ module Match = struct
       | None -> d 
       | Some v -> v 
     in
-    let zero_mac = (* Net.Nettypes.ethernet_mac_of_bytes *)
-                    "\x00\x00\x00\x00\x00\x00" in 
     let flow_wild = Wildcards.({
       in_port=(is_none in_port); dl_vlan=(is_none dl_vlan); 
       dl_src=(is_none dl_src); dl_dst=(is_none dl_dst);
@@ -1086,8 +935,8 @@ module Match = struct
     ~dl_type:(option_default dl_type 0)
     ~nw_tos:(option_default nw_tos (char_of_int 0))
     ~nw_proto:(option_default nw_proto (char_of_int 0))
-    ~nw_src:(option_default nw_src 0l)
-    ~nw_dst:(option_default nw_dst 0l)
+    ~nw_src:(option_default nw_src zero_ip )
+    ~nw_dst:(option_default nw_dst zero_ip )
     ~tp_src:(option_default tp_src 0)
     ~tp_dst:(option_default tp_dst 0) () 
 
@@ -1138,14 +987,15 @@ module Match = struct
   } as big_endian
 
   let raw_packet_to_match in_port bits =
-    let dl_dst = Cstruct.to_string (get_dl_header_dl_dst bits) in 
-    let dl_src = Cstruct.to_string (get_dl_header_dl_src bits) in
+    let dl_dst = Macaddr.of_bytes_exn (Cstruct.to_string (get_dl_header_dl_dst bits)) in 
+    let dl_src = Macaddr.of_bytes_exn (Cstruct.to_string (get_dl_header_dl_src
+    bits)) in
     let dl_type = get_dl_header_dl_type bits in
     let bits = Cstruct.shift bits sizeof_dl_header in 
     match (dl_type) with
     | 0x0800 -> begin
-      let nw_src = get_nw_header_nw_src bits in 
-      let nw_dst = get_nw_header_nw_dst bits in 
+      let nw_src = Ipaddr.V4.of_int32 (get_nw_header_nw_src bits) in 
+      let nw_dst = Ipaddr.V4.of_int32 (get_nw_header_nw_dst bits) in 
       let nw_proto = get_nw_header_nw_proto bits in 
       let nw_tos = char_of_int (get_nw_header_nw_tos bits) in 
       let len = (get_nw_header_hlen_version bits) land 0xf in 
@@ -1174,18 +1024,19 @@ module Match = struct
           nw_proto=(char_of_int nw_proto); tp_src=0; tp_dst=0; }
       end
     | 0x0806 ->
-        {wildcards=(Wildcards.arp_match ()); 
+      let nw_src = Ipaddr.V4.of_int32 (get_nw_header_nw_src bits) in 
+      let nw_dst = Ipaddr.V4.of_int32 (get_nw_header_nw_dst bits) in 
+      {wildcards=(Wildcards.arp_match ()); 
         in_port; dl_src; dl_dst; dl_type;
         dl_vlan=0xffff; dl_vlan_pcp=(char_of_int 0);
-        nw_src=(get_arphdr_nw_src bits); 
-        nw_dst=(get_arphdr_nw_dst bits); 
+        nw_src; nw_dst; 
         nw_proto=( char_of_int (get_arphdr_ar_op bits)); 
         nw_tos=(char_of_int 0); tp_src=0; tp_dst=0}
     | _ ->  
       {wildcards=(Wildcards.l2_match ()); 
       in_port; dl_src; dl_dst; dl_type;
       dl_vlan=0xffff; dl_vlan_pcp=(char_of_int 0);
-      nw_src=0l; nw_dst=0l; 
+      nw_src=zero_ip; nw_dst=zero_ip; 
       nw_tos=(char_of_int 0); nw_proto=(char_of_int 0); 
       tp_src=0; tp_dst=0}
 
@@ -1199,18 +1050,16 @@ module Match = struct
     sprintf 
       "%s%s%s%s%s%s%s%s%s%s%s%s"
       (print_field m.wildcards.Wildcards.in_port "in_port" (Port.string_of_port m.in_port))
-      (print_field m.wildcards.Wildcards.dl_src "dl_src" (eaddr_to_string m.dl_src))
-      (print_field m.wildcards.Wildcards.dl_dst "dl_dst" (eaddr_to_string m.dl_dst))
+      (print_field m.wildcards.Wildcards.dl_src "dl_src" (Macaddr.to_string m.dl_src))
+      (print_field m.wildcards.Wildcards.dl_dst "dl_dst" (Macaddr.to_string m.dl_dst))
       (print_field m.wildcards.Wildcards.dl_vlan "dl_vlan" (string_of_int m.dl_vlan))
       (print_field m.wildcards.Wildcards.dl_vlan_pcp "dl_pcp" 
         (string_of_int (int_of_char m.dl_vlan_pcp) ))
       (print_field m.wildcards.Wildcards.dl_type "dl_type" (string_of_int m.dl_type))
      (print_field (m.wildcards.Wildcards.nw_src >= '\x20') "nw_src" 
-        (sprintf "%s/%d" (Net.Nettypes.ipv4_addr_to_string (ipv4_addr_of_uint32 m.nw_src))
-          (int_of_char m.wildcards.Wildcards.nw_src) ))
+        (sprintf "%s/%d" (Ipaddr.V4.to_string m.nw_src) (int_of_char m.wildcards.Wildcards.nw_src) ))
       (print_field (m.wildcards.Wildcards.nw_dst >= '\x20') "nw_dst" 
-        (sprintf "%s/%d" (Net.Nettypes.ipv4_addr_to_string (ipv4_addr_of_uint32 m.nw_dst) )
-          (int_of_char m.wildcards.Wildcards.nw_dst) ))
+        (sprintf "%s/%d" (Ipaddr.V4.to_string m.nw_dst) (int_of_char m.wildcards.Wildcards.nw_dst) ))
       (print_field m.wildcards.Wildcards.nw_tos "nw_tos" (string_of_int (int_of_char m.nw_tos)))
       (print_field m.wildcards.Wildcards.nw_proto "nw_proto" (string_of_int (int_of_char m.nw_proto)))
       (print_field m.wildcards.Wildcards.tp_src "tp_src" (string_of_int m.tp_src))
@@ -1253,11 +1102,11 @@ module Match = struct
       ((wildcard.Wildcards.tp_src)  || (flow.tp_src = flow_def.tp_src)) &&
       ((wildcard.Wildcards.tp_dst)  || (flow.tp_dst = flow_def.tp_dst)) &&
       ((nw_src_mask <= 0) ||
-        (Int32.shift_right_logical flow.nw_src nw_src_mask) =
-        (Int32.shift_right_logical flow_def.nw_src nw_src_mask)) &&
+        (Int32.shift_right_logical (Ipaddr.V4.to_int32 flow.nw_src) nw_src_mask) =
+        (Int32.shift_right_logical (Ipaddr.V4.to_int32 flow_def.nw_src) nw_src_mask)) &&
       ((nw_dst_mask <= 0) ||
-        (Int32.shift_right_logical flow.nw_dst nw_dst_mask) =
-        (Int32.shift_right_logical flow_def.nw_dst nw_dst_mask)) &&
+        (Int32.shift_right_logical (Ipaddr.V4.to_int32 flow.nw_dst) nw_dst_mask) =
+        (Int32.shift_right_logical (Ipaddr.V4.to_int32 flow_def.nw_dst) nw_dst_mask)) &&
       ((wildcard.Wildcards.nw_tos)  || (flow.nw_tos = flow_def.nw_tos)) &&
       ((wildcard.Wildcards.dl_vlan_pcp) || flow.dl_vlan_pcp =
               flow_def.dl_vlan_pcp))
@@ -1270,10 +1119,10 @@ module Flow = struct
     | Set_vlan_vid of int 
     | Set_vlan_pcp of int 
     | STRIP_VLAN 
-    | Set_dl_src of eaddr
-    | Set_dl_dst of eaddr
-    | Set_nw_src of ipv4 
-    | Set_nw_dst of ipv4
+    | Set_dl_src of Macaddr.t
+    | Set_dl_dst of Macaddr.t
+    | Set_nw_src of Ipaddr.V4.t 
+    | Set_nw_dst of Ipaddr.V4.t
     | Set_nw_tos of byte 
     | Set_tp_src of int16 
     | Set_tp_dst of int16
@@ -1285,10 +1134,10 @@ module Flow = struct
     |  1 -> Set_vlan_vid(0xffff)
     |  2 -> Set_vlan_pcp(0)
     |  3 -> STRIP_VLAN 
-    |  4 -> Set_dl_src("\xff\xff\xff\xff\xff\xff")
-    |  5 -> Set_dl_dst("\xff\xff\xff\xff\xff\xff") 
-    |  6 -> Set_nw_src(0xFFFFFFFFl)
-    |  7 -> Set_nw_dst(0xFFFFFFFFl)
+    |  4 -> Set_dl_src(Macaddr.broadcast)
+    |  5 -> Set_dl_dst(Macaddr.broadcast) 
+    |  6 -> Set_nw_src(Ipaddr.V4.broadcast)
+    |  7 -> Set_nw_dst(Ipaddr.V4.broadcast)
     |  8 -> Set_nw_tos(char_of_int 0) 
     |  9 -> Set_tp_src (0)
     | 10 -> Set_tp_dst (0)
@@ -1315,10 +1164,10 @@ module Flow = struct
     | Set_vlan_vid vlan -> sp "SET_VLAN_VID %d" vlan
     | Set_vlan_pcp (pcp) -> sp "SET_VLAN_PCP %d" pcp
     | STRIP_VLAN   -> sp "STRIP_VLAN"
-    | Set_dl_src(eaddr)   -> (sp "SET_DL_SRC %s" (eaddr_to_string eaddr))
-    | Set_dl_dst(eaddr)   -> (sp "SET_DL_DST %s" (eaddr_to_string eaddr))
-    | Set_nw_src (ip) -> sp "SET_NW_SRC %s" (ipv4_to_string ip)
-    | Set_nw_dst (ip) -> sp "SET_NW_DST %s" (ipv4_to_string ip)
+    | Set_dl_src(eaddr)   -> (sp "SET_DL_SRC %s" (Macaddr.to_string eaddr))
+    | Set_dl_dst(eaddr)   -> (sp "SET_DL_DST %s" (Macaddr.to_string eaddr))
+    | Set_nw_src (ip) -> sp "SET_NW_SRC %s" (Ipaddr.V4.to_string ip)
+    | Set_nw_dst (ip) -> sp "SET_NW_DST %s" (Ipaddr.V4.to_string ip)
     | Set_nw_tos (tos) -> sp "SET_NW_TOS %d" (int_of_char tos)
     | Set_tp_src (port) -> sp "SET_TP_SRC %d" port
     | Set_tp_dst (port) -> sp "SET_TP_DST %d" port
@@ -1426,13 +1275,13 @@ module Flow = struct
     | Set_dl_dst(eaddr) ->
       let _ = set_ofp_action_dl_addr_typ bits (int_of_action m) in
       let _ = set_ofp_action_dl_addr_len bits 16 in
-      let _ = set_ofp_action_dl_addr_dl_addr eaddr 0 bits in 
+      let _ = set_ofp_action_dl_addr_dl_addr (Macaddr.to_bytes eaddr) 0 bits in 
         sizeof_ofp_action_dl_addr
     | Set_nw_src (ip) 
     | Set_nw_dst (ip) -> 
       let _ = set_ofp_action_nw_addr_typ bits (int_of_action m) in
       let _ = set_ofp_action_nw_addr_len bits 8 in
-      let _ = set_ofp_action_nw_addr_nw_addr bits ip in
+      let _ = set_ofp_action_nw_addr_nw_addr bits (Ipaddr.V4.to_int32 ip) in
         sizeof_ofp_action_nw_addr    
     | Set_nw_tos (tos) -> 
       let _ = set_ofp_action_nw_tos_typ bits (int_of_action m) in
@@ -1481,18 +1330,20 @@ module Flow = struct
     | STRIP_VLAN -> 
       (sizeof_ofp_action_header, STRIP_VLAN)
     | Set_dl_src( _ ) ->
-      let eaddr = Cstruct.to_string 
-                    (get_ofp_action_dl_addr_dl_addr bits) in 
+      let eaddr = Macaddr.of_bytes_exn (
+                   Cstruct.to_string (
+                    get_ofp_action_dl_addr_dl_addr bits)) in 
         (sizeof_ofp_action_dl_addr, Set_dl_src(eaddr))
     | Set_dl_dst( _ ) -> 
-      let eaddr = Cstruct.to_string 
-                    (get_ofp_action_dl_addr_dl_addr bits) in 
+      let eaddr = Macaddr.of_bytes_exn 
+          (Cstruct.to_string 
+             (get_ofp_action_dl_addr_dl_addr bits)) in 
         (sizeof_ofp_action_dl_addr, Set_dl_dst(eaddr))
     | Set_nw_src( _ ) ->
-      let ip = get_ofp_action_nw_addr_nw_addr bits in
+      let ip = Ipaddr.V4.of_int32 (get_ofp_action_nw_addr_nw_addr bits) in
         (sizeof_ofp_action_nw_addr, Set_nw_src( ip ))
     | Set_nw_dst( _ ) ->
-      let ip = get_ofp_action_nw_addr_nw_addr bits in
+      let ip = Ipaddr.V4.of_int32 (get_ofp_action_nw_addr_nw_addr bits) in
         (sizeof_ofp_action_nw_addr, Set_nw_dst( ip ))
     | Set_nw_tos( _ ) ->
       let tos = char_of_int (get_ofp_action_nw_tos_nw_tos bits) in
@@ -1521,20 +1372,11 @@ module Flow = struct
         printf "len of action cstruct %d\n%!" (Cstruct.len bits); 
         raise (Unparsable("parse_actions", bits))
 
-  type reason = IDLE_TIMEOUT | HARD_TIMEOUT | DELETE
-  let reason_of_int = function
-    | 0 -> IDLE_TIMEOUT
-    | 1 -> HARD_TIMEOUT
-    | 2 -> DELETE
-    | _ -> invalid_arg "reason_of_int"
-  and int_of_reason = function
-    | IDLE_TIMEOUT -> 0
-    | HARD_TIMEOUT -> 1
-    | DELETE -> 2
-  and string_of_reason = function
-    | IDLE_TIMEOUT -> 0
-    | HARD_TIMEOUT -> 1
-    | DELETE -> 2
+  cenum reason {
+    IDLE_TIMEOUT =00;
+    HARD_TIMEOUT =1; 
+    DELETE = 2
+  } as uint8_t
 
   type stats = {
     mutable table_id: byte;
@@ -1965,7 +1807,7 @@ end
 module Port_mod = struct
   type t = {
     port_no: Port.t;
-    hw_addr: eaddr;
+    hw_addr: Macaddr.t;
     config: Port.config;
     mask: Port.config;
     advertise: Port.features;
@@ -2746,4 +2588,4 @@ let marshal msg =
   | Queue_get_config_req of Header.h * Port.t
   | Queue_get_config_resp of Header.h * Port.t * Queue.t array
  *)
-    marshal_and_sub marshal (OS.Io_page.to_cstruct (OS.Io_page.get ()))
+    marshal_and_sub marshal (OS.Io_page.to_cstruct (OS.Io_page.get 1))

@@ -186,14 +186,14 @@ type lldp_tvl =
   | Tlv_chassis_id_chassis_comp of string
   | Tlv_chassis_id_intf_alias of string
   | Tlv_chassis_id_port_comp of string
-  | Tlv_chassis_id_mac of ethernet_mac
-  | Tlv_chassis_id_net of ipv4_addr 
+  | Tlv_chassis_id_mac of Macaddr.t 
+  | Tlv_chassis_id_net of Ipaddr.V4.t 
   | Tlv_chassis_id_intf_name of string
   | Tlv_chassis_id_local of string
   | Tlv_port_id_intf_alias of string
   | Tlv_port_id_port_comp of string
-  | Tlv_port_id_mac of ethernet_mac
-  | Tlv_port_id_net of ipv4_addr
+  | Tlv_port_id_mac of Macaddr.t 
+  | Tlv_port_id_net of Ipaddr.V4.t 
   | Tlv_port_id_intf_name of string
   | Tlv_port_id_circ_id of string
   | Tlv_port_id_local of string
@@ -219,10 +219,13 @@ let parse_lldp_tlv bits =
                   Tlv_chassis_id_intf_alias(data)
               | Some(LLDP_CHASSIS_PORT_COMP_SUBTYPE)   -> 
                   Tlv_chassis_id_port_comp(data)
-              | Some(LLDP_CHASSIS_MAC_ADDR_SUBTYPE)    -> 
-                  Tlv_chassis_id_mac(Net.Nettypes.ethernet_mac_of_bytes data)
+              | Some(LLDP_CHASSIS_MAC_ADDR_SUBTYPE)    -> begin 
+                  match (Macaddr.of_bytes data) with
+                  | None -> raise (Unparsable bits) 
+                  | Some addr -> (Tlv_chassis_id_mac addr)
+              end 
               | Some(LLDP_CHASSIS_NETWORK_ADDR_SUBTYPE)->
-                  let ip = ipv4_addr_of_uint32 
+                  let ip = Ipaddr.V4.of_int32  
                              (Cstruct.BE.get_uint32 bits 3) in 
                     Tlv_chassis_id_net(ip)
               | Some(LLDP_CHASSIS_INTF_NAME_SUBTYPE)   -> 
@@ -240,10 +243,13 @@ let parse_lldp_tlv bits =
                    Tlv_port_id_intf_alias(data)
                | Some(LLDP_PORT_PORT_COMP_SUBTYPE)    ->  
                    Tlv_port_id_port_comp(data)
-               | Some(LLDP_PORT_MAC_ADDR_SUBTYPE)     ->  
-                   Tlv_port_id_mac(Net.Nettypes.ethernet_mac_of_bytes data)
+               | Some(LLDP_PORT_MAC_ADDR_SUBTYPE)     -> begin  
+                   match (Macaddr.of_bytes data) with
+                   | None -> raise (Unparsable(bits))
+                   | Some addr -> Tlv_port_id_mac(addr)
+               end 
                | Some(LLDP_PORT_NETWORK_ADDR_SUBTYPE) ->  
-                  let ip = ipv4_addr_of_uint32 
+                  let ip = Ipaddr.V4.of_int32  
                              (Cstruct.BE.get_uint32 bits 3) in 
                    Tlv_port_id_net(ip)
                | Some(LLDP_PORT_INTF_NAME_SUBTYPE)    ->  
@@ -306,12 +312,11 @@ let marsal_lldp_tlv tlv bits =
     | Tlv_chassis_id_intf_alias(data) -> set_lldp_tlv_typ_subtyp_data bits 1 2 data 
     | Tlv_chassis_id_port_comp(data) -> set_lldp_tlv_typ_subtyp_data bits 1 3 data
     | Tlv_chassis_id_mac(mac) -> set_lldp_tlv_typ_subtyp_data bits 1 4 
-                                  (Net.Nettypes.ethernet_mac_to_bytes mac)
+                                  (Macaddr.to_bytes  mac)
     | Tlv_chassis_id_net(ip) -> 
         let _ = Cstruct.BE.set_uint16 bits 0 0x205 in 
         let _ = Cstruct.set_uint8 bits 2 5 in 
-        let _ = Cstruct.BE.set_uint32 bits 3 (Net.Nettypes.ipv4_addr_to_uint32
-        ip) in
+        let _ = Cstruct.BE.set_uint32 bits 3 (Ipaddr.V4.to_int32 ip) in 
           7
     | Tlv_chassis_id_intf_name(data) ->  set_lldp_tlv_typ_subtyp_data bits 1 6 data
     | Tlv_chassis_id_local(data) -> set_lldp_tlv_typ_subtyp_data bits 1 8 data
@@ -319,12 +324,11 @@ let marsal_lldp_tlv tlv bits =
     | Tlv_port_id_intf_alias(data) ->  set_lldp_tlv_typ_subtyp_data bits 2 1 data
     | Tlv_port_id_port_comp(data) ->  set_lldp_tlv_typ_subtyp_data bits 2 2 data
     | Tlv_port_id_mac(mac) ->  set_lldp_tlv_typ_subtyp_data bits 2 3 
-                                (Net.Nettypes.ethernet_mac_to_bytes mac)
+                                (Macaddr.to_bytes mac)
     | Tlv_port_id_net(ip) -> 
         let _ = Cstruct.BE.set_uint16 bits 0 0x405 in 
         let _ = Cstruct.set_uint8 bits 2 4 in 
-        let _ = Cstruct.BE.set_uint32 bits 3 (Net.Nettypes.ipv4_addr_to_uint32
-        ip) in
+        let _ = Cstruct.BE.set_uint32 bits 3 (Ipaddr.V4.to_int32 ip) in
           7
     | Tlv_port_id_intf_name(data) -> set_lldp_tlv_typ_subtyp_data bits 2 5 data 
     | Tlv_port_id_circ_id(data) -> set_lldp_tlv_typ_subtyp_data bits 2 6 data
@@ -342,7 +346,7 @@ let marsal_lldp_tlv tlv bits =
 
 let marsal_lldp_tlvs mac tlvs bits = 
   let _ = Net.Ethif.set_ethernet_dst "\x01\x80\xc2\x00\x00\x0e" 0 bits in 
-  let _ = Net.Ethif.set_ethernet_src (Net.Nettypes.ethernet_mac_to_bytes mac) 
+  let _ = Net.Ethif.set_ethernet_src (Macaddr.to_bytes mac) 
             0 bits in 
   let _ = Net.Ethif.set_ethernet_ethertype bits 0x88cc in 
   let bits = Cstruct.shift bits Ethif.sizeof_ethernet in 

@@ -14,23 +14,23 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-
+open Net
 
 type t
-val add_port : Net.Manager.t -> ?use_mac:bool -> t -> string -> unit Lwt.t
-val del_port : Net.Manager.t -> t -> string -> unit Lwt.t
-val add_port_local : Net.Manager.t -> t -> Net.Manager.id -> unit Lwt.t
+val add_port : Manager.t -> ?use_mac:bool -> t -> Manager.id -> unit Lwt.t
+val del_port : Manager.t -> t -> string -> unit Lwt.t
+val add_port_local : Manager.t -> t -> Manager.id -> unit Lwt.t
 val add_flow : t -> Ofpacket.Flow_mod.t -> unit Lwt.t
 val del_flow : t -> Ofpacket.Match.t -> unit Lwt.t
 val get_flow_stats : t -> Ofpacket.Match.t -> Ofpacket.Flow.stats list 
 val create_switch :  ?verbose:bool -> int64 -> t
-val listen : t -> Net.Manager.t -> Net.Nettypes.ipv4_src -> 
+val listen : t -> Manager.t -> Nettypes.ipv4_src -> 
   unit Lwt.t 
-val connect : t -> Net.Manager.t -> Net.Nettypes.ipv4_dst -> 
+val connect : t -> Manager.t -> Nettypes.ipv4_dst -> 
   unit Lwt.t
 
-val local_connect : t -> Net.Manager.t -> Ofsocket.conn_state -> unit Lwt.t
+val local_connect : t -> Manager.t -> Ofsocket.conn_state -> unit Lwt.t
 (*
-val lwt_connect : t -> ?standalone:bool -> Net.Manager.t -> Net.Nettypes.ipv4_dst -> 
+val lwt_connect : t -> ?standalone:bool -> Manager.t -> Nettypes.ipv4_dst -> 
   unit Lwt.t
  *)

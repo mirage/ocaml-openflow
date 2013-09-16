@@ -299,7 +299,7 @@ let controller_run st conn =
       return ()
   
 let socket_controller st (remote_addr, remote_port) t =
-  let rs = Nettypes.ipv4_addr_to_string remote_addr in
+  let rs = Ipaddr.V4.to_string  remote_addr in
   let _ = pp "[controller]+ Controller %s:%d\n%!" rs remote_port in
   let conn = init_socket_conn_state t in 
     controller_run st conn 

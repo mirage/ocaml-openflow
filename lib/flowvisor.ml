@@ -569,7 +569,7 @@ let add_flowvisor_port flv dpid port =
   let _ = Hashtbl.add flv.port_map port_id 
             (dpid, port.OP.Port.port_no, phy) in 
   lwt _ = Flowvisor_topology.add_port flv.flv_topo dpid port.OP.Port.port_no
-        (Net.Nettypes.ethernet_mac_of_bytes port.OP.Port.hw_addr) in
+        port.OP.Port.hw_addr in
   let h = OP.Header.(create PORT_STATUS 0 ) in 
   let status = OP.Port_status(h, (OP.Port.({reason=OP.Port.ADD; desc=phy;}))) in 
     Lwt_list.iter_p 
@@ -792,7 +792,7 @@ let add_slice mgr flv of_m dst dpid =
       while_lwt true do
         try_lwt 
           let switch_connect (addr, port) t = 
-            let rs = Nettypes.ipv4_addr_to_string addr in
+            let rs = Ipaddr.V4.to_string addr in
             let _ = pp "[flowvisor-switch]+ controller %s:%d\n%!" rs port in 
             (* Trigger the dance between the 2 nodes *)
             let sock = Ofsocket.init_socket_conn_state t in

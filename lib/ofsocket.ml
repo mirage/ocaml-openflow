@@ -28,7 +28,7 @@ let cp = pp "%s\n%!"
 let resolve t = Lwt.on_success t (fun _ -> ())
 
 let get_new_buffer len = 
-  let buf = OS.Io_page.to_cstruct (OS.Io_page.get ()) in 
+  let buf = OS.Io_page.to_cstruct (OS.Io_page.get 1) in 
     Cstruct.sub buf 0 len 
 
 module Socket = struct  

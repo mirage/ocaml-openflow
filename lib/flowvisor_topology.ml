@@ -72,7 +72,7 @@ end
 module Dijkstra = Path.Dijkstra(Graph)(W)
 
 type t = {
-  ports : (int64 * int, ethernet_mac * bool) Hashtbl.t; 
+  ports : (int64 * int, Macaddr.t * bool) Hashtbl.t; 
   channels : (int64, Ofcontroller.t) Hashtbl.t;
   topo : Graph.t;
 }
@@ -86,10 +86,10 @@ let add_channel t dpid ch =
   Hashtbl.replace t.channels dpid ch 
 
 let generate_lldp_discovery dpid src_mac port =
-  let bits = OS.Io_page.to_cstruct (OS.Io_page.get ()) in 
+  let bits = OS.Io_page.to_cstruct (OS.Io_page.get 1) in 
   let _ = Cstruct.BE.set_uint64 bits 0 dpid in 
   let dpid = Cstruct.to_string (Cstruct.sub bits 0 8) in 
-  let bits = OS.Io_page.to_cstruct (OS.Io_page.get ()) in
+  let bits = OS.Io_page.to_cstruct (OS.Io_page.get 1) in
   let _ = Cstruct.BE.set_uint16 bits 0 port in 
   let port = Cstruct.(to_string (sub bits 0 2)) in 
     marshal_and_sub (marsal_lldp_tlvs src_mac 
@@ -98,7 +98,7 @@ let generate_lldp_discovery dpid src_mac port =
                         Tlv_ttl(120);
                         Tlv(LLDP_TYPE_SYSTEM_DESCR, dpid);
                         Tlv_end;]) 
-     (OS.Io_page.to_cstruct (OS.Io_page.get ()))
+     (OS.Io_page.to_cstruct (OS.Io_page.get 1))
 
 let send_port_lldp t dpid port mac = 
   let data = generate_lldp_discovery dpid mac port in
@@ -114,7 +114,7 @@ let add_port t dpid port mac =
     send_port_lldp t dpid port mac 
 
 let mark_port_down t dpid port down = 
-  let fmac = Net.Nettypes.ethernet_mac_of_bytes "\xff\xff\xff\xff\xff\xff" in 
+  let fmac = Macaddr.of_bytes_exn "\xff\xff\xff\xff\xff\xff" in 
   try
     let (mac, _) = Hashtbl.find t.ports (dpid, port) in 
       Hashtbl.replace t.ports (dpid, port) (mac, down)
@@ -163,7 +163,7 @@ let process_lldp_packet t src_dpid src_port pkt =
               ) bits in
                 (!dpid, port, mac)
           | _ -> (dpid, port, mac)
-    ) tlvs (0L, 0, Net.Nettypes.ethernet_mac_broadcast) in
+    ) tlvs (0L, 0, Macaddr.broadcast ) in
     match (Hashtbl.mem t.channels dst_dpid) with
     | false -> false
     | true -> 

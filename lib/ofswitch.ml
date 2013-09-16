@@ -40,7 +40,6 @@ type uint16 = OP.uint16
 type uint32 = OP.uint32
 type uint64 = OP.uint64
 type byte   = OP.byte
-type eaddr  = OP.eaddr
 
 type port = uint16
 type cookie = uint64
@@ -50,9 +49,15 @@ type device = string (* XXX placeholder! *)
 let resolve t = Lwt.on_success t (fun _ -> ())
 
 let get_new_buffer len = 
-  let buf = OS.Io_page.to_cstruct (OS.Io_page.get ()) in 
+  let buf = OS.Io_page.to_cstruct (OS.Io_page.get 1) in 
     Cstruct.sub buf 0 len 
 
+let get_ethif mgr id = 
+    let lst = Manager.get_intfs mgr in 
+    let (_, ethif) = List.find (fun (dev_id,_) -> id = dev_id) lst in 
+    ethif
+
+ 
 module Entry = struct
   type table_counter = {
     n_active: uint32;
@@ -147,8 +152,8 @@ module Table = struct
     let entry = Entry.({actions=t.OP.Flow_mod.actions; counters=(init_flow_counters t); 
              cache_entries=[];}) in  
 
-    (* log data to the visualisation server *)
-    let _ = 
+    (* TODO log data to the visualisation server *)
+(*    let _ = 
       match (Lwt.get OS.Topology.node_name) with
       | None -> ()
       | Some(node_name) ->  
@@ -161,7 +166,7 @@ module Table = struct
             ("action", (Rpc.String action_str));
           ] in
           OS.Console.broadcast "flow" (Jsonrpc.to_string msg)
-    in
+  in *)
 
     let _ = Hashtbl.replace table.entries t.OP.Flow_mod.of_match entry in
     (* In the fast path table, I need to delete any conflicting entries *)
@@ -199,7 +204,7 @@ module Table = struct
             let _ = Hashtbl.remove table.entries of_match in 
             
             (* log removal of flow *)
-            let _ = 
+(*            let _ = 
               match Lwt.get OS.Topology.node_name with
               | None -> ()
               | Some(node_name) -> 
@@ -211,7 +216,7 @@ module Table = struct
                     ("flow", (Rpc.String flow_str)); 
                     ("action", (Rpc.String action_str));] in
                     OS.Console.broadcast "flow" (Jsonrpc.to_string msg)
-            in
+    in *)
                (of_match, flow)::ret
           ) else ret
           ) table.entries [] in
@@ -297,10 +302,11 @@ module Switch = struct
     phy: OP.Port.phy;
     queue: Cstruct.t Queue.t;
   }
-  let init_port mgr port_no ethif = 
-    let name = Manager.get_intf_name mgr ethif in 
-    let hw_addr = Nettypes.ethernet_mac_to_bytes 
-                    (Manager.get_intf_mac mgr ethif) in
+
+ let init_port mgr port_no id = 
+    let ethif = Manager.get_ethif ( get_ethif mgr id ) in 
+    let name = OS.Netif.string_of_id (OS.Netif.id (Ethif.get_netif ethif )) in 
+    let hw_addr = Ethif.mac ethif in
  let counter = OP.Port.(
    { port_id=port_no; rx_packets=0L; tx_packets=0L; rx_bytes=0L; 
    tx_bytes=0L; rx_dropped=0L; tx_dropped=0L; rx_errors=0L; 
@@ -325,7 +331,7 @@ module Switch = struct
       supported=features; peer=features;}) in
     
       {port_id=port_no; mgr; port_name=name; counter;
-      ethif;phy;queue=(Queue.create ());}
+      ethif=id;phy;queue=(Queue.create ());}
 
   type stats = {
     mutable n_frags: uint64;
@@ -440,10 +446,10 @@ module Switch = struct
   } as big_endian 
 
   let tcp_checksum ~src ~dst =
-    let pbuf = Cstruct.sub (Cstruct.of_bigarray (OS.Io_page.get ())) 0 sizeof_pseudo_header in
+    let pbuf = Cstruct.sub (Cstruct.of_bigarray (OS.Io_page.get 1)) 0 sizeof_pseudo_header in
     fun data ->
-      set_pseudo_header_src pbuf (ipv4_addr_to_uint32 src);
-      set_pseudo_header_dst pbuf (ipv4_addr_to_uint32 dst);
+      set_pseudo_header_src pbuf (Ipaddr.V4.to_int32  src);
+      set_pseudo_header_dst pbuf (Ipaddr.V4.to_int32 dst);
       set_pseudo_header_res pbuf 0;
       set_pseudo_header_proto pbuf 6;
       set_pseudo_header_len pbuf (Cstruct.lenv data);
@@ -460,9 +466,9 @@ module Switch = struct
         let _ = 
           match (get_nw_header_nw_proto ip_data) with
           | 6 (* TCP *) -> 
-              let src = Net.Nettypes.ipv4_addr_of_uint32 (get_nw_header_nw_src
+              let src = Ipaddr.V4.of_int32 (get_nw_header_nw_src
               ip_data) in 
-              let dst = Net.Nettypes.ipv4_addr_of_uint32 (get_nw_header_nw_dst
+              let dst = Ipaddr.V4.of_int32 (get_nw_header_nw_dst
               ip_data) in 
               let tp_data = Cstruct.shift ip_data (len*4) in  
               let _ = set_tcpv4_checksum tp_data 0 in
@@ -544,10 +550,10 @@ module Switch = struct
         lwt _ = forward_frame st in_port bits pkt_size checksum port in 
           return false
       | OP.Flow.Set_dl_src(eaddr) ->
-          let _ = set_dl_header_dl_src eaddr 0 bits in 
+          let _ = set_dl_header_dl_src (Macaddr.to_bytes eaddr) 0 bits in 
             return checksum
       | OP.Flow.Set_dl_dst(eaddr) ->
-          let _ = set_dl_header_dl_dst eaddr 0 bits in 
+          let _ = set_dl_header_dl_dst (Macaddr.to_bytes eaddr) 0 bits in 
             return checksum
         (* TODO: Add for this actions to check when inserted if 
           * the flow is an ip flow *)
@@ -559,11 +565,11 @@ module Switch = struct
        * *)
       | OP.Flow.Set_nw_src(ip) -> 
         let ip_data = Cstruct.shift bits sizeof_dl_header in
-        let _ = set_nw_header_nw_src ip_data ip in 
+        let _ = set_nw_header_nw_src ip_data (Ipaddr.V4.to_int32 ip) in 
           return true
       | OP.Flow.Set_nw_dst(ip) -> 
         let ip_data = Cstruct.shift bits sizeof_dl_header in
-        let _ = set_nw_header_nw_dst ip_data ip in 
+        let _ = set_nw_header_nw_dst ip_data (Ipaddr.V4.to_int32 ip) in 
           return true
       | OP.Flow.Set_tp_src(port) ->
         let ip_data = Cstruct.shift bits sizeof_dl_header in
@@ -744,7 +750,7 @@ let process_frame st p _ frame =
  *************************************************)
 
 type endhost = {
-  ip: Nettypes.ipv4_addr;
+  ip: Ipaddr.V4.t;
   port: int;
 }
 
@@ -1016,7 +1022,7 @@ let control_channel_run st conn t =
     return (printf "control channel thread returned\n%!")
 
 let control_channel st (remote_addr, remote_port) t =
-  let rs = Nettypes.ipv4_addr_to_string remote_addr in
+  let rs = Ipaddr.V4.to_string remote_addr in
   Printf.eprintf "OpenFlow Switch: controller %s:%d" rs remote_port; 
   let conn = Ofsocket.init_socket_conn_state t in
   let _ = st.Switch.controller <- (Some conn) in 
@@ -1026,17 +1032,15 @@ let control_channel st (remote_addr, remote_port) t =
 (*
  * Interaface with external applications
  * *)
-let add_port mgr ?(use_mac=false) sw ethif = 
+let add_port mgr ?(use_mac=false) sw id = 
   sw.Switch.portnum <- sw.Switch.portnum + 1;
-  let hw_addr =  
-    (Net.Nettypes.ethernet_mac_to_string
-    (Manager.get_intf_mac mgr ethif)) in
-  let _ = pr "Adding port %d (%s) '%s' \n %!" sw.Switch.portnum 
-            (Net.Manager.get_intf_name mgr ethif) hw_addr in 
+  let ethif = Manager.get_ethif (get_ethif mgr id) in 
+  let hw_addr =  (Macaddr.to_string (Ethif.mac ethif)) in
+  let dev_name = OS.Netif.string_of_id (OS.Netif.id (Ethif.get_netif ethif)) in
+  let _ = Console.log (sprintf "Adding port %d (%s) '%s' \n %!" sw.Switch.portnum 
+            dev_name  hw_addr) in 
 (*  lwt _ = log ~level:Notice (sprintf "Adding port %s (port_id=%d)" ethif
   sw.Switch.portnum) in *)
-  let _ = Console.log (sprintf "Adding port %s (port_id=%d)" ethif
-  sw.Switch.portnum) in 
 (*   lwt _ = 
     if (use_mac) then
       lwt _ = Lwt_unix.system (sprintf "ifconfig tap0 lladdr %s" hw_addr) in
@@ -1044,13 +1048,13 @@ let add_port mgr ?(use_mac=false) sw ethif =
     else
       return ()
   in*)
-  let port = Switch.init_port mgr sw.Switch.portnum ethif in
+  let port = Switch.init_port mgr sw.Switch.portnum id in
   sw.Switch.ports <- sw.Switch.ports @ [port];
   Hashtbl.add sw.Switch.int_to_port sw.Switch.portnum (ref port); 
-  Hashtbl.add sw.Switch.dev_to_port ethif (ref port);
+  Hashtbl.add sw.Switch.dev_to_port id (ref port);
   sw.Switch.features.OP.Switch.ports  <- 
     sw.Switch.features.OP.Switch.ports @ [port.Switch.phy];
-  let _ = Net.Manager.set_promiscuous mgr ethif (process_frame sw port) in
+  let _ = Net.Manager.set_promiscuous mgr id (process_frame sw port) in
   let h,p = OP.Port.create_port_status OP.Port.ADD port.Switch.phy in 
   lwt _ = 
     match sw.Switch.controller with
@@ -1064,17 +1068,19 @@ let del_port mgr sw name =
   let port = 
     List.find (
       fun a -> 
-        name = (Net.Manager.get_intf_name mgr a.Switch.ethif) 
+  let ethif = Manager.get_ethif (get_ethif mgr a.Switch.ethif) in 
+  let dev_name = OS.Netif.string_of_id (OS.Netif.id (Ethif.get_netif ethif)) in
+        name = dev_name
     ) sw.Switch.ports in 
   let _ = sw.Switch.ports <- List.filter (
     fun a ->
-      if (name = (Net.Manager.get_intf_name mgr a.Switch.ethif)) then
-        let _ = printf "removing port %s\n%!" (Net.Manager.get_intf_name mgr
-        a.Switch.ethif) in 
+      let ethif = Manager.get_ethif (get_ethif mgr a.Switch.ethif) in 
+      let dev_name = OS.Netif.string_of_id (OS.Netif.id (Ethif.get_netif ethif)) in
+      if (name = dev_name) then
+        let _ = Console.log (sprintf "removing port %s" dev_name ) in 
         false
       else 
         true
-(*      not (name = (Net.Manager.get_intf_name mgr a.Switch.ethif)  ) *)
   ) sw.Switch.ports in 
   let _ = Hashtbl.remove sw.Switch.int_to_port port.Switch.port_id in  
   let _ = Hashtbl.remove sw.Switch.dev_to_port port.Switch.ethif in 
@@ -1127,8 +1133,8 @@ let add_port_local mgr sw ethif =
   lwt _ = log ~level:Notice (sprintf "Adding port %s (port_id=%d)" ethif
             local_port_id) in 
  *)
-  let _ = Console.log (sprintf "Adding port %s (port_id=%d)" ethif
-            local_port_id) in 
+  let _ = Console.log (sprintf "Adding port %s (port_id=%d)" 
+                         (OS.Netif.string_of_id ethif) local_port_id) in 
    let _ = Net.Manager.set_promiscuous mgr ethif (process_frame sw port) in
     return ()
 

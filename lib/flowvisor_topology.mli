@@ -19,7 +19,7 @@ open Net.Nettypes
 type t 
 
 val init_topology: unit -> t
-val add_port: t -> int64 -> int -> ethernet_mac -> unit Lwt.t
+val add_port: t -> int64 -> int -> Macaddr.t -> unit Lwt.t
 val add_channel: t -> int64 -> Ofcontroller.t -> unit
 val discover: t-> unit Lwt.t
 val process_lldp_packet: t -> int64 -> int -> Cstruct.t -> bool

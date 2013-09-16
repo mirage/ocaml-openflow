@@ -23,10 +23,8 @@ type uint8 = char
 type uint16 = int
 type uint32 = int32
 type uint64 = int64
-type ipv4 = uint32
 type byte = uint8
 type bytes = string
-type eaddr = bytes
 type vendor = uint32
 type queue_id = uint32
 type datapath_id = uint64
@@ -118,7 +116,7 @@ module Port :
     }
     type phy = {
       port_no : uint16;
-      hw_addr : eaddr;
+      hw_addr : Macaddr.t;
       name : string;
       config : config;
       state : state;
@@ -127,7 +125,7 @@ module Port :
       supported : features;
       peer : features;
     }
-    val init_port_phy: ?port_no:int -> ?hw_addr:eaddr -> 
+    val init_port_phy: ?port_no:int -> ?hw_addr:Macaddr.t -> 
       ?name:string -> unit -> phy
       val translate_port_phy : phy -> int -> phy
     val string_of_phy : phy -> string
@@ -224,13 +222,13 @@ module Match :
     type t = {
       mutable wildcards : Wildcards.t;
       mutable in_port : Port.t;
-      mutable dl_src : eaddr;
-      mutable dl_dst : eaddr;
+      mutable dl_src : Macaddr.t;
+      mutable dl_dst : Macaddr.t;
       mutable dl_vlan : uint16;
       mutable dl_vlan_pcp : byte;
       mutable dl_type : uint16;
-      mutable nw_src : uint32;
-      mutable nw_dst : uint32;
+      mutable nw_src : Ipaddr.V4.t;
+      mutable nw_dst : Ipaddr.V4.t;
       mutable nw_tos : byte;
       mutable nw_proto : byte;
       mutable tp_src : uint16;
@@ -239,27 +237,27 @@ module Match :
 
     val wildcard: unit -> t
     val create_match : ?in_port:int option -> ?dl_vlan:int option -> 
-      ?dl_src:(* Net.Nettypes.ethernet_mac *) eaddr option -> 
-      ?dl_dst:(* Net.Nettypes.ethernet_mac *) eaddr option ->
+      ?dl_src:(* Net.Nettypes.ethernet_mac *) Macaddr.t option -> 
+      ?dl_dst:(* Net.Nettypes.ethernet_mac *) Macaddr.t option ->
       ?dl_type:int option -> ?nw_proto:char option ->
       ?tp_dst:int option -> ?tp_src:int option ->
-      ?nw_dst:int32 option -> ?nw_dst_len:int ->
-      ?nw_src:int32 option -> ?nw_src_len:int ->
+      ?nw_dst:Ipaddr.V4.t option -> ?nw_dst_len:int ->
+      ?nw_src:Ipaddr.V4.t option -> ?nw_src_len:int ->
       ?dl_vlan_pcp:char option -> ?nw_tos:char option -> unit -> t
 
    val flow_match_compare : t -> t -> Wildcards.t -> bool
     val create_flow_match :
       Wildcards.t ->
       ?in_port:int16 ->
-      ?dl_src:eaddr ->
-      ?dl_dst:eaddr ->
+      ?dl_src:Macaddr.t ->
+      ?dl_dst:Macaddr.t ->
       ?dl_vlan:uint16 ->
       ?dl_vlan_pcp:byte ->
       ?dl_type:uint16 ->
       ?nw_tos:byte ->
       ?nw_proto:byte ->
-      ?nw_src:uint32 ->
-      ?nw_dst:uint32 -> ?tp_src:uint16 -> ?tp_dst:uint16 -> unit -> t
+      ?nw_src:Ipaddr.V4.t ->
+      ?nw_dst:Ipaddr.V4.t -> ?tp_src:uint16 -> ?tp_dst:uint16 -> unit -> t
     val translate_port : t -> Port.t -> t
     val raw_packet_to_match : Port.t -> Cstruct.t -> t
     val match_to_string : t -> string
@@ -271,10 +269,10 @@ module Flow :
     | Set_vlan_vid of int 
     | Set_vlan_pcp of int 
     | STRIP_VLAN 
-    | Set_dl_src of eaddr
-    | Set_dl_dst of eaddr
-    | Set_nw_src of ipv4 
-    | Set_nw_dst of ipv4
+    | Set_dl_src of Macaddr.t
+    | Set_dl_dst of Macaddr.t
+    | Set_nw_src of Ipaddr.V4.t 
+    | Set_nw_dst of Ipaddr.V4.t
     | Set_nw_tos of byte 
     | Set_tp_src of int16 
     | Set_tp_dst of int16
@@ -285,10 +283,11 @@ module Flow :
     val string_of_action : action -> string
     val string_of_actions : action list -> string
     val marshal_action : action -> Cstruct.t -> int
-    type reason = IDLE_TIMEOUT | HARD_TIMEOUT | DELETE
-    val reason_of_int : int -> reason
-    val int_of_reason : reason -> int
-    val string_of_reason : reason -> int
+    cenum reason {
+      IDLE_TIMEOUT = 0;
+      HARD_TIMEOUT = 1;
+      DELETE = 2
+    } as uint8_t 
     type stats = {
       mutable table_id : byte;
       mutable of_match : Match.t;
@@ -399,7 +398,7 @@ module Port_mod :
   sig
     type t = {
       port_no : Port.t;
-      hw_addr : eaddr;
+      hw_addr : Macaddr.t;
       config : Port.config;
       mask : Port.config;
       advertise : Port.features;

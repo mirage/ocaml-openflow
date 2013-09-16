@@ -31,12 +31,12 @@ let sp = Printf.sprintf
 (* TODO this the mapping is incorrect. the datapath must be moved to the key
  * of the hashtbl *)
 type mac_switch = {
-  addr: OP.eaddr; 
+  addr: Macaddr.t; 
   switch: OP.datapath_id;
 }
 
 type switch_state = {
-  mutable mac_cache: (OP.eaddr, OP.Port.t) Hashtbl.t; 
+  mutable mac_cache: (Macaddr.t, OP.Port.t) Hashtbl.t; 
   req_count: int ref; 
 }
 
@@ -98,9 +98,8 @@ let packet_in_cb controller dpid evt =
  
   (* check if I know the output port in order to define what type of message
    * we need to send *)
-  let broadcast = String.make 6 '\255' in
   let ix = m.OP.Match.dl_dst in
-  if ( (ix = broadcast)
+  if ( (ix = Macaddr.broadcast )
        || (not (Hashtbl.mem switch_data.mac_cache ix)) ) 
   then ( 
     let bs = 
