@@ -19,9 +19,11 @@ open Printf
 open Net
 open Net.Nettypes
 open Lldp
-open Graph 
 
-module OP = Ofpacket
+module OP = Openflow.Ofpacket
+module OC = Openflow.Ofcontroller 
+module OE = Openflow.Ofcontroller.Event 
+module OSK = Openflow.Ofsocket
 open OP
 
 let sp = Printf.sprintf
@@ -73,7 +75,7 @@ module Dijkstra = Path.Dijkstra(Graph)(W)
 
 type t = {
   ports : (int64 * int, Macaddr.t * bool) Hashtbl.t; 
-  channels : (int64, Ofcontroller.t) Hashtbl.t;
+  channels : (int64, OC.t) Hashtbl.t;
   topo : Graph.t;
 }
 
@@ -106,7 +108,7 @@ let send_port_lldp t dpid port mac =
   let m = OP.Packet_out.create ~actions:[(OP.Flow.Output(OP.Port.Port(port), 2000))] 
             ~data ~in_port:(OP.Port.No_port) () in 
   let ch = Hashtbl.find t.channels dpid in 
-    Ofcontroller.send_data ch dpid (OP.Packet_out(h, m))
+    OC.send_data ch dpid (OP.Packet_out(h, m))
 
 let add_port t dpid port mac =
   let _ = printf "[flowvisor-topo] adding port %Ld:%d\n%!" dpid port in 

@@ -18,9 +18,9 @@ open Lwt
 open Net
 open Net.Nettypes
 
-module OP = Ofpacket
-module OC = Ofcontroller 
-module OE = Ofcontroller.Event 
+module OP = Openflow.Ofpacket
+module OC = Openflow.Ofcontroller 
+module OE = Openflow.Ofcontroller.Event 
 open OP
 open OP.Flow 
 open OP.Flow_mod 
@@ -68,8 +68,8 @@ type t = {
   mutable buffer_id_count: int32;
   
   (* controller and switch storage *)
-  mutable controllers : (int64 * OP.Match.t *Ofsocket.conn_state ) list;
-  switches : (int64, Ofcontroller.t) Hashtbl.t;
+  mutable controllers : (int64 * OP.Match.t *Openflow.Ofsocket.conn_state ) list;
+  switches : (int64, OC.t) Hashtbl.t;
    
   (* Mapping transients id values *)
   xid_map : (int32, xid_state) Hashtbl.t;
@@ -104,7 +104,7 @@ let init_flowvisor verbose flv_topo =
    port_map=(Hashtbl.create 64);
    controllers=[]; buffer_id_map=(Hashtbl.create 64);
    buffer_id_count=0l; xid_map=(Hashtbl.create 64); 
-   switches=(Hashtbl.create 64); flv_topo;}
+   switches=(Hashtbl.create 64); flv_topo; }
 
 let supported_actions () = 
   OP.Switch.({ 
@@ -140,7 +140,7 @@ let handle_xid flv st xid_st =
           if (sz + fl_sz > 0xffff) then 
             let r = OP.Stats.Flow_resp(stats, flows) in
             let h = OP.Header.create ~xid:(xid_st.xid) OP.Header.STATS_RESP 0 in 
-            lwt _ = Ofsocket.send_packet t (OP.Stats_resp (h, r)) in
+            lwt _ = Openflow.Ofsocket.send_packet t (OP.Stats_resp (h, r)) in
             return ((OP.Header.get_len + OP.Stats.get_resp_hdr_size + fl_sz), [fl])
           else
             return ((sz + fl_sz), (fl::flows)) )
@@ -148,7 +148,7 @@ let handle_xid flv st xid_st =
     let stats = OP.Stats.({st_ty=FLOW; more=false;}) in 
     let r = OP.Stats.Flow_resp(stats, flows) in
     let h = OP.Header.create ~xid:xid_st.xid OP.Header.STATS_RESP 0 in 
-      Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
+      Openflow.Ofsocket.send_packet t (OP.Stats_resp (h, r)) 
   | _ -> return ()
 
 let timeout_xid flv st = 
@@ -171,21 +171,21 @@ let timeout_xid flv st =
 let switch_dpid flv = Hashtbl.fold (fun dpid _ r -> r@[dpid]) flv.switches []
 let send_all_switches st msg =
   Lwt_list.iter_p (
-    fun (dpid, ch) -> Ofcontroller.send_data ch dpid msg) 
+    fun (dpid, ch) -> OC.send_data ch dpid msg) 
   (Hashtbl.fold (fun dpid ch c -> c @[(dpid, ch)]) st.switches [])
 let send_switch st dpid msg =
   try_lwt 
     let ch = Hashtbl.find st.switches dpid in 
-      Ofcontroller.send_data ch dpid msg
+      OC.send_data ch dpid msg
   with Not_found -> return (ep "[flowvisor] unregister dpid %Ld\n%!" dpid)
 
-let send_controller t msg =  Ofsocket.send_packet t msg
+let send_controller t msg =  Openflow.Ofsocket.send_packet t msg
 let inform_controllers flv m msg =  
   (* find the controller that should handle the packet in *)
     Lwt_list.iter_p
     (fun (_, rule, t) ->
       if (OP.Match.flow_match_compare rule m rule.OP.Match.wildcards) then
-        Ofsocket.send_packet t msg
+        Openflow.Ofsocket.send_packet t msg
       else return ()) flv.controllers 
 
 (*************************************************
@@ -235,10 +235,10 @@ let packet_out_create st msg xid in_port bid data actions =
       Lwt_list.iter_p (
         fun (dpid, ch) -> 
           if (dpid = in_dpid) then
-            Ofcontroller.send_data ch dpid  
+            OC.send_data ch dpid  
               (packet_out_create st msg xid inp (-1l) data actions) 
           else
-            Ofcontroller.send_data ch dpid msg
+            OC.send_data ch dpid msg
         ) (Hashtbl.fold (fun dpid ch c -> c @[(dpid, ch)]) st.switches []) in 
       pkt_out_process st xid inp bid data msg acts tail 
   end
@@ -287,7 +287,7 @@ let map_path flv in_dpid in_port out_dpid out_port =
             dp (OP.Port.string_of_port out_p)
         ) path in 
       let _ = pp "\n%!" in  *)
-      path
+      path 
 
 let map_spanning_tree flv in_dpid in_port = []
 
@@ -541,12 +541,12 @@ let process_openflow st dpid t msg =
 
 let switch_channel st dpid of_m sock =
   let h = OP.Header.(create ~xid:1l HELLO sizeof_ofp_header) in
-  lwt _ = Ofsocket.send_packet sock (OP.Hello h) in  
+  lwt _ = Openflow.Ofsocket.send_packet sock (OP.Hello h) in  
   let _ = st.controllers <- (dpid, of_m, sock)::st.controllers in
   let continue = ref true in 
     while_lwt !continue do 
       try_lwt
-        lwt ofp = Ofsocket.read_packet sock in
+        lwt ofp = Openflow.Ofsocket.read_packet sock in
           process_openflow st dpid sock ofp 
       with
         | Nettypes.Closed -> 
@@ -569,12 +569,12 @@ let add_flowvisor_port flv dpid port =
   let _ = Hashtbl.add flv.port_map port_id 
             (dpid, port.OP.Port.port_no, phy) in 
   lwt _ = Flowvisor_topology.add_port flv.flv_topo dpid port.OP.Port.port_no
-        port.OP.Port.hw_addr in
+        port.OP.Port.hw_addr in 
   let h = OP.Header.(create PORT_STATUS 0 ) in 
   let status = OP.Port_status(h, (OP.Port.({reason=OP.Port.ADD; desc=phy;}))) in 
     Lwt_list.iter_p 
     (fun (dpid, _, conn) -> 
-      Ofsocket.send_packet conn status ) flv.controllers
+      Openflow.Ofsocket.send_packet conn status ) flv.controllers
 
 (*
  * openflow controller threads 
@@ -584,7 +584,7 @@ let del_flowvisor_port flv desc =
   let status = OP.Port_status(h, (OP.Port.({reason=OP.Port.ADD;desc;}))) in
     Lwt_list.iter_p 
     (fun (dpid, _, conn) -> 
-      Ofsocket.send_packet conn status ) flv.controllers
+      Openflow.Ofsocket.send_packet conn status ) flv.controllers
 
 let map_flv_port flv dpid port = 
   (* map the new port *)
@@ -623,13 +623,13 @@ let process_switch_channel flv st dpid e =
   match e with 
   | OE.Datapath_join(dpid, ports) ->
       let _ = pr "[flowvisor-ctrl]+ switch dpid:%Ld\n%!" dpid in 
-      let _ = Flowvisor_topology.add_channel flv.flv_topo dpid st in
+      let _ = Flowvisor_topology.add_channel flv.flv_topo dpid st in 
       (* Update local state *)
       let _ = Hashtbl.add flv.switches dpid st in
         Lwt_list.iter_p (add_flowvisor_port flv dpid) ports
   | OE.Datapath_leave(dpid) ->
       let _ = pr "[flowvisor-ctrl]- switch dpid:%Ld\n%!" dpid in 
-      let _ = Flowvisor_topology.remove_dpid flv.flv_topo dpid in
+      let _ = Flowvisor_topology.remove_dpid flv.flv_topo dpid in 
       (* Need to remove ports and port mapping and disard any state 
        * pending for replies. *)
        let removed = 
@@ -644,7 +644,7 @@ let process_switch_channel flv st dpid e =
    | OE.Packet_in(in_port, reason, buffer_id, data, dpid) -> begin
     let m = OP.Match.raw_packet_to_match in_port data in 
       match (in_port, m.OP.Match.dl_type) with 
-      | (OP.Port.Port(p), 0x88cc) -> begin 
+      | (OP.Port.Port(p), 0x88cc) -> begin
         match (Flowvisor_topology.process_lldp_packet 
                   flv.flv_topo dpid p data) with
         | true -> return ()
@@ -667,7 +667,7 @@ let process_switch_channel flv st dpid e =
         let _ = Hashtbl.add flv.buffer_id_map buffer_id (pkt, dpid) in
         lwt _ = inform_controllers flv m (OP.Packet_in(h, pkt)) in 
           return ()
-          end
+          end 
       | (OP.Port.Port(p), _) ->
           return ((*pp "XXXXX supress disable transit port"*))
       | _ -> 
@@ -795,7 +795,7 @@ let add_slice mgr flv of_m dst dpid =
             let rs = Ipaddr.V4.to_string addr in
             let _ = pp "[flowvisor-switch]+ controller %s:%d\n%!" rs port in 
             (* Trigger the dance between the 2 nodes *)
-            let sock = Ofsocket.init_socket_conn_state t in
+            let sock = Openflow.Ofsocket.init_socket_conn_state t in
               switch_channel flv dpid of_m sock
           in
             Net.Channel.connect mgr 
@@ -808,10 +808,10 @@ let add_slice mgr flv of_m dst dpid =
     ) in 
     return ()
 
-let listen st mgr loc = Ofcontroller.listen mgr loc (init st) 
+let listen st mgr loc = OC.listen mgr loc (init st) 
 let local_listen st conn = 
-  let t = Ofcontroller.init_controller () in 
-  Ofcontroller.local_connect t conn (init st) 
+  let t = OC.init_controller () in 
+  OC.local_connect t conn (init st) 
 
 let remove_slice _ _ = return ()
 let add_local_slice flv of_m  conn dpid =

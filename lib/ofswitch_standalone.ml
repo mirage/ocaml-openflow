@@ -20,9 +20,10 @@ open Net.Nettypes
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
-module OP = Ofpacket
-module OC = Ofcontroller
-module OE = Ofcontroller.Event
+module OP = Openflow.Ofpacket
+module OC = Openflow.Ofcontroller
+module OE = Openflow.Ofcontroller.Event
+module OSK = Openflow.Ofsocket 
 
 let pp = Printf.printf
 let sp = Printf.sprintf
@@ -104,7 +105,7 @@ let packet_in_cb controller dpid evt =
   then ( 
     let bs = 
           (OP.Packet_out.create ~buffer_id:buffer_id 
-             ~actions:[ OP.(Flow.Output(Port.All , 2000))] 
+             ~actions:[ OP.Flow.Output(OP.Port.All , 2000)] 
            ~data:data ~in_port:in_port () ) in   
     let h = OP.Header.create OP.Header.PACKET_OUT 0 in 
         OC.send_data controller dpid (OP.Packet_out (h, bs))
@@ -117,7 +118,7 @@ let packet_in_cb controller dpid evt =
         let bs = 
                 OP.Packet_out.create
                    ~buffer_id:buffer_id    
-                   ~actions:[ OP.(Flow.Output(out_port, 2000))] 
+                   ~actions:[ OP.Flow.Output(out_port, 2000)] 
                    ~data:data ~in_port:in_port ()  in   
         let h = OP.Header.create OP.Header.PACKET_OUT 0 in 
           OC.send_data controller dpid (OP.Packet_out (h, bs))
@@ -146,7 +147,7 @@ let init controller =
 let init_controller () = OC.init_controller ()
 
 let run_controller mgr st = 
-  let (controller, switch) = Ofsocket.init_local_conn_state () in 
+  let (controller, switch) = OSK.init_local_conn_state () in 
   let _ = Lwt.ignore_result (
     try_lwt 
       OC.local_connect st controller init

@@ -48,7 +48,7 @@ module Event = struct
     | Flow_stats_reply of int32 * bool * OP.Flow.stats list * OP.datapath_id
     | Aggr_flow_stats_reply of int32 * int64 * int64 * int32 * OP.datapath_id
     | Port_stats_reply of int32 * bool * OP.Port.stats list *  OP.datapath_id
-    | Table_stats_reply of int32 * bool * OP.Stats.table list * OP.datapath_id 
+    | Table_stats_reply of int32 * bool * OP.Stats.table list * OP.datapath_id
     | Desc_stats_reply of
         string * string * string * string * string
       * OP.datapath_id
@@ -167,33 +167,33 @@ let process_of_packet state conn ofp =
      end
       | Features_resp (h, sfs) -> begin (* Generate a datapath join event *)
         let _ =  if state.verbose then pp "[controller] FEATURES_RESP\n%!" in 
-        let _ = conn.dpid <- sfs.Switch.datapath_id  in
-        let evt = Event.Datapath_join (sfs.Switch.datapath_id, sfs.Switch.ports) in
+        let _ = conn.dpid <- sfs.OP.Switch.datapath_id  in
+        let evt = Event.Datapath_join (sfs.OP.Switch.datapath_id, sfs.OP.Switch.ports) in
         let _ = 
-          if (Hashtbl.mem state.dp_db sfs.Switch.datapath_id) then 
+          if (Hashtbl.mem state.dp_db sfs.OP.Switch.datapath_id) then 
             Printf.printf "[controller] Deleting old state \n%!"
         in 
-        let _ = Hashtbl.replace state.dp_db sfs.Switch.datapath_id conn in 
-          Lwt_list.iter_p (fun cb -> cb state sfs.Switch.datapath_id  evt) 
+        let _ = Hashtbl.replace state.dp_db sfs.OP.Switch.datapath_id conn in 
+          Lwt_list.iter_p (fun cb -> cb state sfs.OP.Switch.datapath_id  evt) 
             state.datapath_join_cb
       end
-      | Packet_in (h, p) -> begin (* Generate a packet_in event *) 
+      | OP.Packet_in (h, p) -> begin (* Generate a packet_in event *) 
         let _ =  if state.verbose then pp "[controller]+ %s|%s\n%!" 
                   (OP.Header.header_to_string h)
                   (OP.Packet_in.packet_in_to_string p) in 
         let evt = 
-          Event.Packet_in (p.Packet_in.in_port, p.Packet_in.reason, 
-                           p.Packet_in.buffer_id, p.Packet_in.data, conn.dpid) in 
+          Event.Packet_in (p.OP.Packet_in.in_port, p.OP.Packet_in.reason, 
+                           p.OP.Packet_in.buffer_id, p.OP.Packet_in.data, conn.dpid) in 
           iter_p (fun cb -> cb state conn.dpid evt) state.packet_in_cb
      end
-      | Flow_removed (h, p) -> 
+      | OP.Flow_removed (h, p) -> 
         let _ =  if state.verbose then pp "+ %s|%s\n%!" 
                   (OP.Header.header_to_string h)
                   (OP.Flow_removed.string_of_flow_removed p) in 
         let evt = Event.Flow_removed (
-          p.Flow_removed.of_match, p.Flow_removed.reason, 
-              p.Flow_removed.duration_sec, p.Flow_removed.duration_nsec, 
-              p.Flow_removed.packet_count, p.Flow_removed.byte_count, conn.dpid)
+          p.OP.Flow_removed.of_match, p.OP.Flow_removed.reason, 
+              p.OP.Flow_removed.duration_sec, p.OP.Flow_removed.duration_nsec, 
+              p.OP.Flow_removed.packet_count, p.OP.Flow_removed.byte_count, conn.dpid)
         in
           Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) state.flow_removed_cb
       | Stats_resp(h, resp) -> begin  
@@ -203,24 +203,24 @@ let process_of_packet state conn ofp =
         match resp with 
               | OP.Stats.Flow_resp(resp_h, flows) -> begin
                 let evt = Event.Flow_stats_reply(
-                   h.Header.xid, resp_h.Stats.more, flows, conn.dpid) 
+                   h.Header.xid, resp_h.OP.Stats.more, flows, conn.dpid) 
                  in
                  Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) 
                    state.flow_stats_reply_cb
               end
               | OP.Stats.Aggregate_resp(resp_h, aggr) -> begin
                  let evt = Event.Aggr_flow_stats_reply(
-                   h.Header.xid, aggr.Stats.packet_count, 
-                   aggr.Stats.byte_count, aggr.Stats.flow_count, conn.dpid) 
+                   h.Header.xid, aggr.OP.Stats.packet_count, 
+                   aggr.OP.Stats.byte_count, aggr.OP.Stats.flow_count, conn.dpid) 
                  in
                  Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) 
                    state.aggr_flow_stats_reply_cb
               end
               | OP.Stats.Desc_resp (resp_h, aggr) -> begin
                  let evt = Event.Desc_stats_reply(
-                   aggr.Stats.imfr_desc, aggr.Stats.hw_desc, 
-                   aggr.Stats.sw_desc, aggr.Stats.serial_num, 
-                   aggr.Stats.dp_desc, conn.dpid) 
+                   aggr.OP.Stats.imfr_desc, aggr.OP.Stats.hw_desc, 
+                   aggr.OP.Stats.sw_desc, aggr.OP.Stats.serial_num, 
+                   aggr.OP.Stats.dp_desc, conn.dpid) 
                  in
                  Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) 
                    state.desc_stats_reply_cb
@@ -248,7 +248,7 @@ let process_of_packet state conn ofp =
       | Port_status(h, st) -> begin 
         let _ =  if state.verbose then pp "[controller] + %s|%s" (OP.Header.header_to_string h)
                   (OP.Port.string_of_status st) in 
-            let evt = Event.Port_status (st.Port.reason, st.Port.desc, conn.dpid) in
+            let evt = Event.Port_status (st.OP.Port.reason, st.OP.Port.desc, conn.dpid) in
             Lwt_list.iter_p (fun cb -> cb state conn.dpid evt) state.port_status_cb
       end
       | ofp -> 

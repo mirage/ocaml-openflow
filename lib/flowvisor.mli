@@ -22,13 +22,13 @@ type t
 
 
 val listen: t -> Manager.t -> ipv4_src -> unit Lwt.t
-val local_listen: t -> Ofsocket.conn_state -> unit Lwt.t
+val local_listen: t -> Openflow.Ofsocket.conn_state -> unit Lwt.t
 val create_flowvisor: ?verbose:bool -> unit -> t
-val remove_slice : t -> Ofpacket.Match.t ->  unit Lwt.t
-val add_local_slice : Net.Manager.t -> t -> Ofpacket.Match.t -> 
-  Ofsocket.conn_state -> int64 -> unit Lwt.t 
-val add_slice : Net.Manager.t -> t -> Ofpacket.Match.t -> 
+val remove_slice : t -> Openflow.Ofpacket.Match.t ->  unit Lwt.t
+val add_local_slice : Net.Manager.t -> t -> Openflow.Ofpacket.Match.t -> 
+  Openflow.Ofsocket.conn_state -> int64 -> unit Lwt.t 
+val add_slice : Net.Manager.t -> t -> Openflow.Ofpacket.Match.t -> 
   ipv4_dst -> int64 -> unit Lwt.t 
-val add_local_slice : t -> Ofpacket.Match.t -> 
-  Ofsocket.conn_state -> int64 -> unit Lwt.t 
+val add_local_slice : t -> Openflow.Ofpacket.Match.t -> 
+  Openflow.Ofsocket.conn_state -> int64 -> unit Lwt.t 
 

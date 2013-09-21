@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 2372650f9c40e894f1ba8a24df10b624)
+# DO NOT EDIT (digest: 223fee9da9926174167e33e3c8f49757)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -17,57 +17,25 @@
 "lib/openflow.cmxs": use_openflow
 "lib/ofpacket.cmx": for-pack(Openflow)
 "lib/ofcontroller.cmx": for-pack(Openflow)
-"lib/ofswitch_config.cmx": for-pack(Openflow)
-"lib/ofswitch.cmx": for-pack(Openflow)
 "lib/ofsocket.cmx": for-pack(Openflow)
-"lib/ofswitch_standalone.cmx": for-pack(Openflow)
-"lib/flowvisor.cmx": for-pack(Openflow)
-"lib/flowvisor_topology.cmx": for-pack(Openflow)
-"lib/lldp.cmx": for-pack(Openflow)
-# Executable ovs-vsctl
-"lib/ofswitch_ctrl.native": use_openflow
-"lib/ofswitch_ctrl.native": pkg_cstruct
-"lib/ofswitch_ctrl.native": pkg_cstruct.syntax
-"lib/ofswitch_ctrl.native": pkg_re.str
-"lib/ofswitch_ctrl.native": pkg_rpclib
-"lib/ofswitch_ctrl.native": pkg_rpclib.json
-"lib/ofswitch_ctrl.native": pkg_mirage
-"lib/ofswitch_ctrl.native": pkg_mirage-net
-"lib/ofswitch_ctrl.native": pkg_ocamlgraph
-"lib/ofswitch_ctrl.native": pkg_ipaddr
-<lib/*.ml{,i}>: use_openflow
 <lib/*.ml{,i}>: pkg_cstruct
 <lib/*.ml{,i}>: pkg_cstruct.syntax
-<lib/*.ml{,i}>: pkg_re.str
 <lib/*.ml{,i}>: pkg_rpclib
 <lib/*.ml{,i}>: pkg_rpclib.json
 <lib/*.ml{,i}>: pkg_mirage
 <lib/*.ml{,i}>: pkg_mirage-net
-<lib/*.ml{,i}>: pkg_ocamlgraph
 <lib/*.ml{,i}>: pkg_ipaddr
-"lib/ofswitch_ctrl.native": custom
-# Executable learning_switch_lwt
-"controller/learning_switch.native": use_openflow
-"controller/learning_switch.native": pkg_cstruct
-"controller/learning_switch.native": pkg_cstruct.syntax
-"controller/learning_switch.native": pkg_re.str
-"controller/learning_switch.native": pkg_rpclib
-"controller/learning_switch.native": pkg_rpclib.json
-"controller/learning_switch.native": pkg_mirage
-"controller/learning_switch.native": pkg_mirage-net
-"controller/learning_switch.native": pkg_ocamlgraph
-"controller/learning_switch.native": pkg_ipaddr
-<controller/*.ml{,i}>: use_openflow
-<controller/*.ml{,i}>: pkg_cstruct
-<controller/*.ml{,i}>: pkg_cstruct.syntax
-<controller/*.ml{,i}>: pkg_re.str
-<controller/*.ml{,i}>: pkg_rpclib
-<controller/*.ml{,i}>: pkg_rpclib.json
-<controller/*.ml{,i}>: pkg_mirage
-<controller/*.ml{,i}>: pkg_mirage-net
-<controller/*.ml{,i}>: pkg_ocamlgraph
-<controller/*.ml{,i}>: pkg_ipaddr
-"controller/learning_switch.native": custom
+# Library switch
+"lib/switch.cmxs": use_switch
+"lib/ofswitch.cmx": for-pack(Switch)
+"lib/ofswitch_config.cmx": for-pack(Switch)
+"lib/ofswitch_standalone.cmx": for-pack(Switch)
+<lib/*.ml{,i}>: pkg_re.str
+# Library flv
+"lib/flv.cmxs": use_flv
+"lib/flowvisor.cmx": for-pack(Flv)
+"lib/lldp.cmx": for-pack(Flv)
+"lib/flowvisor_topology.cmx": for-pack(Flv)
 # OASIS_STOP
 true: annot
 <lib/*>: syntax_camlp4o

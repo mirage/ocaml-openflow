@@ -17,7 +17,7 @@
 open Lwt
 open Printf
 
-module OP = Ofpacket
+module OP = Openflow.Ofpacket
 
 let parse_actions actions =
   let actions = Re_str.split (Re_str.regexp "/") actions in 

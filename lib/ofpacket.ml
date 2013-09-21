@@ -26,29 +26,16 @@ exception Unparsable of string * Cstruct.t
 exception Unparsed of string * Cstruct.t 
 exception Unsupported of string 
 
-let resolve t = Lwt.on_success t (fun _ -> ())
     
 let (|>) x f = f x (* pipe *)
 let (>>) f g x = g (f x) (* functor pipe *)
 let (||>) l f = List.map f l (* element-wise pipe *)
 
-let (+++) x y = Int32.add x y
-
-let (&&&) x y = Int32.logand x y
-let (|||) x y = Int32.logor x y
-let (^^^) x y = Int32.logxor x y
-let (<<<) x y = Int32.shift_left x y
-let (>>>) x y = Int32.shift_right_logical x y
-
-let join c l = String.concat c l
-let stop (x, bits) = x (* drop remainder to stop parsing and demuxing *) 
-
-type int16 = int
-
 (* XXX of dubious merit - but we don't do arithmetic so prefer the
    documentation benefits for now *)
 type uint8  = char
 type uint16 = int
+type int16 = int
 type uint32 = int32
 type uint64 = int64
 
@@ -74,13 +61,6 @@ let bytes_to_hex_string bs =
 type vendor = uint32
 type queue_id = uint32
 type datapath_id = uint64
-
-let contain_exc l v = 
-  try
-    Some (v ())
-  with exn ->
-    eprintf "ofpacket %s exn: %s\n%!" l (Printexc.to_string exn); 
-    None 
 
 (* 
  * bit manipulation functions for 32-bit integers
@@ -111,14 +91,13 @@ let set_int_bit f off v = f lor ((int_of_bool v) lsl off)
 
 let marshal_and_sub fn bits =
   let len = fn bits in 
-    Cstruct.sub bits 0 len
+  Cstruct.sub bits 0 len
 
 let marshal_and_shift fn bits =
   let len = fn bits in 
-    (len, (Cstruct.shift bits len))
+  (len, (Cstruct.shift bits len))
 
 module Header = struct
-
   cstruct ofp_header {
     uint8_t version;    
     uint8_t typ;   
@@ -163,16 +142,16 @@ type h = {
   let parse_header bits = 
     match ((get_ofp_header_version bits), 
       (int_to_msg_code (get_ofp_header_typ bits))) with
-      | (1, Some(ty))
-        -> let ret = 
-          { ver=(char_of_int (get_ofp_header_version bits)); 
+      | (1, Some(ty)) -> 
+          let ret = 
+            { ver=(char_of_int (get_ofp_header_version bits)); 
              ty; 
              len=(get_ofp_header_length bits); 
              xid=(get_ofp_header_xid bits); } in 
-        let _ = Cstruct.shift bits sizeof_ofp_header in 
+          let _ = Cstruct.shift bits sizeof_ofp_header in 
           ret
-    | (_, _) -> raise (Unparsable ("parse_h", bits))
-  
+      | (_, _) -> raise (Unparsable ("parse_h", bits))
+
   let header_to_string h =
     sp "ver:%d type:%s len:%d xid:0x%08lx" 
       (int_of_byte h.ver) (msg_code_to_string h.ty) h.len h.xid
@@ -185,7 +164,7 @@ type h = {
     let _ = set_ofp_header_typ bits (msg_code_to_int h.ty) in
     let _ = set_ofp_header_length bits h.len in
     let _ = set_ofp_header_xid bits h.xid in
-      sizeof_ofp_header
+    sizeof_ofp_header
 end
 
 module Queue = struct
@@ -279,7 +258,7 @@ module Port = struct
     let ret = set_int32_bit ret 4 config.no_flood in
     let ret = set_int32_bit ret 5 config.no_fwd in 
     let ret = set_int32_bit ret 6 config.no_packet_in in 
-      ret 
+    ret 
 
   let init_port_config = 
     {port_down=false; no_stp=false; no_recv=false; no_recv_stp=false;
@@ -423,19 +402,19 @@ module Port = struct
     peer=port.peer;}
 
 
-   let marshal_phy phy bits =
-     let _ = set_ofp_phy_port_port_no bits phy.port_no in
-     let _ = set_ofp_phy_port_hw_addr (Macaddr.to_bytes phy.hw_addr) 0 bits in
-     let name = String.make 16 (char_of_int 0) in
-     let _ = String.blit phy.name 0 name 0 (String.length phy.name) in 
-     let _ = set_ofp_phy_port_name name 0 bits in
-     let _ = set_ofp_phy_port_config bits 0l in
-     let _ = set_ofp_phy_port_state bits 0l in
-     let _ = set_ofp_phy_port_curr bits 0l in
-     let _ = set_ofp_phy_port_advertised bits 0l in
-     let _ = set_ofp_phy_port_supported bits 0l in
-     let _ = set_ofp_phy_port_peer bits 0l in
-       Cstruct.shift bits sizeof_ofp_phy_port
+  let marshal_phy phy bits =
+    let _ = set_ofp_phy_port_port_no bits phy.port_no in
+    let _ = set_ofp_phy_port_hw_addr (Macaddr.to_bytes phy.hw_addr) 0 bits in
+    let name = String.make 16 (char_of_int 0) in
+    let _ = String.blit phy.name 0 name 0 (String.length phy.name) in 
+    let _ = set_ofp_phy_port_name name 0 bits in
+    let _ = set_ofp_phy_port_config bits 0l in
+    let _ = set_ofp_phy_port_state bits 0l in
+    let _ = set_ofp_phy_port_curr bits 0l in
+    let _ = set_ofp_phy_port_advertised bits 0l in
+    let _ = set_ofp_phy_port_supported bits 0l in
+    let _ = set_ofp_phy_port_peer bits 0l in
+    Cstruct.shift bits sizeof_ofp_phy_port
 
   let string_of_phy ph = 
     (sp "port_no:%d,hw_addr:%s,name:%s" 
@@ -694,8 +673,7 @@ module Switch = struct
     miss_send_len: uint16;
   }
 
-  let init_switch_config = 
-        {drop=true; reasm=true;miss_send_len=1000;}
+  let init_switch_config = {drop=true; reasm=true;miss_send_len=1000;}
         
   cstruct ofp_switch_config {
     uint16_t flags;           
@@ -2237,8 +2215,7 @@ module Stats = struct
       let (ofp_len, bits) = marshal_and_shift (Header.marshal_header of_header)
                               bits in
       let _ = set_ofp_stats_reply_typ bits (int_of_stats_type DESC) in 
-      let _ = set_ofp_stats_reply_flags bits (int_of_bool
-      resp_hdr.more) in 
+      let _ = set_ofp_stats_reply_flags bits (int_of_bool resp_hdr.more) in 
       let bits = Cstruct.shift bits sizeof_ofp_stats_reply in 
       let _ = set_ofp_desc_stats_mfr_desc desc.imfr_desc 0 bits in  
       let _ = set_ofp_desc_stats_hw_desc desc.hw_desc 0 bits in  
@@ -2255,8 +2232,7 @@ module Stats = struct
       let (ofp_len, bits) = marshal_and_shift (Header.marshal_header of_header)
                               bits in
       let _ = set_ofp_stats_reply_typ bits (int_of_stats_type FLOW) in 
-      let _ = set_ofp_stats_reply_flags bits (int_of_bool
-      resp_h.more) in 
+      let _ = set_ofp_stats_reply_flags bits (int_of_bool resp_h.more) in 
       let bits = Cstruct.shift bits sizeof_ofp_stats_reply in 
       let (flows_len, bits) = marshal_and_shift (Flow.marshal_flow_stats
       flows) bits in 
@@ -2469,7 +2445,7 @@ let build_echo_resp h bits =
   let _ = 
     Header.(marshal_header 
               (create ~xid:h.xid ECHO_RESP len ) bits) in
-   len
+  len
 
 type t =
   | Hello of Header.h
@@ -2581,11 +2557,12 @@ let marshal msg =
         | Flow_mod (h, fm) -> 
             Flow_mod.marshal_flow_mod ~xid:h.Header.xid fm
         | _ -> failwith "Unsupported message" 
-    in
+  in
+    marshal_and_sub marshal (OS.Io_page.to_cstruct (OS.Io_page.get 1))
 (*
   | Vendor of Header.h  * vendor * Cstruct.t
   | Port_mod of Header.h  * Port_mod.t
   | Queue_get_config_req of Header.h * Port.t
   | Queue_get_config_resp of Header.h * Port.t * Queue.t array
  *)
-    marshal_and_sub marshal (OS.Io_page.to_cstruct (OS.Io_page.get 1))
+
