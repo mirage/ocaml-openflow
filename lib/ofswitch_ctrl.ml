@@ -17,7 +17,7 @@
 
 open Lwt
 open Printf
-open Openflow.Ofswitch_config
+open Ofswitch_config
 open Lwt_unix
 
 let check_cmd_args cmd count = 

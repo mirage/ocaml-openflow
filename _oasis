@@ -4,26 +4,21 @@ Name:        openflow
 Version:     0.3.0
 Authors:     Charalampos Rotsos, Richard Mortier, Anil Madhavappedy, Balraj Singh
 License:     ISC
-Synopsis:    OpenFlow protocol and switch implementations in pure OCaml
+Synopsis:    OpenFlow controller, switch and flowvisor implementation in pure OCaml
 Plugins:     META (0.2)
 BuildTools:  ocamlbuild
 
-Flag lwt
-  Description: build the Lwt library
+Flag direct
+  Description: build things over the direct xen net
   Default: false
 
-Flag async
-  Description: build the Core/Async library
+Flag unix
+  Description: build programs with a depency on lwt.unix
   Default: false
 
-Flag mirage
-  Description: build the Mirage library
+Flag xen
+  Description: build xen applications
   Default: false
-
-Flag nettests
-  Description: run the internet-using tests
-  Default: false
-
 
 Library openflow
   Path:                 lib
@@ -44,6 +39,7 @@ Library switch
   Path:                 lib
   Findlibname:          switch
   Findlibparent:        openflow
+  Build$:               flag(direct)
   CompiledObject:       native
   Modules:              Ofswitch, Ofswitch_config, Ofswitch_standalone
   Pack:                 True
@@ -56,3 +52,49 @@ Library flv
   CompiledObject:       native
   Modules:              Flowvisor,Lldp, Flowvisor_topology 
   Pack:                 True
+
+Executable "ocaml-ofctl"
+  Path:                 lib
+  MainIs:               ofswitch_ctrl.ml
+  Build$:               flag(unix)
+  Custom:               true
+  CompiledObject:       native
+  Install$:             flag(unix)
+  BuildDepends:         openflow, re.str
+
+Executable ofcontroller_lwt
+  Path:                 controller
+  MainIs:               learning_switch.ml
+  Build$:               flag(unix)
+  Custom:               true
+  CompiledObject:       native
+  Install$:              flag(unix)
+  BuildDepends:         openflow
+
+Executable ofswitch_lwt
+  Path:                 switch
+  MainIs:               basic_switch.ml
+  Build$:               flag(unix) && flag(direct)
+  Custom:               true
+  CompiledObject:       native
+  Install$:              flag(unix) && flag(direct)
+  BuildDepends:         openflow
+
+
+Executable "ofcontroller.o"
+  Path:                 controller
+  MainIs:               learning_switch.ml
+  Build$:               flag(xen)
+  Custom:               true
+  CompiledObject:       native_object
+  Install:              false
+  BuildDepends:         openflow
+
+Executable "ofswitch.o"
+  Path:                 switch
+  MainIs:               basic_switch.ml
+  Build$:               flag(xen)
+  Custom:               true
+  CompiledObject:       native_object
+  Install:              false
+  BuildDepends:         openflow  

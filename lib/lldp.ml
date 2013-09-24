@@ -53,6 +53,13 @@ cenum lldp_port_id_subtype {
   LLDP_PORT_LOCAL_SUBTYPE         = 7
 } as uint8_t*)
 
+cstruct ethernet {
+  uint8_t        dst[6];
+  uint8_t        src[6];
+  uint16_t       ethertype
+} as big_endian
+
+
 type lldp_tlv_types =
   LLDP_TYPE_END
   | LLDP_TYPE_CHASSIS_ID
@@ -274,7 +281,7 @@ let parse_lldp_tlv bits =
 
 let parse_lldp_tlvs bits =
   (* Ignore ethernet headers for now *)
-  let bits = Cstruct.shift bits Ethif.sizeof_ethernet in
+  let bits = Cstruct.shift bits sizeof_ethernet in
   let rec parse_lldp_tlvs_inner bits = 
     match (Cstruct.len bits) with
       | 0 -> []
@@ -345,11 +352,11 @@ let marsal_lldp_tlv tlv bits =
     | Tlv_unk (typ, data)  -> set_lldp_tlv_typ_data bits typ data
 
 let marsal_lldp_tlvs mac tlvs bits = 
-  let _ = Net.Ethif.set_ethernet_dst "\x01\x80\xc2\x00\x00\x0e" 0 bits in 
-  let _ = Net.Ethif.set_ethernet_src (Macaddr.to_bytes mac) 
+  let _ = set_ethernet_dst "\x01\x80\xc2\x00\x00\x0e" 0 bits in 
+  let _ = set_ethernet_src (Macaddr.to_bytes mac) 
             0 bits in 
-  let _ = Net.Ethif.set_ethernet_ethertype bits 0x88cc in 
-  let bits = Cstruct.shift bits Ethif.sizeof_ethernet in 
+  let _ = set_ethernet_ethertype bits 0x88cc in 
+  let bits = Cstruct.shift bits sizeof_ethernet in 
   let rec marsal_lldp_tlvs_inner tlvs bits = 
     match tlvs with 
       | [] -> 0
@@ -359,6 +366,4 @@ let marsal_lldp_tlvs mac tlvs bits =
           let rest = marsal_lldp_tlvs_inner t bits in 
             len + rest
   in 
-    Ethif.sizeof_ethernet + marsal_lldp_tlvs_inner tlvs bits
-
-
+    sizeof_ethernet + marsal_lldp_tlvs_inner tlvs bits
