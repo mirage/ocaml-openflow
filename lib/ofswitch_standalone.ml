@@ -144,13 +144,13 @@ let init controller =
   OC.register_cb controller OE.PORT_STATUS_CHANGE port_status_cb
 
 
-let init_controller () = OC.init_controller ()
+let init_controller () = OC.init_controller init
 
 let run_controller mgr st = 
   let (controller, switch) = OSK.init_local_conn_state () in 
   let _ = Lwt.ignore_result (
     try_lwt 
-      OC.local_connect st controller init
+      OC.local_connect ~verbose:true st controller
     with exn ->
       return (printf "[switch] standalone controller dailed %s\n%!" (Printexc.to_string
       exn))
