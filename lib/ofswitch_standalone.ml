@@ -150,7 +150,7 @@ let run_controller mgr st =
   let (controller, switch) = OSK.init_local_conn_state () in 
   let _ = Lwt.ignore_result (
     try_lwt 
-      OC.local_connect ~verbose:true st controller
+      OC.local_connect st controller
     with exn ->
       return (printf "[switch] standalone controller dailed %s\n%!" (Printexc.to_string
       exn))
