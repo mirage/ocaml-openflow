@@ -15,15 +15,7 @@
  *)
 open Net
 open Lwt
-open Printf
 module OP = Ofpacket
-
-exception ReadError
-
-let sp = Printf.sprintf
-let pp = Printf.printf
-let ep = Printf.eprintf
-let cp = pp "%s\n%!"
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
@@ -47,13 +39,7 @@ let write_buffer t bits =
  
 let close t = Channel.close t.sock
 
-(*  let cache_size t =
-    List.fold_right (
-      fun a r -> 
-        r + (Cstruct.len a) ) t.data_cache 0*)
-
 let read_data t len = 
-(*     Printf.printf "let rec read_data t data_cache %d = \n%!" len;  *)
   match (len, (Cstruct.len !(t.data_cache) ) ) with
     | (0, _) -> return (get_new_buffer 0)
     | (_, 0) -> 
@@ -133,7 +119,8 @@ let close conn =
         try_lwt
           Socket.close t
         with exn -> 
-          return (printf "[socket] close error: %s\n%!" (Printexc.to_string exn))
+          return (OS.Console.log (Printf.sprintf "[socket] close error: %s\n%!"
+          (Printexc.to_string exn)))
           ) 
   | Local (_, output) -> output None 
  
