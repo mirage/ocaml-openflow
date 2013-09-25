@@ -78,7 +78,7 @@ Executable ofswitch_lwt
   Custom:               true
   CompiledObject:       native
   Install$:              flag(unix) && flag(direct)
-  BuildDepends:         openflow
+  BuildDepends:         openflow, openflow.switch
 
 
 Executable "ofcontroller.o"

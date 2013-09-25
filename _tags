@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a6346ea7787afaf53f974c8470a6635b)
+# DO NOT EDIT (digest: b9736de46cc3c7f8e4f2274631f835f5)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -60,6 +60,8 @@
 "controller/learning_switch.native": custom
 # Executable ofswitch_lwt
 "switch/basic_switch.native": use_openflow
+"switch/basic_switch.native": use_switch
+"switch/basic_switch.native": pkg_re.str
 "switch/basic_switch.native": pkg_cstruct
 "switch/basic_switch.native": pkg_cstruct.syntax
 "switch/basic_switch.native": pkg_rpclib
@@ -67,6 +69,8 @@
 "switch/basic_switch.native": pkg_mirage
 "switch/basic_switch.native": pkg_mirage-net
 "switch/basic_switch.native": pkg_ipaddr
+<switch/*.ml{,i}>: use_switch
+<switch/*.ml{,i}>: pkg_re.str
 "switch/basic_switch.native": custom
 # Executable ofcontroller.o
 "controller/learning_switch.nobj.o": use_openflow

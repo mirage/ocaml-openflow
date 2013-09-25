@@ -5,15 +5,16 @@ NAME=openflow
 J=4
 
 UNIX ?= $(shell if ocamlfind query lwt.ssl >/dev/null 2>&1; then echo --enable-unix; fi)
-
-XEN ?= $(shell if [ $MIRAGE_OS = "xen" ]; then echo --enable-xen; fi)
+DIRECT ?= $(shell if [ $(MIRAGE_NET) = "direct" ]; then echo --enable-direct; fi)
+XEN ?= $(shell if [ $(MIRAGE_OS) = "xen" ]; then echo --enable-xen; fi)
 # MIRAGE = --enable-mirage
 
 -include Makefile.config
 
-setup.data: _oasis
-	oasis setup
-	echo XXXXX $(MIRAGE_NET) $(UNIX) $(XEN) $(DIRECT)
+setup.ml: _oasis
+	oasis setup 
+
+setup.data: setup.ml
 	ocaml setup.ml -configure $(UNIX) $(XEN) $(DIRECT)
 
 clean: setup.data 
@@ -27,11 +28,6 @@ distclean: setup.ml setup.data
 setup: setup.data
 
 build: setup.data $(wildcard lib/*.ml)
-        ifeq ($(MIRAGE_NET), "direct")
-		DR ?= "--enable-direct"
-		echo "hello" $(MIRAGE_NET) $(DR)
-        endif 
-	echo "hello" $(MIRAGE_NET) $(DR)
 	ocaml setup.ml -build -j $(J) $(OFLAGS) $(DR)
 
 doc: setup.data setup.ml
