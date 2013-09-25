@@ -18,13 +18,27 @@ open Net.Nettypes
 
 type t 
 
+(** FlowVisor topology discovery *)
+
+
+(** Initialize a topology struct *)
 val init_topology: unit -> t
-val add_port: t -> int64 -> int -> Macaddr.t -> unit Lwt.t
+
+(** Add to the structure a new switch and the relevant controller channel *)
 val add_channel: t -> int64 -> Openflow.Ofcontroller.t -> unit
+(** Add a new port on a switch *)
+val add_port: t -> int64 -> int -> Macaddr.t -> unit Lwt.t
+(** run a daemon which broadcasts lldp packet every 120 seconds in order to
+ * discover physical connectivity between switches *)
 val discover: t-> unit Lwt.t
+
+(** parse and process an lldp packet *)
 val process_lldp_packet: t -> int64 -> int -> Cstruct.t -> bool
+(** discover a path between two ports of connected switches *)
 val find_dpid_path: t -> int64 -> Openflow.Ofpacket.Port.t -> int64 -> 
   Openflow.Ofpacket.Port.t -> (int64 * Openflow.Ofpacket.Port.t * Openflow.Ofpacket.Port.t) list
+(** remove all ports of a specific switch  *)
 val remove_dpid: t -> int64 -> unit
+(** reports if a link function a a transit link between two adjacent switches *)
 val is_transit_port : t -> int64 -> int -> bool
 
