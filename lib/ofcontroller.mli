@@ -56,5 +56,5 @@ val listen : Manager.t -> ?verbose:bool -> Nettypes.ipv4_src ->
   (t -> 'a) -> unit Lwt.t
 val connect : Manager.t -> ?verbose:bool -> Nettypes.ipv4_dst -> 
   (t -> 'a) -> unit Lwt.t
-val init_controller : ?verbose:bool -> unit -> t 
-val local_connect : t -> Ofsocket.conn_state -> (t -> 'a) -> unit Lwt.t
+val init_controller : ?verbose:bool -> (t -> 'a) -> t 
+val local_connect : ?verbose:bool -> t -> Ofsocket.conn_state -> unit Lwt.t

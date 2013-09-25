@@ -810,8 +810,8 @@ let add_slice mgr flv of_m dst dpid =
 
 let listen st mgr loc = OC.listen mgr loc (init st) 
 let local_listen st conn = 
-  let t = OC.init_controller () in 
-  OC.local_connect t conn (init st) 
+  let t = OC.init_controller (init st) in 
+  OC.local_connect t conn 
 
 let remove_slice _ _ = return ()
 let add_local_slice flv of_m  conn dpid =

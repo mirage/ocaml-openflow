@@ -165,6 +165,10 @@ let process_of_packet state conn ofp =
         let h = OP.Header.(create ~xid:h.xid ECHO_RESP get_len) in
           send_packet conn (OP.Echo_resp h)
      end
+      | Echo_resp h  -> begin (* Reply to ECHO requests *)
+        let _ =  if state.verbose then pp "[controller] ECHO_RESP\n%!" in
+        return ()
+     end
       | Features_resp (h, sfs) -> begin (* Generate a datapath join event *)
         let _ =  if state.verbose then pp "[controller] FEATURES_RESP\n%!" in 
         let _ = conn.dpid <- sfs.OP.Switch.datapath_id  in
@@ -304,8 +308,8 @@ let socket_controller st (remote_addr, remote_port) t =
   let conn = init_socket_conn_state t in 
     controller_run st conn 
 
-let init_controller ?(verbose=false) () = 
-  { verbose;
+let init_controller ?(verbose=false) init = 
+  let t = { verbose;
     dp_db                    = Hashtbl.create 0; 
     datapath_join_cb         = []; 
     datapath_leave_cb        = []; 
@@ -316,18 +320,17 @@ let init_controller ?(verbose=false) () =
     desc_stats_reply_cb      = []; 
     port_stats_reply_cb      = [];
     table_stats_reply_cb     = [];
-    port_status_cb           = []; } 
+    port_status_cb           = []; } in  
+  let _ = init t in 
+  t
 
 let listen mgr ?(verbose=false) loc init =
-  let st = init_controller ~verbose () in
-  let _ = init st in 
+  let st = init_controller ~verbose init in
     (Channel.listen mgr (`TCPv4 (loc, (socket_controller st) ))) 
 
 let connect mgr ?(verbose=false) loc init = 
-  let st = init_controller ~verbose () in
-  let _ = init st in 
+  let st = init_controller ~verbose init in
     Net.Channel.connect mgr (`TCPv4 (None, loc, 
       (socket_controller st loc) ))
 
-let local_connect st conn init = 
-  let _ = init st in  controller_run st conn 
+let local_connect ?(verbose=false) st conn = controller_run st conn 

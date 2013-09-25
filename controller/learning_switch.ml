@@ -130,14 +130,19 @@ let init controller =
 let port = 6633 
 
 let run () =
+  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap9" () in 
+  let _ = Tuntap.set_ipv4 ~devname:("tap9") ~ipv4:"10.20.0.3"
+      ~netmask:"255.255.255.0" () in 
+  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
   Net.Manager.create (fun mgr interface id ->
     try_lwt
       let ip = 
 (*           (ipv4_addr_of_tuple (10l,0l,0l,253l),  *)
-         ( Ipaddr.V4.make 128l 232l 32l 230l, 
-           Ipaddr.V4.make 255l 255l 255l 0l, []) in  
+         ( Ipaddr.V4.make 10l 20l 0l 4l, 
+           Ipaddr.V4.make 255l 255l 255l 0l, 
+           []) in  
       lwt _ = Manager.configure interface (`IPv4 ip) in
-        OC.listen mgr (None, port) init
+        OC.listen mgr ~verbose:true (None, port) init
     with | e ->
       return (Printf.eprintf "Unexpected exception : %s" (Printexc.to_string e))
   )
