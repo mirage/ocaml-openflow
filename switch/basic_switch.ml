@@ -32,42 +32,20 @@ let sp = Printf.sprintf
 (****************************************************************
  * OpenFlow Switch configuration 
  *****************************************************************)
-
-let print_time () =
-  while_lwt true do
-    OS.Time.sleep 10.0 >>
-    return (printf "%03.6f: process running..\n%!" (OS.Clock.time ()))
-  done
-
 let switch_run () = 
   let sw = create_switch 0x100L in
   let use_mac = ref true in 
-  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap0" () in 
-(*  let _ = Tuntap.set_ipv4 ~devname:("tap0") ~ipv4:"10.20.0.1"
-      ~netmask:"255.255.255.0" () in *)
-  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
-
-  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap1" () in 
-  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
-  
   try_lwt 
-    Manager.create 
-    (fun mgr interface id ->
-       match (OS.Netif.string_of_id (OS.Netif.id (Ethif.get_netif
-       (Manager.get_ethif interface)))) with 
-         | "tap0" 
-         | "0" ->
-             lwt _ = OS.Time.sleep 5.0 in
-             let _ = printf "connecting switch...\n%!" in 
-             let ip = 
-               ( Ipaddr.V4.make 10l 20l 0l 2l, 
-                 Ipaddr.V4.make 255l 255l 255l 0l, 
-                 []) in  
-             lwt _ = Manager.configure interface (`IPv4 ip) in
-              let dst_ip = Ipaddr.V4.make 10l 20l 0l 4l in 
-             lwt _ = standalone_connect sw mgr (dst_ip, 6633) in 
-             let _ = printf "connect returned...\n%!" in 
-              return ()
+    Manager.create (fun mgr interface id ->
+        match (OS.Netif.string_of_id id) with 
+        | "tap0" 
+        | "0" ->
+          lwt _ = OS.Time.sleep 5.0 in
+          let _ = printf "connecting switch...\n%!" in 
+          let ip = Ipaddr.V4.(make 10l 20l 0l 2l, Prefix.mask 24, []) in  
+          lwt _ = Manager.configure interface (`IPv4 ip) in
+          let dst_ip = Ipaddr.V4.make 10l 20l 0l 4l in 
+          standalone_connect sw mgr (dst_ip, 6633) 
       | str_id -> 
           let find dev = 
             try 
@@ -87,4 +65,3 @@ let switch_run () =
     Printf.eprintf "Error: %s" (Printexc.to_string e); 
     return ()
 
-let _ = OS.Main.run(switch_run ())
