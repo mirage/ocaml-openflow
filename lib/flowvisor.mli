@@ -39,10 +39,10 @@ val local_listen: t -> Openflow.Ofsocket.conn_state -> unit Lwt.t
 (** connect to a local control socket and expose a slice of the network control
  * traffic *)
 val add_local_slice : t -> Openflow.Ofpacket.Match.t -> 
-  Openflow.Ofsocket.conn_state -> int64 -> unit Lwt.t 
+  Openflow.Ofsocket.conn_state -> int64 -> unit 
 (** connect to a remote controller and expose a slice of the network control
  * traffic *)
 val add_slice : Net.Manager.t -> t -> Openflow.Ofpacket.Match.t -> 
-  ipv4_dst -> int64 -> unit Lwt.t 
+  ipv4_dst -> int64 -> unit  
 (** stop exposing a control slice *)
-val remove_slice : t -> Openflow.Ofpacket.Match.t ->  unit Lwt.t
+val remove_slice : t -> Openflow.Ofpacket.Match.t ->  unit 

@@ -47,7 +47,6 @@ module E = struct
           0 
         else
           Pervasives.compare v1 v2 
-        
   let default = (0L, 0, 0L, 0, 1)
 end
 
