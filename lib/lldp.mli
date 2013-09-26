@@ -14,11 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Net
-open Net.Nettypes
-open Cstruct
-
 exception Unparsable of Cstruct.t
+
+(** LLDP basic message tbl types *)
 
 type lldp_tlv_types = 
   | LLDP_TYPE_END            
@@ -51,5 +49,7 @@ type lldp_tvl =
   | Tlv of lldp_tlv_types * string
   | Tlv_unk of int * string
 
-val parse_lldp_tlvs: t -> lldp_tvl list
-val marsal_lldp_tlvs:  Macaddr.t -> lldp_tvl list -> t -> int 
+(** [parse_lldp_tlvs bits] extract an lldp packet from a raw packet*)
+val parse_lldp_tlvs: Cstruct.t -> lldp_tvl list
+(** [marshal_lldp_tlvs mac tlvs bits] marshal lldp tlvs to bits memory address *)
+val marsal_lldp_tlvs:  Macaddr.t -> lldp_tvl list -> Cstruct.t -> int 

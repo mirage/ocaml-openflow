@@ -20,15 +20,29 @@ open Net.Nettypes
 
 type t 
 
+(*
+ * TODO:
+   *
+   * expose read write permissions to slices 
+ * *)
+
+(** initialize required state for a flowvisor instance *)
+val create_flowvisor: ?verbose:bool -> unit -> t
+
+(** switch listening daemons *)
 
 val listen: t -> Manager.t -> ipv4_src -> unit Lwt.t
 val local_listen: t -> Openflow.Ofsocket.conn_state -> unit Lwt.t
-val create_flowvisor: ?verbose:bool -> unit -> t
-val remove_slice : t -> Openflow.Ofpacket.Match.t ->  unit Lwt.t
-val add_local_slice : Net.Manager.t -> t -> Openflow.Ofpacket.Match.t -> 
-  Openflow.Ofsocket.conn_state -> int64 -> unit Lwt.t 
-val add_slice : Net.Manager.t -> t -> Openflow.Ofpacket.Match.t -> 
-  ipv4_dst -> int64 -> unit Lwt.t 
-val add_local_slice : t -> Openflow.Ofpacket.Match.t -> 
-  Openflow.Ofsocket.conn_state -> int64 -> unit Lwt.t 
 
+(** slice management methods *)
+
+(** connect to a local control socket and expose a slice of the network control
+ * traffic *)
+val add_local_slice : t -> Openflow.Ofpacket.Match.t -> 
+  Openflow.Ofsocket.conn_state -> int64 -> unit 
+(** connect to a remote controller and expose a slice of the network control
+ * traffic *)
+val add_slice : Net.Manager.t -> t -> Openflow.Ofpacket.Match.t -> 
+  ipv4_dst -> int64 -> unit  
+(** stop exposing a control slice *)
+val remove_slice : t -> Openflow.Ofpacket.Match.t ->  unit 

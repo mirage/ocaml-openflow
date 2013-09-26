@@ -24,7 +24,7 @@ let resolve t = Lwt.on_success t (fun _ -> ())
 module OP = Openflow.Ofpacket
 module OC = Openflow.Ofcontroller
 module OE = Openflow.Ofcontroller.Event
-open Openflow.Ofswitch
+open Switch.Ofswitch
 
 let pp = Printf.printf
 let sp = Printf.sprintf
@@ -32,36 +32,28 @@ let sp = Printf.sprintf
 (****************************************************************
  * OpenFlow Switch configuration 
  *****************************************************************)
-
-let print_time () =
-  while_lwt true do
-    OS.Time.sleep 10.0 >>
-    return (printf "%03.6f: process running..\n%!" (OS.Clock.time ()))
-  done
-
 let switch_run () = 
-  let sw = create_switch () in
+  let sw = create_switch 0x100L in
   let use_mac = ref true in 
   try_lwt 
-    Manager.create ~devs:1 (* ~attached:(["en0"]) *)
-    (fun mgr interface id ->
-       match (Manager.get_intf_name mgr id) with 
-         | "tap0" 
-         | "0" ->
-             let _ = printf "connecting switch...\n%!" in 
-             let _ = add_port_local mgr sw id in 
-              let dst_ip = ipv4_addr_of_tuple (0l,0l,0l,0l) in
-             lwt _ = connect sw mgr (dst_ip, 6633) in 
-             let _ = printf "connect returned...\n%!" in 
-              return ()
-      | _ -> 
+    Manager.create (fun mgr interface id ->
+        match (OS.Netif.string_of_id id) with 
+        | "tap0" 
+        | "0" ->
+          lwt _ = OS.Time.sleep 5.0 in
+          let _ = printf "connecting switch...\n%!" in 
+          let ip = Ipaddr.V4.(make 10l 20l 0l 2l, Prefix.mask 24, []) in  
+          lwt _ = Manager.configure interface (`IPv4 ip) in
+          let dst_ip = Ipaddr.V4.make 10l 20l 0l 4l in 
+          standalone_connect sw mgr (dst_ip, 6633) 
+      | str_id -> 
           let find dev = 
             try 
               let _ = Re_str.search_forward (Re_str.regexp "tap") dev 0 in true
             with Not_found -> false
           in
           lwt _ =
-            if (not (find id) ) then 
+            if (not (find str_id) ) then 
               lwt _ = add_port mgr ~use_mac:(!use_mac) sw id in 
                 return (use_mac := false)
             else
@@ -73,5 +65,3 @@ let switch_run () =
     Printf.eprintf "Error: %s" (Printexc.to_string e); 
     return ()
 
-
-let _ = OS.Main.run(switch_run ())

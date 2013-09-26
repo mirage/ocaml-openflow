@@ -64,21 +64,21 @@ Executable "ocaml-ofctl"
 
 Executable ofcontroller_lwt
   Path:                 controller
-  MainIs:               learning_switch.ml
+  MainIs:               lwt_controller.ml
   Build$:               flag(unix)
   Custom:               true
   CompiledObject:       native
-  Install$:              flag(unix)
+  Install$:             flag(unix)
   BuildDepends:         openflow
 
 Executable ofswitch_lwt
   Path:                 switch
-  MainIs:               basic_switch.ml
+  MainIs:               lwt_switch.ml
   Build$:               flag(unix) && flag(direct)
   Custom:               true
   CompiledObject:       native
-  Install$:              flag(unix) && flag(direct)
-  BuildDepends:         openflow
+  Install$:             flag(unix) && flag(direct)
+  BuildDepends:         openflow, openflow.switch
 
 
 Executable "ofcontroller.o"

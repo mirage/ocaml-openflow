@@ -16,7 +16,6 @@
 
 (* Simple openflow controller that listens on port 6633 and replies
    with echo request on every packet_in event *)
-
 open Lwt
 open Printf
 open Net
@@ -31,18 +30,13 @@ module OE = Openflow.Ofcontroller.Event
 let pp = Printf.printf
 let sp = Printf.sprintf
 
-(* TODO this the mapping is incorrect. the datapath must be moved to the key
- * of the hashtbl *)
 type mac_switch = {
   addr: Macaddr.t; 
   switch: OP.datapath_id;
 }
 
 type switch_state = {
-(*   mutable mac_cache: (mac_switch, OP.Port.t) Hashtbl.t; *)
   mutable mac_cache: (Macaddr.t, OP.Port.t) Hashtbl.t; 
-(*  mutable dpid: OP.datapath_id list;
-  mutable of_ctrl: OC.t list; *)
   req_count: int ref; 
 }
 
@@ -78,7 +72,6 @@ let packet_in_cb controller dpid evt =
  
   (* check if I know the output port in order to define what type of message
    * we need to send *)
-  let broadcast = String.make 6 '\255' in
   let ix = m.OP.Match.dl_dst in
   if ( (ix = Macaddr.broadcast)
        || (not (Hashtbl.mem switch_data.mac_cache ix)) ) 
@@ -120,8 +113,6 @@ let packet_in_cb controller dpid evt =
  )
 
 let init controller = 
-(*  if (not (List.mem controller switch_data.of_ctrl)) then
-    switch_data.of_ctrl <- (([controller] @ switch_data.of_ctrl));*)
   pp "test controller register datapath cb\n";
   OC.register_cb controller OE.DATAPATH_JOIN datapath_join_cb;
   pp "test controller register packet_in cb\n";
@@ -132,14 +123,10 @@ let port = 6633
 let run () =
   Net.Manager.create (fun mgr interface id ->
     try_lwt
-      let ip = 
-(*           (ipv4_addr_of_tuple (10l,0l,0l,253l),  *)
-         ( Ipaddr.V4.make 128l 232l 32l 230l, 
-           Ipaddr.V4.make 255l 255l 255l 0l, []) in  
+      let ip = Ipaddr.V4.(make 10l 20l 0l 4l, Prefix.mask 24, []) in  
       lwt _ = Manager.configure interface (`IPv4 ip) in
-        OC.listen mgr (None, port) init
+        OC.listen mgr ~verbose:true (None, port) init
     with | e ->
       return (Printf.eprintf "Unexpected exception : %s" (Printexc.to_string e))
   )
 
-let _ = OS.Main.run (run ())

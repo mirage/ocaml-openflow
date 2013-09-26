@@ -19,6 +19,9 @@ open Printf
 
 module OP = Openflow.Ofpacket
 
+let sp = Printf.sprintf
+let cp = OS.Console.log
+
 let parse_actions actions =
   let actions = Re_str.split (Re_str.regexp "/") actions in 
   let split_action = Re_str.regexp ":" in 
@@ -41,28 +44,28 @@ let parse_actions actions =
         | "set_dl_src"::addr::_ -> begin 
             match (Macaddr.of_string  addr) with
             | None -> 
-              let _ = printf "[ofswitch-config] Invalid mac %s\n%!" action in 
+              let _ = cp (sp "[ofswitch-config] Invalid mac %s\n%!" action) in 
               actions
             | Some addr -> actions @[(OP.Flow.Set_dl_src(addr))]
           end
         | "set_dl_dst"::addr::_ -> begin 
             match (Macaddr.of_string addr) with
             | None -> 
-              let _ = printf "[ofswitch-config] Invalid mac %s\n%!" action in 
+              let _ = cp (sp "[ofswitch-config] Invalid mac %s\n%!" action) in 
               actions
             | Some addr -> actions @[(OP.Flow.Set_dl_dst(addr))]
           end
         | "set_nw_src"::addr::_ -> begin 
             match (Ipaddr.V4.of_string addr) with
             | None -> 
-              let _ = printf "[ofswitch-config] invalid ip %s\n%!" addr in 
+              let _ = cp (sp "[ofswitch-config] invalid ip %s\n%!" addr) in 
               actions
             | Some ip -> actions @ [(OP.Flow.Set_nw_src(ip))]
           end
         | "set_nw_dst"::addr::_ ->  begin
             match (Ipaddr.V4.of_string addr) with
             | None -> 
-              let _ = printf "[ofswitch-config] invalid ip %s\n%!" addr in 
+              let _ = cp (sp "[ofswitch-config] invalid ip %s\n%!" addr) in 
               actions
             | Some ip -> actions @  [(OP.Flow.Set_nw_dst(ip))]
           end
@@ -73,10 +76,10 @@ let parse_actions actions =
         | "set_tp_dst"::port::_ -> 
           actions @ [(OP.Flow.Set_tp_dst(int_of_string port))]
         | _ -> 
-          let _ = eprintf "[ofswitch-config] invalid action %s" action in 
+          let _ = cp (sp "[ofswitch-config] invalid action %s" action) in 
           actions
       with exn -> 
-        let _ = printf "[ofswitch-config] error parsing action %s\n%!" action in 
+        let _ = cp (sp "[ofswitch-config] error parsing action %s\n%!" action) in 
         actions
   ) actions []
 
@@ -87,8 +90,8 @@ let hashtbl_to_flow_match t =
     List.fold_right (
       fun (name, value) r -> 
         let _ = Hashtbl.add r name (Rpc.string_of_rpc value) in 
-        let _ = printf "Adding %s = %s\n%!" name 
-            (Rpc.string_of_rpc value) in 
+(*        let _ = printf "Adding %s = %s\n%!" name 
+            (Rpc.string_of_rpc value) in *)
         r 
     ) t (Hashtbl.create 10) in
   let _ = 
@@ -190,93 +193,74 @@ let listen_t mgr del_port get_stats add_flow del_flow port =
   let manage (dip,dpt) t =
     try_lwt 
       lwt req = Net.Channel.read_line t in
-  let req = 
-    List.fold_right (
-      fun a r -> 
-        r ^ (Cstruct.to_string a)
-    ) req "" in 
-  let req = Jsonrpc.call_of_string req in 
-  lwt success = 
-  match (req.Rpc.name, req.Rpc.params) with
-  | ("add-port", (Rpc.String (dev))::_) -> 
+      let req = 
+        List.fold_right (
+          fun a r -> 
+            r ^ (Cstruct.to_string a)
+        ) req "" in 
+      let req = Jsonrpc.call_of_string req in 
+      lwt success = 
+        match (req.Rpc.name, req.Rpc.params) with
+        | ("add-port", (Rpc.String (dev))::_) -> 
     (*             let _ = Net.Manager.attach mgr dev in *)
-    return (Rpc.Enum [(Rpc.String "true")])
-  | ("del-port", (Rpc.String (dev))::_) -> 
-    lwt _ = del_port dev in 
+          return (Rpc.Enum [(Rpc.String "true")])
+        | ("del-port", (Rpc.String (dev))::_) -> 
+          lwt _ = del_port dev in 
 (*             lwt _ = Net.Manager.detach mgr dev in *)
-return (Rpc.Enum [(Rpc.String "true")])
-| ("dump-flows", (Rpc.Dict t)::_) -> 
-let of_match = hashtbl_to_flow_match t in
-let _ = printf "Find rules matching %s\n%!"
-    (OP.Match.match_to_string of_match) in 
-let flows = get_stats of_match in 
-let res = 
-  List.fold_right (
-    fun a r -> 
-      r @ [(Rpc.String (OP.Flow.string_of_flow_stat a))]
-  ) flows [] in 
-return (Rpc.Enum res)
-| ("add-flow", (Rpc.Dict t)::_) -> 
-let _ = printf "adding flow %s\n%!" (Rpc.string_of_call req) in
-let fm = OP.Flow_mod.create (OP.Match.wildcard () ) 
-    0L OP.Flow_mod.ADD [] () in 
-let map = 
-  List.fold_right (
-    fun (name, value) r -> 
-      match name with
-      | "actions" -> 
-        let _ = fm.OP.Flow_mod.actions <- 
-                  (parse_actions (Rpc.string_of_rpc value) ) in 
-        r
-      | "idle_timeout" -> 
-        let _ = 
-          fm.OP.Flow_mod.idle_timeout <- (Rpc.int_of_rpc value) in 
-        r 
-      | "hard_timeout" -> 
-        let _ = 
-          fm.OP.Flow_mod.hard_timeout <- (Rpc.int_of_rpc value) in 
-        r 
-      | "priority" -> 
-        let _ = 
-          fm.OP.Flow_mod.priority <- (Rpc.int_of_rpc value) in 
-        r 
-      | _ ->  r @ [(name, value)]
-  ) t [] in
-let _ = fm.OP.Flow_mod.of_match <- hashtbl_to_flow_match map in 
-let _ = printf "Add flow %s\n%!" (OP.Flow_mod.flow_mod_to_string fm) in
-lwt _ = add_flow fm in 
-return (Rpc.Enum [(Rpc.String "true")] )
-| ("del-flow", (Rpc.Dict t)::_) -> 
-let of_match = hashtbl_to_flow_match t in
-let _ = printf "Find rules matching %s\n%!"
-    (OP.Match.match_to_string of_match) in 
-lwt _ = del_flow of_match in 
-return (Rpc.Enum [(Rpc.String "true")] )
-| (_, _) -> 
-let _ = printf "[ofswitch-config] invalid action %s\n%!" 
-    (req.Rpc.name) in 
-return (Rpc.Enum [(Rpc.String "false")])
-in 
-let resp = 
-  Jsonrpc.string_of_response (Rpc.success success) in 
-let _ = Net.Channel.write_line t resp in
-lwt _ = Net.Channel.flush t in 
-lwt _ = Net.Channel.close t in 
-return ()
-with 
-| End_of_file -> return ()
-| exn ->
-  let _ = OS.Console.log 
-      "[ofswitch_config] server error" in 
-  (*      let resp = Jsonrpc.string_of_response 
-                    (Rpc.failure (Rpc.Enum [(Rpc.String "false")])) in 
-          lwt _ = Lwt_io.write_line output resp in 
-          lwt _ = Lwt_io.close output in 
-          lwt _ = Lwt_io.close input in *)
-  return ()
-
-
-in 
-let _ = Net.Channel.listen mgr (`TCPv4 ((None, 6634), manage )) in 
-return ()
-
+          return (Rpc.Enum [(Rpc.String "true")])
+        | ("dump-flows", (Rpc.Dict t)::_) -> 
+          let of_match = hashtbl_to_flow_match t in
+          let _ = cp (sp "Find rules matching %s\n%!"
+                        (OP.Match.match_to_string of_match)) in 
+          let flows = get_stats of_match in 
+          let res = 
+            List.fold_right (
+              fun a r -> (Rpc.String (OP.Flow.string_of_flow_stat a))::r) flows [] in 
+          return (Rpc.Enum res)
+        | ("add-flow", (Rpc.Dict t)::_) -> 
+          let _ = cp (sp "adding flow %s\n%!" (Rpc.string_of_call req)) in
+          let fm = OP.Flow_mod.create (OP.Match.wildcard () ) 0L OP.Flow_mod.ADD [] () in 
+          let map = 
+            List.fold_right (
+              fun (name, value) r -> 
+                match name with
+                | "actions" -> 
+                  fm.OP.Flow_mod.actions <- parse_actions (Rpc.string_of_rpc value);
+                  r
+                | "idle_timeout" -> 
+                  fm.OP.Flow_mod.idle_timeout <- (Rpc.int_of_rpc value); 
+                  r 
+                | "hard_timeout" -> 
+                  fm.OP.Flow_mod.hard_timeout <- (Rpc.int_of_rpc value); 
+                  r 
+                | "priority" -> 
+                  fm.OP.Flow_mod.priority <- (Rpc.int_of_rpc value); 
+                  r 
+                | _ ->  r @ [(name, value)]
+            ) t [] in
+          let _ = fm.OP.Flow_mod.of_match <- hashtbl_to_flow_match map in 
+          let _ = cp (sp "Add flow %s\n%!" (OP.Flow_mod.flow_mod_to_string fm)) in
+          lwt _ = add_flow fm in 
+          return (Rpc.Enum [(Rpc.String "true")] )
+        | ("del-flow", (Rpc.Dict t)::_) -> 
+          let of_match = hashtbl_to_flow_match t in
+          lwt _ = del_flow of_match in 
+          return (Rpc.Enum [(Rpc.String "true")] )
+        | (_, _) -> 
+          let _ = printf "[ofswitch-config] invalid action %s\n%!" 
+              (req.Rpc.name) in 
+          return (Rpc.Enum [(Rpc.String "false")])
+      in 
+      let resp = 
+        Jsonrpc.string_of_response (Rpc.success success) in 
+      let _ = Net.Channel.write_line t resp in
+      lwt _ = Net.Channel.flush t in 
+      lwt _ = Net.Channel.close t in 
+      return ()
+    with 
+    | End_of_file -> return ()
+    | exn ->
+      let _ = cp "[ofswitch_config] server error" in 
+      return ()
+  in 
+  Net.Channel.listen mgr (`TCPv4 ((None, 6634), manage )) 

@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: a6346ea7787afaf53f974c8470a6635b)
+# DO NOT EDIT (digest: 40400a50bb46b869aaf10fff14592cbf)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -49,25 +49,29 @@
 <lib/*.ml{,i}>: pkg_ipaddr
 "lib/ofswitch_ctrl.native": custom
 # Executable ofcontroller_lwt
-"controller/learning_switch.native": use_openflow
-"controller/learning_switch.native": pkg_cstruct
-"controller/learning_switch.native": pkg_cstruct.syntax
-"controller/learning_switch.native": pkg_rpclib
-"controller/learning_switch.native": pkg_rpclib.json
-"controller/learning_switch.native": pkg_mirage
-"controller/learning_switch.native": pkg_mirage-net
-"controller/learning_switch.native": pkg_ipaddr
-"controller/learning_switch.native": custom
+"controller/lwt_controller.native": use_openflow
+"controller/lwt_controller.native": pkg_cstruct
+"controller/lwt_controller.native": pkg_cstruct.syntax
+"controller/lwt_controller.native": pkg_rpclib
+"controller/lwt_controller.native": pkg_rpclib.json
+"controller/lwt_controller.native": pkg_mirage
+"controller/lwt_controller.native": pkg_mirage-net
+"controller/lwt_controller.native": pkg_ipaddr
+"controller/lwt_controller.native": custom
 # Executable ofswitch_lwt
-"switch/basic_switch.native": use_openflow
-"switch/basic_switch.native": pkg_cstruct
-"switch/basic_switch.native": pkg_cstruct.syntax
-"switch/basic_switch.native": pkg_rpclib
-"switch/basic_switch.native": pkg_rpclib.json
-"switch/basic_switch.native": pkg_mirage
-"switch/basic_switch.native": pkg_mirage-net
-"switch/basic_switch.native": pkg_ipaddr
-"switch/basic_switch.native": custom
+"switch/lwt_switch.native": use_openflow
+"switch/lwt_switch.native": use_switch
+"switch/lwt_switch.native": pkg_re.str
+"switch/lwt_switch.native": pkg_cstruct
+"switch/lwt_switch.native": pkg_cstruct.syntax
+"switch/lwt_switch.native": pkg_rpclib
+"switch/lwt_switch.native": pkg_rpclib.json
+"switch/lwt_switch.native": pkg_mirage
+"switch/lwt_switch.native": pkg_mirage-net
+"switch/lwt_switch.native": pkg_ipaddr
+<switch/*.ml{,i}>: use_switch
+<switch/*.ml{,i}>: pkg_re.str
+"switch/lwt_switch.native": custom
 # Executable ofcontroller.o
 "controller/learning_switch.nobj.o": use_openflow
 "controller/learning_switch.nobj.o": pkg_cstruct

@@ -1,5 +1,5 @@
-(*
- * Copyright (c) 2011 Charalampos Rotsos <cr409@cl.cam.ac.uk>
+(* 
+ * Copyright (c) 2012 Charalampos Rotsos <cr409@cl.cam.ac.uk>
  *
  * Permission to use, copy, modify, and distribute this software for any
  * purpose with or without fee is hereby granted, provided that the above
@@ -14,11 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+let _ = OS.Main.run(
+  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap0" () in 
+(*  let _ = Tuntap.set_ipv4 ~devname:("tap0") ~ipv4:"10.20.0.1"
+      ~netmask:"255.255.255.0" () in *)
+  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
 
-(** initalize a switch configration daemon *)
-val listen_t: Net.Manager.t -> 
-  (string -> unit Lwt.t) -> 
-  (Openflow.Ofpacket.Match.t -> Openflow.Ofpacket.Flow.stats list) -> 
-  (Openflow.Ofpacket.Flow_mod.t -> unit Lwt.t) ->
-  (Openflow.Ofpacket.Match.t -> unit Lwt.t) -> 
-  int -> unit Lwt.t
+  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap1" () in 
+  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
+  
+  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap2" () in 
+  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
+  Basic_switch.switch_run ()
+  )
