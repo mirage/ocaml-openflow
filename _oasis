@@ -80,21 +80,18 @@ Executable ofswitch_lwt
   Install$:             flag(unix) && flag(direct)
   BuildDepends:         openflow, openflow.switch
 
-
-Executable "ofcontroller.o"
-  Path:                 controller
-  MainIs:               learning_switch.ml
-  Build$:               flag(xen)
-  Custom:               true
-  CompiledObject:       native_object
-  Install:              false
-  BuildDepends:         openflow
-
-Executable "ofswitch.o"
+Executable ofswitch
   Path:                 switch
-  MainIs:               basic_switch.ml
+  MainIs:               xen_switch.ml
   Build$:               flag(xen)
-  Custom:               true
   CompiledObject:       native_object
   Install:              false
-  BuildDepends:         openflow  
+  BuildDepends:         openflow, re.str 
+
+Executable ofcontroller
+  Path:                 controller
+  MainIs:               xen_controller.ml
+  Build$:               flag(xen)
+  CompiledObject:       native_object
+  Install:              false
+  BuildDepends:         openflow, re.str 
