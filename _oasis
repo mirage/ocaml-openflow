@@ -26,7 +26,7 @@ Library openflow
   CompiledObject:       native
   Modules:              Ofpacket,  Ofcontroller, Ofsocket 
   Pack:                 True
-  BuildDepends:         ipaddr, cstruct, cstruct.syntax, rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0), re.str, ocamlgraph
+  BuildDepends:         ipaddr, cstruct, cstruct.syntax, rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0)
 
 Document openflow
   Title:                OpenFlow docs
