@@ -188,8 +188,12 @@ let hashtbl_to_flow_match t =
     ) map in 
   of_match
 
+let get_ethif mgr id = 
+    let lst = Net.Manager.get_intfs mgr in 
+    let (_, ethif) = List.find (fun (dev_id,_) -> id = dev_id) lst in 
+    ethif
 
-let listen_t mgr del_port get_stats add_flow del_flow port =
+let listen_t mgr add_port del_port get_stats add_flow del_flow port =
   let manage (dip,dpt) t =
     try_lwt 
       lwt req = Net.Channel.read_line t in
@@ -201,12 +205,24 @@ let listen_t mgr del_port get_stats add_flow del_flow port =
       let req = Jsonrpc.call_of_string req in 
       lwt success = 
         match (req.Rpc.name, req.Rpc.params) with
-        | ("add-port", (Rpc.String (dev))::_) -> 
-    (*             let _ = Net.Manager.attach mgr dev in *)
-          return (Rpc.Enum [(Rpc.String "true")])
+        | ("add-port", (Rpc.String (devname))::_) -> begin 
+          try_lwt 
+            let (fd, name) = Tuntap.opentap ~persist:true ~devname () in
+            let id = OS.Netif.id_of_string name in 
+            OS.Netif.add_vif id OS.Netif.ETH fd;
+            lwt _ = Net.Manager.create (fun _ _ _ -> add_port id) in 
+            return (Rpc.Enum [(Rpc.String "true")])
+          with exn ->
+            cp (sp "[ofswitch-confid] add-port: %s\n%!"  (Printexc.to_string exn));
+            return (Rpc.Enum [(Rpc.String "false")])
+
+        end
         | ("del-port", (Rpc.String (dev))::_) -> 
+
+          let ethif = Net.Ethif.get_netif 
+              (Net.Manager.get_ethif (get_ethif mgr (OS.Netif.id_of_string dev))) in
+          lwt _ = OS.Netif.destroy ethif in 
           lwt _ = del_port dev in 
-(*             lwt _ = Net.Manager.detach mgr dev in *)
           return (Rpc.Enum [(Rpc.String "true")])
         | ("dump-flows", (Rpc.Dict t)::_) -> 
           let of_match = hashtbl_to_flow_match t in

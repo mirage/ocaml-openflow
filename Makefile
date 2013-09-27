@@ -4,9 +4,9 @@ all: build
 NAME=openflow
 J=4
 
-UNIX ?= $(shell if ocamlfind query lwt.ssl >/dev/null 2>&1; then echo --enable-unix; fi)
-DIRECT ?= $(shell if [ $(MIRAGE_NET) = "direct" ]; then echo --enable-direct; fi)
-XEN ?= $(shell if [ $(MIRAGE_OS) = "xen" ]; then echo --enable-xen; fi)
+UNIX ?= $(shell if ocamlfind query lwt.ssl >/dev/null 2>&1; then echo --enable-unix; else echo --disable-unix; fi)
+DIRECT ?= $(shell if [ $(MIRAGE_NET) = "direct" ]; then echo --enable-direct; else echo --disable-direct; fi)
+XEN ?= $(shell if [ $(MIRAGE_OS) = "xen" ]; then echo --enable-xen; else echo --disable-xen; fi)
 caml_path ?= $(shell ocamlfind printconf path)
 
 # MIRAGE = --enable-mirage

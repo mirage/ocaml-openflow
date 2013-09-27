@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: f62abd39414d901db360117bdb2f1f55)
+# DO NOT EDIT (digest: c550df0ef3bf0ac4c5011828fc3ba577)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -18,16 +18,16 @@
 "lib/ofpacket.cmx": for-pack(Openflow)
 "lib/ofcontroller.cmx": for-pack(Openflow)
 "lib/ofsocket.cmx": for-pack(Openflow)
-# Library switch
-"lib/switch.cmxs": use_switch
-"lib/ofswitch.cmx": for-pack(Switch)
-"lib/ofswitch_config.cmx": for-pack(Switch)
-"lib/ofswitch_standalone.cmx": for-pack(Switch)
 # Library flv
 "lib/flv.cmxs": use_flv
 "lib/flowvisor.cmx": for-pack(Flv)
 "lib/lldp.cmx": for-pack(Flv)
 "lib/flowvisor_topology.cmx": for-pack(Flv)
+# Library switch
+"lib/switch.cmxs": use_switch
+"lib/ofswitch.cmx": for-pack(Switch)
+"lib/ofswitch_config.cmx": for-pack(Switch)
+"lib/ofswitch_standalone.cmx": for-pack(Switch)
 # Executable ocaml-ofctl
 "lib/ofswitch_ctrl.native": use_openflow
 "lib/ofswitch_ctrl.native": pkg_re.str

@@ -35,31 +35,32 @@ Document openflow
   XOCamlbuildPath:      lib 
   XOCamlbuildModules:   Ofpacket, Ofcontroller, Ofsocket
 
-Library switch
-  Path:                 lib
-  Findlibname:          switch
-  Findlibparent:        openflow
-  Build$:               flag(direct)
-  CompiledObject:       native
-  Modules:              Ofswitch, Ofswitch_config, Ofswitch_standalone
-  Pack:                 True
-  BuildDepends:         re.str
-
 Library flv
   Path:                 lib
   Findlibname:          flv
   Findlibparent:        openflow
   CompiledObject:       native
-  Modules:              Flowvisor,Lldp, Flowvisor_topology 
+  Modules:              Flowvisor, Lldp, Flowvisor_topology 
   Pack:                 True
+
+Library switch
+  Path:                 lib
+  Findlibname:          switch
+  Findlibparent:        openflow
+  Build$:               flag(direct)
+  Install$:             flag(direct)
+  CompiledObject:       native
+  Modules:              Ofswitch, Ofswitch_config, Ofswitch_standalone
+  Pack:                 True
+  BuildDepends:         re.str
 
 Executable "ocaml-ofctl"
   Path:                 lib
   MainIs:               ofswitch_ctrl.ml
   Build$:               flag(unix)
+  Install$:             flag(unix)
   Custom:               true
   CompiledObject:       native
-  Install$:             flag(unix)
   BuildDepends:         openflow, re.str
 
 Executable ofcontroller_lwt
@@ -74,10 +75,10 @@ Executable ofcontroller_lwt
 Executable ofswitch_lwt
   Path:                 switch
   MainIs:               lwt_switch.ml
-  Build$:               flag(unix) && flag(direct)
   Custom:               true
+  Build$:               (flag(unix) && flag(direct))
+  Install$:             (flag(unix) && flag(direct))
   CompiledObject:       native
-  Install$:             flag(unix) && flag(direct)
   BuildDepends:         openflow, openflow.switch
 
 Executable ofswitch

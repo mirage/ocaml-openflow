@@ -51,7 +51,6 @@ let get_ethif mgr id =
     let lst = Net.Manager.get_intfs mgr in 
     let (_, ethif) = List.find (fun (dev_id,_) -> id = dev_id) lst in 
     ethif
-
  
 module Entry = struct
   type table_counter = {
@@ -996,25 +995,25 @@ let create_switch ?(verbose=false) dpid =
 let listen st mgr loc =
   Net.Channel.listen mgr (`TCPv4 (loc, (control_channel st ))) <&>
   (forward_thread st) <&>
-    (Ofswitch_config.listen_t mgr 
+    (Ofswitch_config.listen_t mgr (add_port mgr st) 
     (del_port mgr st) (get_flow_stats st) (add_flow st) (del_flow st) 6634) 
 
 let connect st mgr loc  =
   Net.Channel.connect mgr (`TCPv4 (None, loc, (control_channel st loc))) <&> 
   (forward_thread st) <&>
-    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 
+    (Ofswitch_config.listen_t mgr (add_port mgr st) (del_port mgr st) (get_flow_stats st) 
      (add_flow st) (del_flow st) 6634) 
 
 let local_connect st mgr conn =
   let _ = st.Switch.controller <- (Some conn) in 
      (control_channel_run st conn) <&> 
   (forward_thread st)  <&>
-    (Ofswitch_config.listen_t mgr (del_port mgr st) (get_flow_stats st) 
+    (Ofswitch_config.listen_t mgr (add_port mgr st) (del_port mgr st) (get_flow_stats st) 
      (add_flow st) (del_flow st) 6634) 
 
 let standalone_connect st mgr loc  =
   let of_ctrl = Ofswitch_standalone.init_controller () in 
-  let _ = Lwt.ignore_result (Ofswitch_config.listen_t mgr (del_port mgr st) 
+  let _ = Lwt.ignore_result (Ofswitch_config.listen_t mgr (add_port mgr st) (del_port mgr st) 
             (get_flow_stats st)  (add_flow st) (del_flow st) 6634) in 
   let _ = ignore_result (forward_thread st) in 
   let _ = cp "[switch] Listening socket...\n%!" in 
