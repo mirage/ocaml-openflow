@@ -20,9 +20,10 @@ open Net.Nettypes
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
-module OP = Ofpacket
-module OC = Ofcontroller
-module OE = Ofcontroller.Event
+module OP = Openflow.Ofpacket
+module OC = Openflow.Ofcontroller
+module OE = Openflow.Ofcontroller.Event
+module OSK = Openflow.Ofsocket 
 
 let pp = Printf.printf
 let sp = Printf.sprintf
@@ -31,12 +32,12 @@ let sp = Printf.sprintf
 (* TODO this the mapping is incorrect. the datapath must be moved to the key
  * of the hashtbl *)
 type mac_switch = {
-  addr: OP.eaddr; 
+  addr: Macaddr.t; 
   switch: OP.datapath_id;
 }
 
 type switch_state = {
-  mutable mac_cache: (OP.eaddr, OP.Port.t) Hashtbl.t; 
+  mutable mac_cache: (Macaddr.t, OP.Port.t) Hashtbl.t; 
   req_count: int ref; 
 }
 
@@ -98,14 +99,13 @@ let packet_in_cb controller dpid evt =
  
   (* check if I know the output port in order to define what type of message
    * we need to send *)
-  let broadcast = String.make 6 '\255' in
   let ix = m.OP.Match.dl_dst in
-  if ( (ix = broadcast)
+  if ( (ix = Macaddr.broadcast )
        || (not (Hashtbl.mem switch_data.mac_cache ix)) ) 
   then ( 
     let bs = 
           (OP.Packet_out.create ~buffer_id:buffer_id 
-             ~actions:[ OP.(Flow.Output(Port.All , 2000))] 
+             ~actions:[ OP.Flow.Output(OP.Port.All , 2000)] 
            ~data:data ~in_port:in_port () ) in   
     let h = OP.Header.create OP.Header.PACKET_OUT 0 in 
         OC.send_data controller dpid (OP.Packet_out (h, bs))
@@ -118,7 +118,7 @@ let packet_in_cb controller dpid evt =
         let bs = 
                 OP.Packet_out.create
                    ~buffer_id:buffer_id    
-                   ~actions:[ OP.(Flow.Output(out_port, 2000))] 
+                   ~actions:[ OP.Flow.Output(out_port, 2000)] 
                    ~data:data ~in_port:in_port ()  in   
         let h = OP.Header.create OP.Header.PACKET_OUT 0 in 
           OC.send_data controller dpid (OP.Packet_out (h, bs))
@@ -144,13 +144,13 @@ let init controller =
   OC.register_cb controller OE.PORT_STATUS_CHANGE port_status_cb
 
 
-let init_controller () = OC.init_controller ()
+let init_controller () = OC.init_controller init
 
 let run_controller mgr st = 
-  let (controller, switch) = Ofsocket.init_local_conn_state () in 
+  let (controller, switch) = OSK.init_local_conn_state () in 
   let _ = Lwt.ignore_result (
     try_lwt 
-      OC.local_connect st controller init
+      OC.local_connect st controller
     with exn ->
       return (printf "[switch] standalone controller dailed %s\n%!" (Printexc.to_string
       exn))

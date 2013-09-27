@@ -14,9 +14,12 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
+
+(** initalize a switch configration daemon *)
 val listen_t: Net.Manager.t -> 
+  (Net.Manager.id -> unit Lwt.t) -> 
   (string -> unit Lwt.t) -> 
-  (Ofpacket.Match.t -> Ofpacket.Flow.stats list) -> 
-  (Ofpacket.Flow_mod.t -> unit Lwt.t) ->
-  (Ofpacket.Match.t -> unit Lwt.t) -> 
+  (Openflow.Ofpacket.Match.t -> Openflow.Ofpacket.Flow.stats list) -> 
+  (Openflow.Ofpacket.Flow_mod.t -> unit Lwt.t) ->
+  (Openflow.Ofpacket.Match.t -> unit Lwt.t) -> 
   int -> unit Lwt.t

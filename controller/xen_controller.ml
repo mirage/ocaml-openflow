@@ -14,5 +14,4 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-val init_controller : unit -> Openflow.Ofcontroller.t 
-val run_controller : Net.Manager.t -> Openflow.Ofcontroller.t -> Openflow.Ofsocket.conn_state Lwt.t
+let _ = OS.Main.run(Learning_switch.run ())

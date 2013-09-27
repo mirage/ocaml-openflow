@@ -14,11 +14,9 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-open Net
-open Net.Nettypes
-open Cstruct
-
 exception Unparsable of Cstruct.t
+
+(** LLDP basic message tbl types *)
 
 type lldp_tlv_types = 
   | LLDP_TYPE_END            
@@ -35,14 +33,14 @@ type lldp_tvl =
   | Tlv_chassis_id_chassis_comp of string
   | Tlv_chassis_id_intf_alias of string
   | Tlv_chassis_id_port_comp of string
-  | Tlv_chassis_id_mac of ethernet_mac
-  | Tlv_chassis_id_net of ipv4_addr 
+  | Tlv_chassis_id_mac of Macaddr.t 
+  | Tlv_chassis_id_net of Ipaddr.V4.t 
   | Tlv_chassis_id_intf_name of string
   | Tlv_chassis_id_local of string
   | Tlv_port_id_intf_alias of string
   | Tlv_port_id_port_comp of string
-  | Tlv_port_id_mac of ethernet_mac
-  | Tlv_port_id_net of ipv4_addr
+  | Tlv_port_id_mac of Macaddr.t
+  | Tlv_port_id_net of Ipaddr.V4.t
   | Tlv_port_id_intf_name of string
   | Tlv_port_id_circ_id of string
   | Tlv_port_id_local of string
@@ -51,5 +49,7 @@ type lldp_tvl =
   | Tlv of lldp_tlv_types * string
   | Tlv_unk of int * string
 
-val parse_lldp_tlvs: t -> lldp_tvl list
-val marsal_lldp_tlvs: ethernet_mac -> lldp_tvl list -> t -> int 
+(** [parse_lldp_tlvs bits] extract an lldp packet from a raw packet*)
+val parse_lldp_tlvs: Cstruct.t -> lldp_tvl list
+(** [marshal_lldp_tlvs mac tlvs bits] marshal lldp tlvs to bits memory address *)
+val marsal_lldp_tlvs:  Macaddr.t -> lldp_tvl list -> Cstruct.t -> int 

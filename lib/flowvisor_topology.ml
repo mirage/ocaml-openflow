@@ -19,15 +19,14 @@ open Printf
 open Net
 open Net.Nettypes
 open Lldp
-open Graph 
 
-module OP = Ofpacket
+module OP = Openflow.Ofpacket
+module OC = Openflow.Ofcontroller 
+module OE = Openflow.Ofcontroller.Event 
+module OSK = Openflow.Ofsocket
 open OP
 
 let sp = Printf.sprintf
-let pr = Printf.printf
-let pp = Printf.printf
-let ep = Printf.eprintf
 let cp = OS.Console.log
 
 module V = struct
@@ -48,15 +47,8 @@ module E = struct
           0 
         else
           Pervasives.compare v1 v2 
-        
   let default = (0L, 0, 0L, 0, 1)
 end
-
-(*module PortSet = Set.Make (
-  struct 
-    type t = (int64 * int)
-    let compare = Pervasives.compare
-end) *)
 
 module Graph = Imperative.Graph.ConcreteLabeled(V)(E)
 
@@ -72,8 +64,8 @@ end
 module Dijkstra = Path.Dijkstra(Graph)(W)
 
 type t = {
-  ports : (int64 * int, ethernet_mac * bool) Hashtbl.t; 
-  channels : (int64, Ofcontroller.t) Hashtbl.t;
+  ports : (int64 * int, Macaddr.t * bool) Hashtbl.t; 
+  channels : (int64, OC.t) Hashtbl.t;
   topo : Graph.t;
 }
 
@@ -82,23 +74,22 @@ let init_topology () =
     {ports=(Hashtbl.create 64); channels=(Hashtbl.create 64);
     topo;}
 
-let add_channel t dpid ch = 
-  Hashtbl.replace t.channels dpid ch 
+let add_channel t dpid ch = Hashtbl.replace t.channels dpid ch 
 
 let generate_lldp_discovery dpid src_mac port =
-  let bits = OS.Io_page.to_cstruct (OS.Io_page.get ()) in 
+  let bits = OS.Io_page.to_cstruct (OS.Io_page.get 1) in 
   let _ = Cstruct.BE.set_uint64 bits 0 dpid in 
   let dpid = Cstruct.to_string (Cstruct.sub bits 0 8) in 
-  let bits = OS.Io_page.to_cstruct (OS.Io_page.get ()) in
+  let bits = OS.Io_page.to_cstruct (OS.Io_page.get 1) in
   let _ = Cstruct.BE.set_uint16 bits 0 port in 
   let port = Cstruct.(to_string (sub bits 0 2)) in 
-    marshal_and_sub (marsal_lldp_tlvs src_mac 
-                       [Tlv_chassis_id_mac(src_mac);
-                        Tlv_port_id_port_comp(port);
-                        Tlv_ttl(120);
-                        Tlv(LLDP_TYPE_SYSTEM_DESCR, dpid);
-                        Tlv_end;]) 
-     (OS.Io_page.to_cstruct (OS.Io_page.get ()))
+  marshal_and_sub (marsal_lldp_tlvs src_mac 
+                     [Tlv_chassis_id_mac(src_mac);
+                      Tlv_port_id_port_comp(port);
+                      Tlv_ttl(120);
+                      Tlv(LLDP_TYPE_SYSTEM_DESCR, dpid);
+                      Tlv_end;]) 
+    (OS.Io_page.to_cstruct (OS.Io_page.get 1))
 
 let send_port_lldp t dpid port mac = 
   let data = generate_lldp_discovery dpid mac port in
@@ -106,15 +97,15 @@ let send_port_lldp t dpid port mac =
   let m = OP.Packet_out.create ~actions:[(OP.Flow.Output(OP.Port.Port(port), 2000))] 
             ~data ~in_port:(OP.Port.No_port) () in 
   let ch = Hashtbl.find t.channels dpid in 
-    Ofcontroller.send_data ch dpid (OP.Packet_out(h, m))
+    OC.send_data ch dpid (OP.Packet_out(h, m))
 
 let add_port t dpid port mac =
-  let _ = printf "[flowvisor-topo] adding port %Ld:%d\n%!" dpid port in 
+  let _ = cp (sp "[flowvisor-topo] adding port %Ld:%d\n%!" dpid port) in 
   let _ = Hashtbl.replace t.ports (dpid, port) (mac, false) in 
     send_port_lldp t dpid port mac 
 
 let mark_port_down t dpid port down = 
-  let fmac = Net.Nettypes.ethernet_mac_of_bytes "\xff\xff\xff\xff\xff\xff" in 
+  let fmac = Macaddr.broadcast in 
   try
     let (mac, _) = Hashtbl.find t.ports (dpid, port) in 
       Hashtbl.replace t.ports (dpid, port) (mac, down)
@@ -163,13 +154,13 @@ let process_lldp_packet t src_dpid src_port pkt =
               ) bits in
                 (!dpid, port, mac)
           | _ -> (dpid, port, mac)
-    ) tlvs (0L, 0, Net.Nettypes.ethernet_mac_broadcast) in
+    ) tlvs (0L, 0, Macaddr.broadcast ) in
     match (Hashtbl.mem t.channels dst_dpid) with
     | false -> false
     | true -> 
         let v = (src_dpid, (src_dpid, src_port, dst_dpid, dst_port, 1), dst_dpid) in
-        let _ = printf "[flowvisor-topo] adding link  %Ld:%d-%Ld:%d\n%!" 
-                  src_dpid src_port dst_dpid dst_port in 
+        let _ = cp (sp "[flowvisor-topo] adding link  %Ld:%d-%Ld:%d\n%!" 
+                  src_dpid src_port dst_dpid dst_port) in 
         let _ = Graph.add_edge_e t.topo v in
         let _ = mark_port_down t src_dpid src_port true in 
         let _ = mark_port_down t dst_dpid dst_port true in 
@@ -182,8 +173,7 @@ let remove_dpid t dpid =
       fun (dp, p) _ ->
         if (dpid = dp) then 
           Hashtbl.remove t.ports (dp, p)) t.ports in
-  let _ = Hashtbl.remove t.channels dpid in 
-    ()
+  Hashtbl.remove t.channels dpid 
 
 let is_transit_port t dpid port = 
   try 

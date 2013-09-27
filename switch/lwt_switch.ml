@@ -14,5 +14,16 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-val init_controller : unit -> Openflow.Ofcontroller.t 
-val run_controller : Net.Manager.t -> Openflow.Ofcontroller.t -> Openflow.Ofsocket.conn_state Lwt.t
+let _ = OS.Main.run(
+  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap0" () in 
+(*  let _ = Tuntap.set_ipv4 ~devname:("tap0") ~ipv4:"10.20.0.1"
+      ~netmask:"255.255.255.0" () in *)
+  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
+
+  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap1" () in 
+  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
+  
+  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap2" () in 
+  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
+  Basic_switch.switch_run ()
+  )

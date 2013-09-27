@@ -13,6 +13,14 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
+ 
+ 
+let _ = OS.Main.run (
+  let (fd, dev) = Tuntap.opentap ~persist:true ~devname:"tap9" () in 
+  let _ = Tuntap.set_ipv4 ~devname:("tap9") ~ipv4:"10.20.0.3"
+      ~netmask:"255.255.255.0" () in 
+  let _ = OS.Netif.add_vif (OS.Netif.id_of_string dev) OS.Netif.ETH fd in 
+  Learning_switch.run () 
 
-val init_controller : unit -> Openflow.Ofcontroller.t 
-val run_controller : Net.Manager.t -> Openflow.Ofcontroller.t -> Openflow.Ofsocket.conn_state Lwt.t
+)
+

@@ -17,7 +17,6 @@
 
 open Lwt
 open Printf
-open Openflow.Ofswitch_config
 open Lwt_unix
 
 let check_cmd_args cmd count = 
@@ -103,7 +102,7 @@ let send_cmd (input, output) =
 
 lwt _ = 
   try_lwt 
-    let dst = ADDR_INET( (Unix.inet_addr_of_string "127.0.0.1"), 
+    let dst = ADDR_INET( (Unix.inet_addr_of_string "10.20.0.2"), 
                          6634) in
     lwt _ = Lwt_io.with_connection dst (send_cmd) in  
      return ()

@@ -16,7 +16,6 @@
 
 (* Simple openflow controller that listens on port 6633 and replies
    with echo request on every packet_in event *)
-
 open Lwt
 open Printf
 open Net
@@ -24,25 +23,20 @@ open Net.Nettypes
 
 let resolve t = Lwt.on_success t (fun _ -> ())
 
-module OP = Ofpacket
-module OC = Ofcontroller
-module OE = Ofcontroller.Event
+module OP = Openflow.Ofpacket
+module OC = Openflow.Ofcontroller
+module OE = Openflow.Ofcontroller.Event
 
 let pp = Printf.printf
 let sp = Printf.sprintf
 
-(* TODO this the mapping is incorrect. the datapath must be moved to the key
- * of the hashtbl *)
 type mac_switch = {
-  addr: OP.eaddr; 
+  addr: Macaddr.t; 
   switch: OP.datapath_id;
 }
 
 type switch_state = {
-(*   mutable mac_cache: (mac_switch, OP.Port.t) Hashtbl.t; *)
-  mutable mac_cache: (OP.eaddr, OP.Port.t) Hashtbl.t; 
-(*  mutable dpid: OP.datapath_id list;
-  mutable of_ctrl: OC.t list; *)
+  mutable mac_cache: (Macaddr.t, OP.Port.t) Hashtbl.t; 
   req_count: int ref; 
 }
 
@@ -78,9 +72,8 @@ let packet_in_cb controller dpid evt =
  
   (* check if I know the output port in order to define what type of message
    * we need to send *)
-  let broadcast = String.make 6 '\255' in
   let ix = m.OP.Match.dl_dst in
-  if ( (ix = broadcast)
+  if ( (ix = Macaddr.broadcast)
        || (not (Hashtbl.mem switch_data.mac_cache ix)) ) 
   then (
     let bs = 
@@ -89,7 +82,7 @@ let packet_in_cb controller dpid evt =
           (OP.Packet_out.create
              ~buffer_id:buffer_id 
              ~actions:[ OP.(Flow.Output(Port.All , 2000))] 
-           ~data:data ~in_port:in_port () )) (Cstruct.of_bigarray (OS.Io_page.get ())) in   
+           ~data:data ~in_port:in_port () )) (Cstruct.of_bigarray (OS.Io_page.get 1)) in   
         OC.send_of_data controller dpid bs
   ) else (
     let out_port = (Hashtbl.find switch_data.mac_cache ix) in
@@ -104,7 +97,7 @@ let packet_in_cb controller dpid evt =
                    ~buffer_id:buffer_id    
                    ~actions:[ OP.(Flow.Output(out_port, 2000))] 
                    ~data:data ~in_port:in_port () )) 
-                  (Cstruct.of_bigarray (OS.Io_page.get ())) in   
+                  (Cstruct.of_bigarray (OS.Io_page.get 1)) in   
           OC.send_of_data controller dpid bs      
       else
         return ()
@@ -115,13 +108,11 @@ let packet_in_cb controller dpid evt =
             (OP.Flow_mod.create m 0_L OP.Flow_mod.ADD ~hard_timeout:0 
                  ~idle_timeout:0 ~buffer_id:(Int32.to_int buffer_id)  ~flags
                  [OP.Flow.Output(out_port, 2000)] ()))
-        (Cstruct.of_bigarray (OS.Io_page.get ())) in
+        (Cstruct.of_bigarray (OS.Io_page.get 1)) in
       OC.send_of_data controller dpid pkt
  )
 
 let init controller = 
-(*  if (not (List.mem controller switch_data.of_ctrl)) then
-    switch_data.of_ctrl <- (([controller] @ switch_data.of_ctrl));*)
   pp "test controller register datapath cb\n";
   OC.register_cb controller OE.DATAPATH_JOIN datapath_join_cb;
   pp "test controller register packet_in cb\n";
@@ -132,14 +123,10 @@ let port = 6633
 let run () =
   Net.Manager.create (fun mgr interface id ->
     try_lwt
-      let ip = 
-(*           (ipv4_addr_of_tuple (10l,0l,0l,253l),  *)
-         ( ipv4_addr_of_tuple (128l, 232l, 32l, 230l), 
-           ipv4_addr_of_tuple (255l,255l,255l,0l), []) in  
+      let ip = Ipaddr.V4.(make 10l 20l 0l 4l, Prefix.mask 24, []) in  
       lwt _ = Manager.configure interface (`IPv4 ip) in
-        OC.listen mgr (None, port) init
+        OC.listen mgr ~verbose:true (None, port) init
     with | e ->
       return (Printf.eprintf "Unexpected exception : %s" (Printexc.to_string e))
   )
 
-let _ = OS.Main.run (run ())

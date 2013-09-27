@@ -1,13 +1,36 @@
 # OASIS_START
-# DO NOT EDIT (digest: af22db32fa2321ef21a267936ae9c0ff)
+# DO NOT EDIT (digest: fb3a7474b6d3d22fd415ea0a71caf87e)
 version = "0.3.0"
-description = "OpenFlow protocol and switch implementations in pure OCaml"
+description =
+"OpenFlow controller, switch and flowvisor implementation in pure OCaml"
 requires =
-"cstruct cstruct.syntax rpclib rpclib.json mirage mirage-net re.str ocamlgraph"
+"cstruct cstruct.syntax rpclib rpclib.json mirage mirage-net ipaddr"
 archive(byte) = "openflow.cma"
 archive(byte, plugin) = "openflow.cma"
 archive(native) = "openflow.cmxa"
 archive(native, plugin) = "openflow.cmxs"
 exists_if = "openflow.cmxa"
+package "switch" (
+ version = "0.3.0"
+ description =
+ "OpenFlow controller, switch and flowvisor implementation in pure OCaml"
+ requires = "re.str"
+ archive(byte) = "switch.cma"
+ archive(byte, plugin) = "switch.cma"
+ archive(native) = "switch.cmxa"
+ archive(native, plugin) = "switch.cmxs"
+ exists_if = "switch.cmxa"
+)
+
+package "flv" (
+ version = "0.3.0"
+ description =
+ "OpenFlow controller, switch and flowvisor implementation in pure OCaml"
+ archive(byte) = "flv.cma"
+ archive(byte, plugin) = "flv.cma"
+ archive(native) = "flv.cmxa"
+ archive(native, plugin) = "flv.cmxs"
+ exists_if = "flv.cmxa"
+)
 # OASIS_STOP
 

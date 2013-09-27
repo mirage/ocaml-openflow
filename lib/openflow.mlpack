@@ -1,12 +1,6 @@
 # OASIS_START
-# DO NOT EDIT (digest: f8655b265a303b0b1fd5a6766c3a4bec)
+# DO NOT EDIT (digest: b6991de36e646d2bbeea2320259aae59)
 Ofpacket
 Ofcontroller
-Ofswitch_config
-Ofswitch
 Ofsocket
-Ofswitch_standalone
-Flowvisor
-Flowvisor_topology
-Lldp
 # OASIS_STOP
