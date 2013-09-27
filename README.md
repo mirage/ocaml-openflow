@@ -13,17 +13,19 @@ switches in a network. Each OpenFlow switch has three parts:
 
 Following this standard model, the implementation comprises three parts: 
 
-+ `switch.ml`, containing a skeleton OpenFlow switch;
-+ `controller.ml`, containing a skeleton OpenFlow controller; and
-+ `ofpacket.ml`, containing `Bitstring` parsers/writers for the
-  OpenFlow protocol.
+* `Openflow` library, contains a complete parsing library in pure Ocaml and a
+  minimal controller library using an event-driven model.
+* `Openflow.switch` library, provides a skeleton OpenFlow switch supporting most
+  elementary switch functionality.
+* `Openflow.flv` library, implements a basic FLowVisor reimplementation in
+  ocaml. 
 
 __N.B.__ _There are two versions of the OpenFlow protocol: v1.0.0 (`0x01` on
 the wire) and v1.1.0 (`0x02` on the wire).  The implementation supports wire
 protocol `0x01` as this is what is implemented in [Open vSwitch][ovs-1.2],
 used for debugging._ 
 
-ofpacket.ml
+Openflow.Ofpacket
 -----------
 
 The file begins with some utility functions, operators, types.  The
@@ -116,7 +118,16 @@ the request and response messages that transport them.
 [of-1.1]: http://www.openflow.org/documents/openflow-spec-v1.1.0.pdf
 [ovs-1.2]: http://openvswitch.org/releases/openvswitch-1.2.2.tar.gz
 
-controller.ml
+Openflow.Ofsocket
+-------------
+
+A simple module to create an openflow channel abstraction over a serires of
+different transport mechanisms. At the moment the library contains support of
+Channel.t connections and Lwt_stream streams. The protocol ensures to read from
+the socket full Openflow pdus and transform them to appropriate Ofpacket
+structures.
+
+Openflow.Ofontroller
 -------------
 
 Initially modelled after [NOX][], this is a skeleton controller
@@ -131,43 +142,51 @@ corresponding to basic switch operation:
 + `PACKET_IN`, representing the forwarding of a packet to the
   controller, whether through an explicit action corresponding to a
   flow match, or simply as the default when flow match is found.
-  
++ `FLOW_REMOVED`, i.e., representing the switch notification regarding the
+  removal of a flow from the flow table.  
++ `FLOW_STATS_REPLY`, i.e., represents the replies transmitted by the switch
+  after a flow_stats_req.
++ `AGGR_FLOW_STATS_REPLY`, i.e., representing the reply transmitted by the switch
+to an aggr_flow_stats_req.  
++ ` DESC_STATS_REPLY`, i.e., representing the reply of a switch to desc_stats
+  request. 
++ `PORT_STATS_REPLY`, i.e., representing the replt of a switch to a port_stats
+  request providing port level counter and the state of the switch. 
++ `TABLE_STATS_REPLY`, i.e., representing the reply of a switch to a
+  table_stats request. 
++ `PORT_STATUS_REPLY`, i.e., representing the notification send by the switch
+  when the state of a port of the switch is changed.  
+
 The controller state is mutable and modelled as:
 
 + A list of callbacks per event, each taking the current state, the
   originating datapath, and the event;
 + Mappings from switch (`datapath_id`) to a Mirage communications
   channel (`Channel.t`); and 
-+ Mappings from channel (`endhost` comprising an IPv4 address and
-  port) tp datapath (`datapath_id`).
   
 The main work of the controller is carried out in `process_of_packet`
 which processes each received packet within the context given by the
 current state of the switch: this is where the OpenFlow state machine
 is implemented.  
 
-The controller entry point is via the `listen` function which
-effectively creates a receiving channel to parse OpenFlow packets, and
-pass them to `process_of_packet` which handles a range of standard
-protocol-level interactions, e.g., `ECHO_REQ`, `FEATURES_RESP`,
-generating Mirage events as appropriate.  Specifically, `controller`
-is passed as callback to `Channel.listen`, and recursively evaluates
-`echo` to read the incoming packet and pass it to
-`process_of_packet`. 
+The controller entry point is via the `listen`, `local_connect` or `connect`
+function which effectively creates a receiving channel to parse OpenFlow
+packets, and pass them to `process_of_packet` which handles a range of standard
+protocol-level interactions, e.g., `ECHO_REQ`, `FEATURES_RESP`, generating
+Mirage events as appropriate.  Specifically, `controller` is passed as callback
+to the respective connection method, and recursively evaluates `read_packet` to
+read the incoming packet and pass it to `process_of_packet`. 
 
 [nox]: http://noxrepo.org/
 
 
-switch.ml
+Openflow.Switch.Ofswitch
 ---------
 
-__N.B.__ _This is unwritten as yet, awaiting the new device model being
-applied to the network stack._ 
-
-An OpenFlow _switch_ or _datapath_ consists of one or more _flow tables_, a
-_group table_ (in later versions, not supported in v1.0.0), and a _secure
-channel_ back to the controller.  Communication over the channel is via the
-OpenFlow protocol, and is how the controller manages the switch. 
+An OpenFlow _switch_ or _datapath_ consists of a _flow table_, a _group table_
+(in later versions, not supported in v1.0.0), and a _channel_ back to the
+controller.  Communication over the channel is via the OpenFlow protocol, and is
+how the controller manages the switch. 
 
 In short, each table contains flow entries consisting of _match fields_,
 _counters_, and _instructions_ to apply to packets.  Starting with the first
@@ -176,13 +195,14 @@ and the instructions carried out.  If no entry in the first table matches,
 (part of) the packet is forwarded to the controller, or it is dropped, or it
 proceeds to the next flow table. 
 
+At the current point the switch doesn't support any queue principles. 
+
 Skeleton code is as follows:
 
 ### Entry
 
 Represents a single flow table entry.  Each entry consists of:
 
-+ _fields_, against which to match (`Ofpacket.Match.t list`);;
 + _counters_, to keep statistics per-table, -flow, -port, -queue
   (`Entry.table_counter list`, `Entry.flow_counter list`, `Entry.port_counter
   list`, `Entry.queue_counter list`); and   
@@ -191,7 +211,9 @@ Represents a single flow table entry.  Each entry consists of:
 ### Table
 
 A simple module representing a table of flow entries.  Currently just an id
-(`tid`) and a list of entries (`Entry.t list`).
+(`tid`) , a hashtbl of entries (`(OP.Match.t, Entry.t) Hashtbl.t`), a list of
+exact match entries to reduce the lookup time for wildcard entries and a the
+table counter. 
 
 ### Switch
 

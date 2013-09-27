@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: c550df0ef3bf0ac4c5011828fc3ba577)
+# DO NOT EDIT (digest: d7120abbd08dc6103d705bb20d52346b)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -31,84 +31,84 @@
 # Executable ocaml-ofctl
 "lib/ofswitch_ctrl.native": use_openflow
 "lib/ofswitch_ctrl.native": pkg_re.str
+"lib/ofswitch_ctrl.native": pkg_ipaddr
 "lib/ofswitch_ctrl.native": pkg_cstruct
 "lib/ofswitch_ctrl.native": pkg_cstruct.syntax
 "lib/ofswitch_ctrl.native": pkg_rpclib
 "lib/ofswitch_ctrl.native": pkg_rpclib.json
 "lib/ofswitch_ctrl.native": pkg_mirage
 "lib/ofswitch_ctrl.native": pkg_mirage-net
-"lib/ofswitch_ctrl.native": pkg_ipaddr
 <lib/*.ml{,i}>: use_openflow
 <lib/*.ml{,i}>: pkg_re.str
+<lib/*.ml{,i}>: pkg_ipaddr
 <lib/*.ml{,i}>: pkg_cstruct
 <lib/*.ml{,i}>: pkg_cstruct.syntax
 <lib/*.ml{,i}>: pkg_rpclib
 <lib/*.ml{,i}>: pkg_rpclib.json
 <lib/*.ml{,i}>: pkg_mirage
 <lib/*.ml{,i}>: pkg_mirage-net
-<lib/*.ml{,i}>: pkg_ipaddr
 "lib/ofswitch_ctrl.native": custom
 # Executable ofcontroller_lwt
 "controller/lwt_controller.native": use_openflow
+"controller/lwt_controller.native": pkg_ipaddr
 "controller/lwt_controller.native": pkg_cstruct
 "controller/lwt_controller.native": pkg_cstruct.syntax
 "controller/lwt_controller.native": pkg_rpclib
 "controller/lwt_controller.native": pkg_rpclib.json
 "controller/lwt_controller.native": pkg_mirage
 "controller/lwt_controller.native": pkg_mirage-net
-"controller/lwt_controller.native": pkg_ipaddr
 "controller/lwt_controller.native": custom
 # Executable ofswitch_lwt
 "switch/lwt_switch.native": use_openflow
 "switch/lwt_switch.native": use_switch
 "switch/lwt_switch.native": pkg_re.str
+"switch/lwt_switch.native": pkg_ipaddr
 "switch/lwt_switch.native": pkg_cstruct
 "switch/lwt_switch.native": pkg_cstruct.syntax
 "switch/lwt_switch.native": pkg_rpclib
 "switch/lwt_switch.native": pkg_rpclib.json
 "switch/lwt_switch.native": pkg_mirage
 "switch/lwt_switch.native": pkg_mirage-net
-"switch/lwt_switch.native": pkg_ipaddr
 <switch/*.ml{,i}>: use_switch
 "switch/lwt_switch.native": custom
 # Executable ofswitch
 "switch/xen_switch.nobj.o": use_openflow
 "switch/xen_switch.nobj.o": pkg_re.str
+"switch/xen_switch.nobj.o": pkg_ipaddr
 "switch/xen_switch.nobj.o": pkg_cstruct
 "switch/xen_switch.nobj.o": pkg_cstruct.syntax
 "switch/xen_switch.nobj.o": pkg_rpclib
 "switch/xen_switch.nobj.o": pkg_rpclib.json
 "switch/xen_switch.nobj.o": pkg_mirage
 "switch/xen_switch.nobj.o": pkg_mirage-net
-"switch/xen_switch.nobj.o": pkg_ipaddr
 <switch/*.ml{,i}>: use_openflow
 <switch/*.ml{,i}>: pkg_re.str
+<switch/*.ml{,i}>: pkg_ipaddr
 <switch/*.ml{,i}>: pkg_cstruct
 <switch/*.ml{,i}>: pkg_cstruct.syntax
 <switch/*.ml{,i}>: pkg_rpclib
 <switch/*.ml{,i}>: pkg_rpclib.json
 <switch/*.ml{,i}>: pkg_mirage
 <switch/*.ml{,i}>: pkg_mirage-net
-<switch/*.ml{,i}>: pkg_ipaddr
 # Executable ofcontroller
 "controller/xen_controller.nobj.o": use_openflow
 "controller/xen_controller.nobj.o": pkg_re.str
+"controller/xen_controller.nobj.o": pkg_ipaddr
 "controller/xen_controller.nobj.o": pkg_cstruct
 "controller/xen_controller.nobj.o": pkg_cstruct.syntax
 "controller/xen_controller.nobj.o": pkg_rpclib
 "controller/xen_controller.nobj.o": pkg_rpclib.json
 "controller/xen_controller.nobj.o": pkg_mirage
 "controller/xen_controller.nobj.o": pkg_mirage-net
-"controller/xen_controller.nobj.o": pkg_ipaddr
 <controller/*.ml{,i}>: use_openflow
 <controller/*.ml{,i}>: pkg_re.str
+<controller/*.ml{,i}>: pkg_ipaddr
 <controller/*.ml{,i}>: pkg_cstruct
 <controller/*.ml{,i}>: pkg_cstruct.syntax
 <controller/*.ml{,i}>: pkg_rpclib
 <controller/*.ml{,i}>: pkg_rpclib.json
 <controller/*.ml{,i}>: pkg_mirage
 <controller/*.ml{,i}>: pkg_mirage-net
-<controller/*.ml{,i}>: pkg_ipaddr
 # OASIS_STOP
 true: annot
 <lib/*>: syntax_camlp4o
