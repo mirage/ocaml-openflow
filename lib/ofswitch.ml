@@ -279,16 +279,24 @@ module Switch = struct
     mgr: Net.Manager.t;
     port_id: int;
     ethif: Net.Manager.id; 
+    netif: OS.Netif.t;
     port_name: string;
     counter: OP.Port.stats;
     phy: OP.Port.phy;
-    queue: Cstruct.t Queue.t;
+    in_queue: Cstruct.t Lwt_stream.t;
+    in_push : (Cstruct.t option -> unit);
+    out_queue: Cstruct.t Lwt_stream.t;
+    out_push : (Cstruct.t option -> unit);
+    mutable pkt_count : int;
   }
 
   let init_port mgr port_no id = 
     let ethif = Net.Manager.get_ethif ( get_ethif mgr id ) in 
+    let netif = Net.Ethif.get_netif ethif in 
     let name = OS.Netif.string_of_id (OS.Netif.id (Net.Ethif.get_netif ethif )) in 
     let hw_addr = Net.Ethif.mac ethif in
+    let (in_queue, in_push) = Lwt_stream.create () in
+    let (out_queue, out_push) = Lwt_stream.create () in
     let counter = OP.Port.(
         { port_id=port_no; rx_packets=0L; tx_packets=0L; rx_bytes=0L; 
           tx_bytes=0L; rx_dropped=0L; tx_dropped=0L; rx_errors=0L; 
@@ -313,7 +321,8 @@ module Switch = struct
          supported=features; peer=features;}) in
     
     {port_id=port_no; mgr; port_name=name; counter;
-     ethif=id;phy;queue=(Queue.create ());}
+     ethif=id;netif;phy;in_queue;in_push;pkt_count=0;
+        out_queue;out_push;}
 
   type stats = {
     mutable n_frags: uint64;
@@ -436,7 +445,9 @@ module Switch = struct
 
   let send_packet port bits =
     update_port_tx_stats (Int64.of_int (Cstruct.len bits)) port;
-    Net.Manager.inject_packet port.mgr port.ethif bits 
+    return (port.out_push (Some bits))
+(*    OS.Netif.write port.netif bits *)
+(*    Net.Manager.inject_packet port.mgr port.ethif bits *)
 
   
   let forward_frame st in_port bits pkt_size checksum port = 
@@ -467,7 +478,8 @@ module Switch = struct
     | OP.Port.Port(port) -> 
       if Hashtbl.mem st.int_to_port port then
         let out_p = (!( Hashtbl.find st.int_to_port port))  in
-          Net.Manager.inject_packet out_p.mgr out_p.ethif bits
+        send_packet out_p bits 
+(*          Net.Manager.inject_packet out_p.mgr out_p.ethif bits *)
       else
         return (cp (sp "[switch] forward_frame: Port %d not registered\n%!" port))
     | OP.Port.No_port -> return ()
@@ -657,33 +669,73 @@ let process_frame_inner st p frame =
     return (cp (sp "[switch] process_frame_inner: control channel error: %s\n" 
         (Printexc.to_string exn)))
 
-let forward_thread st = 
-  while_lwt true do
-    lwt _ = Lwt_condition.wait st.Switch.ready in 
+let check_packets st = 
+  match_lwt (Lwt_list.exists_p (fun p -> return (p.Switch.pkt_count > 0))
+  st.Switch.ports) with
+  | false -> OS.Time.sleep 0.5 
+  | true -> return ()
+
+let forward_thread st =
+(*  while_lwt true do
+    lwt _ = check_packets st <?> Lwt_condition.wait st.Switch.ready in 
     Lwt_list.iter_s (fun p ->
-      if (Queue.is_empty p.Switch.queue) then
+(*      lwt empty = Lwt_stream.is_empty p.Switch.queue in *)
+      if (p.Switch.pkt_count = 0) then
+(*        let _ = cp (sp "port %d no packets\n" p.Switch.port_id) in *)
         return ()
-      else 
-        process_frame_inner st p (Queue.take p.Switch.queue) 
+      else
+        lwt frames = Lwt_stream.nget p.Switch.pkt_count p.Switch.queue in
+        lwt _ = 
+          Lwt_list.iter_p 
+          (fun f -> 
+            p.Switch.pkt_count <- p.Switch.pkt_count - 1; process_frame_inner st p f) 
+          frames in 
+(*        let _ = cp (sp "port %d got packet\n" p.Switch.port_id) in *)
+(*        let _ = cp (sp "port %d processed packet\n" p.Switch.port_id) in *)
+        return ()
     ) st.Switch.ports 
-  done 
+  done *)
+  Lwt_list.iter_p (fun p ->
+    while_lwt true do
+(*      if (p.Switch.pkt_count > 0) then 
+        lwt frames = Lwt_stream.nget 10 p.Switch.queue in 
+        Lwt_list.iter_p (
+          fun f -> p.Switch.pkt_count <- p.Switch.pkt_count - 1; 
+          process_frame_inner st p f) frames
+      else *)
+        lwt _ = Lwt_stream.next p.Switch.in_queue >>= process_frame_inner st p in
+(*       let _ = 
+        if (p.Switch.pkt_count mod 20 = 1) then
+       cp (sp "port %d got packet %d" p.Switch.port_id p.Switch.pkt_count) in
+      *        *)
+        return (p.Switch.pkt_count <- p.Switch.pkt_count - 1)
+    done <&> (
+    while_lwt true do
+        lwt frame = Lwt_stream.next p.Switch.out_queue in
+(*        lwt _ = OS.Time.sleep 0.0 in *)
+(*        let frames = Lwt_stream.get_available p.Switch.out_queue in*)
+(*        let _ = Printf.printf "got %d packets\n%!" (1+(List.length frames)) in
+   *        *)
+        OS.Netif.writev p.Switch.netif [frame] (*frame::frames*)
+    done
+    )
+    ) st.Switch.ports 
 
 let process_frame st p _ frame =
   let _ = 
     try 
       match frame with
       | Net.Ethif.Output _ -> ()
-      | Net.Ethif.Input frame -> 
-        Queue.push frame p.Switch.queue; 
-        Lwt_condition.broadcast st.Switch.ready () 
-(*    if (st.Switch.queue_len < 256) then (
-      st.Switch.queue_len <- st.Switch.queue_len + 1;
-
-      return(st.Switch.push_packet (Some(frame, ((!p).Switch.port_id) )))
-    ) else (
-      pr "dropping packet at the switch\n%!";
-      return ()
-    ) *)
+      | Net.Ethif.Input frame ->
+(*        let _ = Lwt_condition.broadcast st.Switch.ready () in *)
+(*          if (p.Switch.pkt_count < 1000) then *)
+            let _ = p.Switch.pkt_count <- p.Switch.pkt_count + 1 in
+(*            let _ = Printf.printf "pushing packet to port %d %d\n%!"
+                p.Switch.port_id p.Switch.pkt_count in *)
+            p.Switch.in_push (Some frame)
+(*            Printf.printf "pushed packet to port %d\n%!" p.Switch.port_id*)
+(*          else
+            cp "[process_frame] blocked queue" *)
     with 
     | Not_found -> cp (sp "[switch] process_frame: Invalid port\n%!")
     | Packet_type_unknw -> cp (sp "[switch] process_frame: malformed packet\n%!")
@@ -898,7 +950,7 @@ let control_channel_run st conn =
   in
   let _ = OSK.close conn in 
   let _ = st.Switch.controller <- None in 
-    return (cp "[switch] control channel thread returned\n%!")
+    return (cp "[switch] control channel thread returned")
 
 let control_channel st (addr, port) t =
   cp (sp "[switch] controller %s:%d" (Ipaddr.V4.to_string addr) port); 

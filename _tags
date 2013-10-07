@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: d7120abbd08dc6103d705bb20d52346b)
+# DO NOT EDIT (digest: 7c9c51d36fdd7fa35499b1c9d975c796)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -18,6 +18,13 @@
 "lib/ofpacket.cmx": for-pack(Openflow)
 "lib/ofcontroller.cmx": for-pack(Openflow)
 "lib/ofsocket.cmx": for-pack(Openflow)
+<lib/*.ml{,i}>: pkg_ipaddr
+<lib/*.ml{,i}>: pkg_cstruct
+<lib/*.ml{,i}>: pkg_cstruct.syntax
+<lib/*.ml{,i}>: pkg_rpclib
+<lib/*.ml{,i}>: pkg_rpclib.json
+<lib/*.ml{,i}>: pkg_mirage
+<lib/*.ml{,i}>: pkg_mirage-net
 # Library flv
 "lib/flv.cmxs": use_flv
 "lib/flowvisor.cmx": for-pack(Flv)
@@ -28,26 +35,8 @@
 "lib/ofswitch.cmx": for-pack(Switch)
 "lib/ofswitch_config.cmx": for-pack(Switch)
 "lib/ofswitch_standalone.cmx": for-pack(Switch)
-# Executable ocaml-ofctl
-"lib/ofswitch_ctrl.native": use_openflow
-"lib/ofswitch_ctrl.native": pkg_re.str
-"lib/ofswitch_ctrl.native": pkg_ipaddr
-"lib/ofswitch_ctrl.native": pkg_cstruct
-"lib/ofswitch_ctrl.native": pkg_cstruct.syntax
-"lib/ofswitch_ctrl.native": pkg_rpclib
-"lib/ofswitch_ctrl.native": pkg_rpclib.json
-"lib/ofswitch_ctrl.native": pkg_mirage
-"lib/ofswitch_ctrl.native": pkg_mirage-net
-<lib/*.ml{,i}>: use_openflow
 <lib/*.ml{,i}>: pkg_re.str
-<lib/*.ml{,i}>: pkg_ipaddr
-<lib/*.ml{,i}>: pkg_cstruct
-<lib/*.ml{,i}>: pkg_cstruct.syntax
-<lib/*.ml{,i}>: pkg_rpclib
-<lib/*.ml{,i}>: pkg_rpclib.json
-<lib/*.ml{,i}>: pkg_mirage
-<lib/*.ml{,i}>: pkg_mirage-net
-"lib/ofswitch_ctrl.native": custom
+<lib/*.ml{,i}>: pkg_tuntap
 # Executable ofcontroller_lwt
 "controller/lwt_controller.native": use_openflow
 "controller/lwt_controller.native": pkg_ipaddr
@@ -62,6 +51,7 @@
 "switch/lwt_switch.native": use_openflow
 "switch/lwt_switch.native": use_switch
 "switch/lwt_switch.native": pkg_re.str
+"switch/lwt_switch.native": pkg_tuntap
 "switch/lwt_switch.native": pkg_ipaddr
 "switch/lwt_switch.native": pkg_cstruct
 "switch/lwt_switch.native": pkg_cstruct.syntax
@@ -70,6 +60,7 @@
 "switch/lwt_switch.native": pkg_mirage
 "switch/lwt_switch.native": pkg_mirage-net
 <switch/*.ml{,i}>: use_switch
+<switch/*.ml{,i}>: pkg_tuntap
 "switch/lwt_switch.native": custom
 # Executable ofswitch
 "switch/xen_switch.nobj.o": use_openflow

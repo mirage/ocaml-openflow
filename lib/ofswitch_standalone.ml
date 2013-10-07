@@ -152,7 +152,7 @@ let run_controller mgr st =
     try_lwt 
       OC.local_connect st controller
     with exn ->
-      return (printf "[switch] standalone controller dailed %s\n%!" (Printexc.to_string
+      return (printf "[switch] standalone controllern failed %s\n%!" (Printexc.to_string
       exn))
       ) in
     return switch

@@ -35,19 +35,23 @@ let sp = Printf.sprintf
 let switch_run () = 
   let sw = create_switch 0x100L in
   let use_mac = ref true in 
-  try_lwt 
-    Manager.create (fun mgr interface id ->
+  try_lwt
+  let devs = OS.Netif.create () in
+  lwt _ = 
+    Lwt_list.iter_s (
+    ) devs in 
+(*    Manager.create (fun mgr interface id ->
         match (OS.Netif.string_of_id id) with 
         | "tap0" 
         | "0" ->
           lwt _ = OS.Time.sleep 5.0 in
           let _ = printf "connecting switch...\n%!" in 
-          let ip = Ipaddr.V4.(make 10l 20l 0l 2l, Prefix.mask 24, []) in  
+          let ip = Ipaddr.V4.(make 10l 20l 0l 100l, Prefix.mask 24, []) in  
           lwt _ = Manager.configure interface (`IPv4 ip) in
-          let dst_ip = Ipaddr.V4.make 10l 20l 0l 4l in 
+          let dst_ip = Ipaddr.V4.make 10l 20l 0l 1l in 
           standalone_connect sw mgr (dst_ip, 6633) 
       | str_id -> 
-          let find dev = 
+(*          let find dev = 
             try 
               let _ = Re_str.search_forward (Re_str.regexp "tap") dev 0 in true
             with Not_found -> false
@@ -56,11 +60,11 @@ let switch_run () =
             if (not (find str_id) ) then 
               lwt _ = add_port mgr ~use_mac:(!use_mac) sw id in 
                 return (use_mac := false)
-            else
+            else *)
               add_port mgr ~use_mac:false sw id
-          in 
-            return ()
-    )
+(*          in 
+            return () *)
+    ) *)
   with e ->
     Printf.eprintf "Error: %s" (Printexc.to_string e); 
     return ()
