@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: b3b71f3631fe233e81415c476c4af9f7)
+# DO NOT EDIT (digest: b787620bd33d2bdf1fe0565f29356a9c)
 version = "0.3.0"
 description =
 "OpenFlow controller, switch and flowvisor implementation in pure OCaml"
@@ -14,7 +14,7 @@ package "switch" (
  version = "0.3.0"
  description =
  "OpenFlow controller, switch and flowvisor implementation in pure OCaml"
- requires = "re.str"
+ requires = "re.str tuntap"
  archive(byte) = "switch.cma"
  archive(byte, plugin) = "switch.cma"
  archive(native) = "switch.cmxa"

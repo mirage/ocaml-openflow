@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: d7120abbd08dc6103d705bb20d52346b)
+# DO NOT EDIT (digest: 2d568b09f1aa4bebf0b9ee452cde0d8d)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -28,6 +28,7 @@
 "lib/ofswitch.cmx": for-pack(Switch)
 "lib/ofswitch_config.cmx": for-pack(Switch)
 "lib/ofswitch_standalone.cmx": for-pack(Switch)
+<lib/*.ml{,i}>: pkg_tuntap
 # Executable ocaml-ofctl
 "lib/ofswitch_ctrl.native": use_openflow
 "lib/ofswitch_ctrl.native": pkg_re.str
@@ -62,6 +63,7 @@
 "switch/lwt_switch.native": use_openflow
 "switch/lwt_switch.native": use_switch
 "switch/lwt_switch.native": pkg_re.str
+"switch/lwt_switch.native": pkg_tuntap
 "switch/lwt_switch.native": pkg_ipaddr
 "switch/lwt_switch.native": pkg_cstruct
 "switch/lwt_switch.native": pkg_cstruct.syntax
@@ -70,6 +72,7 @@
 "switch/lwt_switch.native": pkg_mirage
 "switch/lwt_switch.native": pkg_mirage-net
 <switch/*.ml{,i}>: use_switch
+<switch/*.ml{,i}>: pkg_tuntap
 "switch/lwt_switch.native": custom
 # Executable ofswitch
 "switch/xen_switch.nobj.o": use_openflow
