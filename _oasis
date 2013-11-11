@@ -52,7 +52,7 @@ Library switch
   CompiledObject:       native
   Modules:              Ofswitch, Ofswitch_config, Ofswitch_standalone
   Pack:                 True
-  BuildDepends:         re.str,tuntap
+  BuildDepends:         re.str
 
 Executable "ocaml-ofctl"
   Path:                 lib
