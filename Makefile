@@ -30,7 +30,7 @@ distclean: setup.ml setup.data
 setup: setup.data
 
 build: setup.data $(wildcard lib/*.ml)
-	ocaml setup.ml -build -j $(J) $(OFLAGS) $(DR)
+	ocaml setup.ml -build -cflags -bin-annot -j $(J) $(OFLAGS) $(DR)
 ifeq ($(MIRAGE_OS), xen)
 	ld -d -nostdlib -m elf_x86_64 -T $(caml_path)/mirage-xen/mirage-x86_64.lds \
 	  $(caml_path)/mirage-xen/x86_64.o _build/switch/xen_switch.nobj.o \

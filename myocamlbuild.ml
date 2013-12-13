@@ -1,5 +1,5 @@
 (* OASIS_START *)
-(* DO NOT EDIT (digest: e02ba6573f9818d0d9f18eb9a66eb191) *)
+(* DO NOT EDIT (digest: d09f38b5f845453a33251ed8fef2743c) *)
 module OASISGettext = struct
 (* # 21 "src/oasis/OASISGettext.ml" *)
 
@@ -508,7 +508,12 @@ open Ocamlbuild_plugin;;
 let package_default =
   {
      MyOCamlbuildBase.lib_ocaml =
-       [("openflow", ["lib"]); ("flv", ["lib"]); ("switch", ["lib"])];
+       [
+          ("openflow", ["lib"]);
+          ("flv", ["lib"]);
+          ("switch", ["lib"]);
+          ("switch_model", ["lib"])
+       ];
      lib_c = [];
      flags = [];
      includes = [("switch", ["lib"]); ("controller", ["lib"])];
@@ -517,6 +522,6 @@ let package_default =
 
 let dispatch_default = MyOCamlbuildBase.dispatch_default package_default;;
 
-# 521 "myocamlbuild.ml"
+# 526 "myocamlbuild.ml"
 (* OASIS_STOP *)
 Ocamlbuild_plugin.dispatch dispatch_default;;

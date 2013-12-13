@@ -219,10 +219,10 @@ let listen_t mgr add_port del_port get_stats add_flow del_flow port =
         end
         | ("del-port", (Rpc.String (dev))::_) -> 
 
-          let ethif = Net.Ethif.get_netif 
+(*          let ethif = Net.Ethif.get_netif 
               (Net.Manager.get_ethif (get_ethif mgr (OS.Netif.id_of_string dev))) in
 (*          lwt _ = OS.Netif.destroy ethif in *)
-          lwt _ = del_port dev in 
+          lwt _ = del_port dev in  *)
           return (Rpc.Enum [(Rpc.String "true")])
         | ("dump-flows", (Rpc.Dict t)::_) -> 
           let of_match = hashtbl_to_flow_match t in

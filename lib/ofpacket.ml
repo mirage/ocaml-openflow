@@ -110,7 +110,7 @@ module Header = struct
     ERROR                 =  1;
     ECHO_REQ              =  2;
     ECHO_RESP             =  3;
-    VENDOR                =  4;
+    VENDOR_MSG            =  4;
     FEATURES_REQ          =  5;
     FEATURES_RESP         =  6;
     GET_CONFIG_REQ        =  7;
@@ -673,7 +673,8 @@ module Switch = struct
     miss_send_len: uint16;
   }
 
-  let init_switch_config = {drop=true; reasm=true;miss_send_len=1000;}
+  let init_switch_config = {drop=true;
+  reasm=true;miss_send_len=1000;}
         
   cstruct ofp_switch_config {
     uint16_t flags;           
@@ -689,6 +690,11 @@ module Switch = struct
     let _ = set_ofp_switch_config_flags bits 0 in
     let _ = set_ofp_switch_config_miss_send_len bits config.miss_send_len in
       (Header.sizeof_ofp_header + sizeof_ofp_switch_config)
+
+  let parse_switch_config bits = 
+    let _ = get_ofp_switch_config_flags bits in
+    let miss_send_len = get_ofp_switch_config_miss_send_len bits in
+    {drop=false; reasm=false; miss_send_len}
 
 end
 
@@ -2159,6 +2165,17 @@ module Stats = struct
     uint64_t collisions
   } as big_endian
 
+  let create_desc_stat_resp imfr hw sw serial dp = 
+    let ret = {imfr_desc=(String.create 256); hw_desc=(String.create 256);
+                sw_desc=(String.create 356); serial_num=(String.create 32);
+                dp_desc=(String.create 256);} in
+  let _ = String.blit imfr 0 ret.imfr_desc 0 (String.length imfr) in 
+  let _ = String.blit hw 0 ret.hw_desc 0 (String.length hw) in 
+  let _ = String.blit sw 0 ret.sw_desc 0 (String.length sw) in
+  let _ = String.blit serial 0 ret.serial_num 0 (String.length serial) in
+  let _ = String.blit dp 0 ret.dp_desc 0 (String.length dp) in
+  ret 
+
   let parse_stats_resp bits =
     let typ = stats_type_of_int  (get_ofp_stats_reply_typ bits) in 
     let more = ((get_ofp_stats_reply_flags bits) = 1) in 
@@ -2210,7 +2227,8 @@ module Stats = struct
     match resp with 
     | Desc_resp(resp_hdr, desc) ->
       let len = (Header.sizeof_ofp_header + sizeof_ofp_stats_reply +
-                  sizeof_ofp_desc_stats) in 
+                  sizeof_ofp_desc_stats) in
+      let _ = Printf.printf "marshaling description response\n%!" in 
       let of_header = Header.create ~xid Header.STATS_RESP len in 
       let (ofp_len, bits) = marshal_and_shift (Header.marshal_header of_header)
                               bits in
@@ -2221,7 +2239,8 @@ module Stats = struct
       let _ = set_ofp_desc_stats_hw_desc desc.hw_desc 0 bits in  
       let _ = set_ofp_desc_stats_sw_desc desc.sw_desc 0 bits in  
       let _ = set_ofp_desc_stats_serial_num desc.serial_num 0 bits in  
-      let _ = set_ofp_desc_stats_dp_desc desc.dp_desc 0 bits in  
+      let _ = set_ofp_desc_stats_dp_desc desc.dp_desc 0 bits in
+      let _ = Printf.printf "done marshaling description response\n%!" in 
         len        
     | Flow_resp(resp_h, flows) ->
       let flow_len = List.fold_right 
@@ -2423,19 +2442,19 @@ and string_of_error_code = function
     uint16_t code
   } as big_endian
 
-let marshal_error errornum data xid bits = 
-    let req_len = Cstruct.len data in
-    let req_h = Header.create ~xid Header.ERROR  
-    (Header.get_len + sizeof_ofp_error_msg + req_len) in
-    let (len, bits) = marshal_and_shift (Header.marshal_header req_h) bits in
-    let errornum = int_of_error_code errornum in 
-    let _ = set_ofp_error_msg_typ bits 
-              (Int32.to_int (Int32.shift_left errornum 16)) in 
-    let _ = set_ofp_error_msg_code bits 
-              (Int32.to_int (Int32.logand errornum 0xffff0000l)) in
-    let bits = Cstruct.shift bits sizeof_ofp_error_msg in 
-    let _ = Cstruct.blit data 0 bits 0 (Cstruct.len data) in 
-      (Header.get_len + sizeof_ofp_error_msg + req_len)
+let marshal_error errornum data xid bits =
+  let req_len = Cstruct.len data in
+  let req_h = Header.create ~xid Header.ERROR  
+      (Header.get_len + sizeof_ofp_error_msg + req_len) in
+  let (len, bits) = marshal_and_shift (Header.marshal_header req_h) bits in
+  let errornum = int_of_error_code errornum in 
+  let _ = set_ofp_error_msg_typ bits 
+      (Int32.to_int (Int32.logand errornum 0xffffl)) in 
+  let _ = set_ofp_error_msg_code bits 
+      (Int32.to_int (Int32.shift_right (Int32.logand errornum 0xffff0000l) 16)) in
+  let bits = Cstruct.shift bits sizeof_ofp_error_msg in 
+  let _ = Cstruct.blit data 0 bits 0 (Cstruct.len data) in 
+  (Header.get_len + sizeof_ofp_error_msg + req_len)
 
 let build_features_req xid bits = 
   Header.marshal_header (Header.(create ~xid FEATURES_REQ 8)) bits
@@ -2452,7 +2471,7 @@ type t =
   | Error of Header.h  * error_code * Cstruct.t
   | Echo_req of Header.h 
   | Echo_resp of Header.h 
-  | Vendor of Header.h  * vendor * Cstruct.t
+  | Vendor of Header.h  * (* vendor * *) Cstruct.t
 
   | Features_req of Header.h
   | Features_resp of Header.h  * Switch.features
@@ -2483,12 +2502,12 @@ let parse h bits =
     | ERROR -> raise (Unparsed ("ERROR", bits))
     | ECHO_REQ -> Echo_req h
     | ECHO_RESP -> Echo_resp h
-    | VENDOR -> raise (Unparsed ("VENDOR", bits))
+    | VENDOR_MSG -> Vendor(h, bits)
     | FEATURES_REQ -> Features_req (h)
     | FEATURES_RESP -> Features_resp (h, Switch.parse_features bits)
     | GET_CONFIG_REQ -> Get_config_req(h)
     | GET_CONFIG_RESP -> raise (Unparsed ("GET_CONFIG_RESP", bits))
-    | SET_CONFIG -> raise (Unparsed ("SET_CONFIG", bits))
+    | SET_CONFIG -> Set_config(h, (Switch.parse_switch_config bits) )
     | PACKET_IN -> Packet_in (h, Packet_in.parse_packet_in bits)
     | PORT_STATUS -> Port_status(h, (Port.parse_status bits)) 
     | FLOW_REMOVED -> Flow_removed(h, (Flow_removed.parse_flow_removed bits))
@@ -2534,6 +2553,7 @@ let marshal msg =
         | Echo_req (h)
         | Echo_resp (h)
         | Get_config_req (h)
+        | Vendor(h, _)
         | Hello (h) -> Header.marshal_header h 
         | Flow_removed (h, frm) ->
             Flow_removed.marshal_flow_removed ~xid:(h.Header.xid) frm

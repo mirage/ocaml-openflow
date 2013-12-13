@@ -1,5 +1,5 @@
 # OASIS_START
-# DO NOT EDIT (digest: 7c9c51d36fdd7fa35499b1c9d975c796)
+# DO NOT EDIT (digest: 2e93c3b498a48aeea27e4bda67fc628e)
 # Ignore VCS directories, you can use the same kind of rule outside 
 # OASIS_START/STOP if you want to exclude directories that contains 
 # useless stuff for the build process
@@ -35,10 +35,14 @@
 "lib/ofswitch.cmx": for-pack(Switch)
 "lib/ofswitch_config.cmx": for-pack(Switch)
 "lib/ofswitch_standalone.cmx": for-pack(Switch)
+# Library switch_model
+"lib/switch_model.cmxs": use_switch_model
+"lib/ofswitch_model.cmx": for-pack(Switch_model)
 <lib/*.ml{,i}>: pkg_re.str
 <lib/*.ml{,i}>: pkg_tuntap
 # Executable ofcontroller_lwt
 "controller/lwt_controller.native": use_openflow
+"controller/lwt_controller.native": pkg_tuntap
 "controller/lwt_controller.native": pkg_ipaddr
 "controller/lwt_controller.native": pkg_cstruct
 "controller/lwt_controller.native": pkg_cstruct.syntax
@@ -46,6 +50,7 @@
 "controller/lwt_controller.native": pkg_rpclib.json
 "controller/lwt_controller.native": pkg_mirage
 "controller/lwt_controller.native": pkg_mirage-net
+<controller/*.ml{,i}>: pkg_tuntap
 "controller/lwt_controller.native": custom
 # Executable ofswitch_lwt
 "switch/lwt_switch.native": use_openflow
@@ -110,3 +115,4 @@ true: annot
 <controller/*>: pkg_lwt.syntax
 <switch/*>: syntax_camlp4o
 <switch/*>: pkg_lwt.syntax
+true: bin_annot

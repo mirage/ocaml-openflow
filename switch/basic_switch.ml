@@ -24,7 +24,7 @@ let resolve t = Lwt.on_success t (fun _ -> ())
 module OP = Openflow.Ofpacket
 module OC = Openflow.Ofcontroller
 module OE = Openflow.Ofcontroller.Event
-open Switch.Ofswitch
+open Ofswitch
 
 let pp = Printf.printf
 let sp = Printf.sprintf
@@ -32,15 +32,17 @@ let sp = Printf.sprintf
 (****************************************************************
  * OpenFlow Switch configuration 
  *****************************************************************)
-let switch_run () = 
-  let sw = create_switch 0x100L in
+let switch_run () =
+(*  let delay = {flow_insert=0.; flow_update=0.; pktin_rate=50.; pktin_delay=0.002;
+  stats_delay=0.; pktout_delay=0.;} in *) 
+  let model = Ofswitch_model.(
+      {flow_insert=0.002;
+       flow_update=0.002; pktin_rate=18.; pktin_delay=0.002;stats_delay=0.;
+       pktout_delay=0.;}) in
+  let sw = create_switch 0x100L (* model *) in
   let use_mac = ref true in 
   try_lwt
-  let devs = OS.Netif.create () in
-  lwt _ = 
-    Lwt_list.iter_s (
-    ) devs in 
-(*    Manager.create (fun mgr interface id ->
+    Manager.create (fun mgr interface id ->
         match (OS.Netif.string_of_id id) with 
         | "tap0" 
         | "0" ->
@@ -48,7 +50,7 @@ let switch_run () =
           let _ = printf "connecting switch...\n%!" in 
           let ip = Ipaddr.V4.(make 10l 20l 0l 100l, Prefix.mask 24, []) in  
           lwt _ = Manager.configure interface (`IPv4 ip) in
-          let dst_ip = Ipaddr.V4.make 10l 20l 0l 1l in 
+          let dst_ip = Ipaddr.V4.make 10l 20l 0l 4l in 
           standalone_connect sw mgr (dst_ip, 6633) 
       | str_id -> 
 (*          let find dev = 
@@ -64,7 +66,7 @@ let switch_run () =
               add_port mgr ~use_mac:false sw id
 (*          in 
             return () *)
-    ) *)
+    ) 
   with e ->
     Printf.eprintf "Error: %s" (Printexc.to_string e); 
     return ()

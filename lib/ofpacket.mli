@@ -36,7 +36,7 @@ module Header :
       | ERROR
       | ECHO_REQ
       | ECHO_RESP
-      | VENDOR
+      | VENDOR_MSG
       | FEATURES_REQ
       | FEATURES_RESP
       | GET_CONFIG_REQ
@@ -481,7 +481,9 @@ module Stats :
       | Port_resp of resp_hdr * Port.stats list
       | Queue_resp of resp_hdr * queue list
       | Vendor_resp of resp_hdr
-    val resp_get_len : resp -> int 
+    val resp_get_len : resp -> int
+    val create_desc_stat_resp : string -> string -> string -> string -> string
+    -> desc
     val marshal_stats_resp : int32 -> resp -> Cstruct.t -> int
     val string_of_stats : resp -> string
   end
@@ -531,7 +533,7 @@ type t =
   | Error of Header.h * error_code * Cstruct.t 
   | Echo_req of Header.h 
   | Echo_resp of Header.h
-  | Vendor of Header.h * vendor * Cstruct.t 
+  | Vendor of Header.h * (* vendor *) Cstruct.t 
   | Features_req of Header.h
   | Features_resp of Header.h * Switch.features
   | Get_config_req of Header.h

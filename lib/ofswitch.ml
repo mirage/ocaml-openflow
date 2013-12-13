@@ -290,7 +290,8 @@ module Switch = struct
     mutable pkt_count : int;
   }
 
-  let init_port mgr port_no id = 
+  let init_port mgr port_no id =
+
     let ethif = Net.Manager.get_ethif ( get_ethif mgr id ) in 
     let netif = Net.Ethif.get_netif ethif in 
     let name = OS.Netif.string_of_id (OS.Netif.id (Net.Ethif.get_netif ethif )) in 
@@ -791,8 +792,8 @@ let process_openflow st t msg =
    match req with
    | OP.Stats.Desc_req(req) ->
      let p = OP.Stats.(Desc_resp ({st_ty=DESC; more=false;},
-                                  { imfr_desc="Mirage"; hw_desc="Mirage";
-                                    sw_desc="Mirage"; serial_num="0.1";dp_desc="Mirage";})) in 
+                                  (create_desc_stat_resp "Mirage" "Mirage" "Mirage"
+                                  "0.1" "Mirage"))) in 
       let h = create ~xid STATS_RESP (OP.Stats.resp_get_len p) in 
         OSK.send_packet t (OP.Stats_resp (h, p))
    | OP.Stats.Flow_req(req_h, of_match, table_id, out_port) ->
@@ -899,6 +900,7 @@ let process_openflow st t msg =
       in
       if (fm.buffer_id = -1l) then return () 
       else process_buffer_id st t msg h.xid fm.buffer_id fm.actions
+  | OP.Set_config (h, _) -> return ()
   | OP.Queue_get_config_resp (h, _, _)
   | OP.Queue_get_config_req (h, _)
   | OP.Barrier_resp h
@@ -907,10 +909,9 @@ let process_openflow st t msg =
   | OP.Port_status (h, _)
   | OP.Flow_removed (h, _)
   | OP.Packet_in (h, _)
-  | OP.Set_config (h, _)
   | OP.Get_config_resp (h, _)
   | OP.Features_resp (h, _)
-  | OP.Vendor (h, _, _)
+  | OP.Vendor (h, _)
   | OP.Error (h, _, _) ->
       let bits = OP.marshal msg in 
       let h = OP.Header.create ~xid:h.OP.Header.xid OP.Header.ERROR 
@@ -1084,6 +1085,7 @@ let standalone_connect st mgr loc  =
       let rec connect_socket () =
         let sock = ref None in 
         try_lwt
+          let _ = Printf.printf "trying to connect to controller\n%!" in 
           lwt _ = Lwt.pick
             [(Net.Channel.connect mgr (`TCPv4(None,loc,(fun t -> return (sock:=Some(t))))));
              (OS.Time.sleep 10.0)]

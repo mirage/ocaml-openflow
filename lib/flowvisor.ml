@@ -523,7 +523,7 @@ let process_openflow st dpid t msg =
   | OP.Barrier_resp h
   | OP.Stats_resp (h, _)
   | OP.Features_resp (h, _)
-  | OP.Vendor (h, _, _)
+  | OP.Vendor (h, _)
   | OP.Echo_resp (h)
   | OP.Error (h, _, _) ->
       let h = OP.Header.(create ~xid:h.xid OP.Header.ERROR 0) in 
