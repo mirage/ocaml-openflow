@@ -67,6 +67,7 @@ module Queue :
     type h = { queue_id : queue_id; }
     type t = NONE | MIN_RATE of uint16
   end
+
 module Port :
   sig
     type t =
@@ -152,6 +153,7 @@ module Port :
     val string_of_status : status -> string
     val marshal_port_status : ?xid:int32 -> status -> Cstruct.t -> int
   end
+
 module Switch :
   sig
     type capabilities = {
@@ -189,10 +191,11 @@ module Switch :
     val marshal_reply_features : int32 -> features -> Cstruct.t -> int
     val get_len : features -> int 
     type config = { drop : bool; reasm : bool; miss_send_len : uint16; }
-    val init_switch_config : config
+    val init_switch_config : int -> config
     val config_get_len : int
     val marshal_switch_config : int32 -> config -> Cstruct.t -> int 
-  end
+  end (* end of Switch module *)
+
 module Wildcards :
   sig
     type t = {
@@ -217,6 +220,7 @@ module Wildcards :
     val arp_match : unit ->  t
     val wildcard_to_string : t -> string
   end
+
 module Match :
   sig
     type t = {
@@ -262,6 +266,7 @@ module Match :
     val raw_packet_to_match : Port.t -> Cstruct.t -> t
     val match_to_string : t -> string
   end
+
 module Flow :
   sig
     type action =
@@ -305,6 +310,8 @@ module Flow :
     val string_of_flow_stat : stats -> string
     val flow_stats_len : stats -> int 
   end
+
+
 module Packet_in :
   sig
     type reason = NO_MATCH | ACTION
@@ -340,6 +347,7 @@ module Packet_out :
     val marshal_packet_out : ?xid:int32 -> t -> Cstruct.t -> int
     val packet_out_to_string: t -> string
   end
+
 module Flow_mod :
   sig
     type command = ADD | MODIFY | MODIFY_STRICT | DELETE | DELETE_STRICT
@@ -369,6 +377,7 @@ module Flow_mod :
       ?out_port:Port.t -> ?flags:flags -> Flow.action list -> unit -> t
     val marshal_flow_mod : ?xid:int32 -> t -> Cstruct.t -> int
   end
+
 module Flow_removed :
   sig
     type reason = IDLE_TIMEOUT | HARD_TIMEOUT | DELETE
@@ -394,6 +403,7 @@ module Flow_removed :
       Flow_mod.t -> t
     val string_of_flow_removed : t -> string
   end
+
 module Port_mod :
   sig
     type t = {
@@ -554,3 +564,4 @@ type t =
 val parse : Header.h -> Cstruct.t -> t
 val marshal : t -> Cstruct.t
 val to_string : t -> string
+

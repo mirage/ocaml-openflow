@@ -14,29 +14,20 @@
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
 
-(** OpenFlow socket structure *)
-type conn_type 
-type conn_state = {
-  mutable dpid : Ofpacket.datapath_id;
-  t : conn_type; 
-}
+open V1_LWT
 
-(** Socket initialization *)
+module Make(T:TCPV4) : sig
+  type c (* = Channel.Make(T).t *)
+  type t
+  type fl = Channel.Make(T).flow (* M: can I do it better? I cannot define it abstrct *)
+  type conn_state
 
-(** initialize an OpenFlow socket from a Net.Channel.t socket*)
-val init_socket_conn_state : Net.Channel.t -> conn_state
-(** create an emulated local socket using Lwt_stream structures *)
-val init_local_conn_state: unit -> (conn_state * conn_state)
+(*  val create_socket : c -> t *)
+  val read_packet : conn_state -> Ofpacket.t Lwt.t
+  val send_packet : conn_state -> Ofpacket.t -> unit Lwt.t
+  val close : conn_state -> unit
+  val create : fl -> c
+  val init_socket_conn_state : c -> conn_state
+ 
+end
 
-(** Socket access methods *)
-
-(** [read_packet conn] read a complete and parsed OpenFlow packet from the
- * control channel socket *)
-val read_packet : conn_state -> Ofpacket.t Lwt.t
-(** [send_packet conn pkt] send an complete OpenFlow packet over the control
- * channel socket *)
-val send_packet : conn_state -> Ofpacket.t -> unit Lwt.t
-(** [send_data_raw conn bits] send raw bits over the control channel socket *)
-val send_data_raw : conn_state -> Cstruct.t -> unit Lwt.t
-(** [conn conn] teardown the control channel socket *)
-val close : conn_state -> unit 

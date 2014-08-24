@@ -14,14 +14,38 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-open Net
+open V1_LWT
+open Lwt
 
-type t
+
+module Make(T: TCPV4)(N: NETWORK) (*(N1: NETWORK)(N2: NETWORK)*) : sig
+
+  type t
+(*
+  type eth_netif = Ethif.Make(N).netif *)
+  type eth_t = Ethif.Make(N).t
+(*  type ip_if
+  type tcp_flow
+  type tcp_error 
+  type tcp_t
+
+  val ifconnect : eth_netif -> eth_t Lwt.t
+*)
+(* val ipconfig : eth_t -> string -> string -> string -> unit Lwt.t *)
+(*
+  val init : eth_netif -> string -> string -> string -> ip_if Lwt.t
+  val create_connection : ip_if -> string -> int -> tcp_flow Lwt.t
+  val init : eth_netif -> (string * string * string) -> (string * int) -> tcp_t Lwt.t 
+*)
+  val create_switch : T.t -> (* (string * string * string) -> *) (string * int) -> (eth_t list)-> unit Lwt.t
+
+end
 
 (** [create dpid] initializes the state for a switch with a datapth id dpid *)
-val create_switch :  ?verbose:bool -> int64 -> t
+(* val create_switch :  ?verbose:bool -> int64 -> t *)
 
-(** Port Management *)
+(*
+(* Port Management *)
 
 (** [add_port mgr st intf] add port intf under the control of the switch st *)
 val add_port : Manager.t -> ?use_mac:bool -> t -> Manager.id -> unit Lwt.t
@@ -58,3 +82,4 @@ val local_connect : t -> Manager.t -> Openflow.Ofsocket.conn_state -> unit Lwt.t
  * learning switch is responsible to control the switch, when the remote
  * control channel is unresponsive *)
 val standalone_connect : t -> Manager.t -> Nettypes.ipv4_dst -> unit Lwt.t
+*)
