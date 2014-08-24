@@ -15,3 +15,4 @@ setup.bin
 
 mirage/**/Makefile
 mirage/**/main.ml
+mirage/**/mir-*
