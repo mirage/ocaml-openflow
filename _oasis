@@ -8,6 +8,7 @@ License:     ISC
 Plugins:     META (0.3), DevFiles (0.3)
 BuildTools:  ocamlbuild
 
+
 Flag direct
   Description: build things over the direct xen net
   Default: false
@@ -20,27 +21,30 @@ Flag xen
   Description: build xen applications
   Default: false
 
-Library openflow
-  Path:                 lib
+
+Library "openflow"
+  Path:                 lib/
   Findlibname:          openflow
   CompiledObject:       native
-  Modules:              Ofpacket,  Ofcontroller, Ofsocket 
-  Pack:                 True
-  BuildDepends:         ipaddr, cstruct, cstruct.syntax, rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0)
+  Modules:              Ofpacket, Ofsocket, Ofswitch,  Ofcontroller
+  Pack:                 true
+  BuildDepends:         ipaddr, cstruct, cstruct.syntax,
+                        rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0)
 
 Document "openflow"
   Title:                OpenFlow docs
   Type:                 OCamlbuild (0.4)
   BuildTools+:          ocamldoc
-  XOCamlbuildPath:      lib 
-  XOCamlbuildModules:   Ofpacket, Ofcontroller, Ofsocket
+  XOCamlbuildPath:      lib/
+  XOCamlbuildModules:   Ofpacket, Ofswitch, Ofsocket, Ofcontroller
+
 
 Library flv
   Path:                 lib
   Findlibname:          flv
   Findlibparent:        openflow
   CompiledObject:       native
-  Modules:              Flowvisor, Lldp, Flowvisor_topology 
+  Modules:              Flowvisor, Lldp, Flowvisor_topology
   Pack:                 True
 
 Library switch
@@ -86,14 +90,14 @@ Executable ofswitch
   Path:                 switch
   MainIs:               xen_switch.ml
   Build$:               flag(xen)
-  CompiledObject:       native_object
+  CompiledObject:       native
   Install:              false
-  BuildDepends:         openflow, re.str 
+  BuildDepends:         openflow, re.str
 
 Executable ofcontroller
   Path:                 controller
   MainIs:               xen_controller.ml
   Build$:               flag(xen)
-  CompiledObject:       native_object
+  CompiledObject:       native
   Install:              false
-  BuildDepends:         openflow, re.str 
+  BuildDepends:         openflow, re.str
