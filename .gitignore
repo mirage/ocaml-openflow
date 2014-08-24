@@ -10,3 +10,8 @@ setup.bin
 *.docdir
 *.native
 *.byte
+
+**/log
+
+mirage/**/Makefile
+mirage/**/main.ml
