@@ -26,10 +26,11 @@ Library "openflow"
   Path:                 lib/
   Findlibname:          openflow
   CompiledObject:       native
-  Modules:              Ofpacket, Ofsocket, Ofswitch,  Ofcontroller
+  Modules:              Ofpacket, Ofsocket, Ofswitch # , Ofcontroller
   Pack:                 true
-  BuildDepends:         ipaddr, cstruct, cstruct.syntax,
-                        rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0)
+  BuildDepends:         lwt, lwt.syntax, cstruct, cstruct.syntax, ipaddr,
+                        mirage-types, mirage-unix, tcpip, mirage-clock-unix,
+                        rpclib, rpclib.json
 
 Document "openflow"
   Title:                OpenFlow docs
@@ -39,13 +40,14 @@ Document "openflow"
   XOCamlbuildModules:   Ofpacket, Ofswitch, Ofsocket, Ofcontroller
 
 
-Library flv
-  Path:                 lib
-  Findlibname:          flv
-  Findlibparent:        openflow
-  CompiledObject:       native
-  Modules:              Flowvisor, Lldp, Flowvisor_topology
-  Pack:                 True
+## not yet updated to mirage 2.0
+# Library flv
+#   Path:                 lib
+#   Findlibname:          flv
+#   Findlibparent:        openflow
+#   CompiledObject:       native
+#   Modules:              Flowvisor, Lldp, Flowvisor_topology
+#   Pack:                 True
 
 Library switch
   Path:                 lib
