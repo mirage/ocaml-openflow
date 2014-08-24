@@ -1,12 +1,13 @@
-OASISFormat: 0.3
-OCamlVersion: >= 4.00.1
+OASISFormat: 0.4
 Name:        openflow
 Version:     0.3.0
-Authors:     Charalampos Rotsos, Richard Mortier, Anil Madhavappedy, Balraj Singh
+Synopsis:    OpenFlow protocol and switch implementations in pure OCaml
+Authors:     Charalampos Rotsos, Richard Mortier, Anil Madhavappedy,
+             Balraj Singh, Masoud Koleini
 License:     ISC
-Synopsis:    OpenFlow controller, switch and flowvisor implementation in pure OCaml
-Plugins:     META (0.3)
+Plugins:     META (0.3), DevFiles (0.3)
 BuildTools:  ocamlbuild
+
 
 Flag direct
   Description: build things over the direct xen net
@@ -20,28 +21,33 @@ Flag xen
   Description: build xen applications
   Default: false
 
-Library openflow
-  Path:                 lib
+
+Library "openflow"
+  Path:                 lib/
   Findlibname:          openflow
   CompiledObject:       native
-  Modules:              Ofpacket,  Ofcontroller, Ofsocket 
-  Pack:                 True
-  BuildDepends:         ipaddr, cstruct, cstruct.syntax, rpclib, rpclib.json, mirage, mirage-net (>= 0.3.0)
+  Modules:              Ofpacket, Ofsocket, Ofswitch # , Ofcontroller
+  Pack:                 true
+  BuildDepends:         lwt, lwt.syntax, cstruct, cstruct.syntax, ipaddr,
+                        mirage-types, mirage-unix, tcpip, mirage-clock-unix,
+                        rpclib, rpclib.json
 
-Document openflow
+Document "openflow"
   Title:                OpenFlow docs
-  Type:                 ocamlbuild (0.2)
+  Type:                 OCamlbuild (0.4)
   BuildTools+:          ocamldoc
-  XOCamlbuildPath:      lib 
-  XOCamlbuildModules:   Ofpacket, Ofcontroller, Ofsocket
+  XOCamlbuildPath:      lib/
+  XOCamlbuildModules:   Ofpacket, Ofswitch, Ofsocket, Ofcontroller
 
-Library flv
-  Path:                 lib
-  Findlibname:          flv
-  Findlibparent:        openflow
-  CompiledObject:       native
-  Modules:              Flowvisor, Lldp, Flowvisor_topology 
-  Pack:                 True
+
+## not yet updated to mirage 2.0
+# Library flv
+#   Path:                 lib
+#   Findlibname:          flv
+#   Findlibparent:        openflow
+#   CompiledObject:       native
+#   Modules:              Flowvisor, Lldp, Flowvisor_topology
+#   Pack:                 True
 
 Library switch
   Path:                 lib
@@ -86,14 +92,14 @@ Executable ofswitch
   Path:                 switch
   MainIs:               xen_switch.ml
   Build$:               flag(xen)
-  CompiledObject:       native_object
+  CompiledObject:       native
   Install:              false
-  BuildDepends:         openflow, re.str 
+  BuildDepends:         openflow, re.str
 
 Executable ofcontroller
   Path:                 controller
   MainIs:               xen_controller.ml
   Build$:               flag(xen)
-  CompiledObject:       native_object
+  CompiledObject:       native
   Install:              false
-  BuildDepends:         openflow, re.str 
+  BuildDepends:         openflow, re.str

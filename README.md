@@ -3,7 +3,7 @@ Mirage OpenFlow Implementation
 
 OpenFlow is a switching standard and open protocol  enabling
 distributed control of the flow tables contained within Ethernet
-switches in a network. Each OpenFlow switch has three parts: 
+switches in a network. Each OpenFlow switch has three parts:
 
 + A **datapath**, containing a *flow table*, associating set of
   *actions* with each flow entry;
@@ -11,19 +11,19 @@ switches in a network. Each OpenFlow switch has three parts:
 + The **OpenFlow protocol**, used by the controller to talk to
   switches.
 
-Following this standard model, the implementation comprises three parts: 
+Following this standard model, the implementation comprises three parts:
 
 * `Openflow` library, contains a complete parsing library in pure Ocaml and a
   minimal controller library using an event-driven model.
 * `Openflow.switch` library, provides a skeleton OpenFlow switch supporting most
   elementary switch functionality.
 * `Openflow.flv` library, implements a basic FLowVisor reimplementation in
-  ocaml. 
+  ocaml.
 
 __N.B.__ _There are two versions of the OpenFlow protocol: v1.0.0 (`0x01` on
 the wire) and v1.1.0 (`0x02` on the wire).  The implementation supports wire
 protocol `0x01` as this is what is implemented in [Open vSwitch][ovs-1.2],
-used for debugging._ 
+used for debugging._
 
 Openflow.Ofpacket
 -----------
@@ -38,7 +38,7 @@ bitstring to a type (`parse_*`) and pretty printers for the type
 (`string_of_*`).  At the end of the file, in the root `Ofpacket`
 module scope, are definitions for interacting with the protocol as a
 whole, e.g., error codes, OpenFlow message types and standard header,
-root OpenFlow parser, OpenFlow packet builders. 
+root OpenFlow parser, OpenFlow packet builders.
 
 ### Queue, Port, Switch
 
@@ -64,7 +64,7 @@ The `Port` module wraps several port related elements:
   collisions, etc).
 + _reason_ and _status_, for reporting changes to a port's
   configuration; _reason_ is one of `ADD|DEL|MOD`.
-  
+
 Finally, `Switch` wraps elements pertaining to a whole switch, that is
 a collection of ports, tables (including the _group table_), and the
 connection to the controller.
@@ -109,10 +109,10 @@ These represent modification messages to existing flow and port state
 in the switch.
 
 ### Stats
-    
+
 Finally, the `Stats` module contains structures representing the
 different statistics messages available through OpenFlow, as well as
-the request and response messages that transport them. 
+the request and response messages that transport them.
 
 [of-1.0]: http://www.openflow.org/documents/openflow-spec-v1.0.0.pdf
 [of-1.1]: http://www.openflow.org/documents/openflow-spec-v1.1.0.pdf
@@ -143,31 +143,31 @@ corresponding to basic switch operation:
   controller, whether through an explicit action corresponding to a
   flow match, or simply as the default when flow match is found.
 + `FLOW_REMOVED`, i.e., representing the switch notification regarding the
-  removal of a flow from the flow table.  
+  removal of a flow from the flow table.
 + `FLOW_STATS_REPLY`, i.e., represents the replies transmitted by the switch
   after a flow_stats_req.
 + `AGGR_FLOW_STATS_REPLY`, i.e., representing the reply transmitted by the switch
-to an aggr_flow_stats_req.  
+to an aggr_flow_stats_req.
 + ` DESC_STATS_REPLY`, i.e., representing the reply of a switch to desc_stats
-  request. 
+  request.
 + `PORT_STATS_REPLY`, i.e., representing the replt of a switch to a port_stats
-  request providing port level counter and the state of the switch. 
+  request providing port level counter and the state of the switch.
 + `TABLE_STATS_REPLY`, i.e., representing the reply of a switch to a
-  table_stats request. 
+  table_stats request.
 + `PORT_STATUS_REPLY`, i.e., representing the notification send by the switch
-  when the state of a port of the switch is changed.  
+  when the state of a port of the switch is changed.
 
 The controller state is mutable and modelled as:
 
 + A list of callbacks per event, each taking the current state, the
   originating datapath, and the event;
 + Mappings from switch (`datapath_id`) to a Mirage communications
-  channel (`Channel.t`); and 
-  
+  channel (`Channel.t`); and
+
 The main work of the controller is carried out in `process_of_packet`
 which processes each received packet within the context given by the
 current state of the switch: this is where the OpenFlow state machine
-is implemented.  
+is implemented.
 
 The controller entry point is via the `listen`, `local_connect` or `connect`
 function which effectively creates a receiving channel to parse OpenFlow
@@ -175,7 +175,7 @@ packets, and pass them to `process_of_packet` which handles a range of standard
 protocol-level interactions, e.g., `ECHO_REQ`, `FEATURES_RESP`, generating
 Mirage events as appropriate.  Specifically, `controller` is passed as callback
 to the respective connection method, and recursively evaluates `read_packet` to
-read the incoming packet and pass it to `process_of_packet`. 
+read the incoming packet and pass it to `process_of_packet`.
 
 [nox]: http://noxrepo.org/
 
@@ -186,16 +186,16 @@ Openflow.Switch.Ofswitch
 An OpenFlow _switch_ or _datapath_ consists of a _flow table_, a _group table_
 (in later versions, not supported in v1.0.0), and a _channel_ back to the
 controller.  Communication over the channel is via the OpenFlow protocol, and is
-how the controller manages the switch. 
+how the controller manages the switch.
 
 In short, each table contains flow entries consisting of _match fields_,
 _counters_, and _instructions_ to apply to packets.  Starting with the first
 flow table, if an incoming packet matches an entry, the counters are updated
 and the instructions carried out.  If no entry in the first table matches,
 (part of) the packet is forwarded to the controller, or it is dropped, or it
-proceeds to the next flow table. 
+proceeds to the next flow table.
 
-At the current point the switch doesn't support any queue principles. 
+At the current point the switch doesn't support any queue principles.
 
 Skeleton code is as follows:
 
@@ -205,15 +205,15 @@ Represents a single flow table entry.  Each entry consists of:
 
 + _counters_, to keep statistics per-table, -flow, -port, -queue
   (`Entry.table_counter list`, `Entry.flow_counter list`, `Entry.port_counter
-  list`, `Entry.queue_counter list`); and   
-+ _actions_, to perform on packets matching the fields (`Entry.action list`). 
+  list`, `Entry.queue_counter list`); and
++ _actions_, to perform on packets matching the fields (`Entry.action list`).
 
 ### Table
 
 A simple module representing a table of flow entries.  Currently just an id
 (`tid`) , a hashtbl of entries (`(OP.Match.t, Entry.t) Hashtbl.t`), a list of
 exact match entries to reduce the lookup time for wildcard entries and a the
-table counter. 
+table counter.
 
 ### Switch
 
@@ -228,7 +228,7 @@ The switch is then modelled as:
 + _table_, the table of flow entries for this switch;
 + _stats_, a set of per-switch counters (`Switch.stats`); and
 + *p_sflow*, the probability in use when sFlow sampling.
-                     
+
 Note that the vocabulary of a number of these changes with v1.1.0, in addition
 to the table structure becoming more complex (support for chains of tables,
 forwarding to tables, and the group table).
@@ -241,7 +241,7 @@ introduce generation and consumption of new events?  NOX permits this within a
 single event-handling framework -- is this simply out-of-scope here, or should
 we have a separate event-based programming framework available, or is there a
 straightforward Ocaml-ish way to incorporate this into the OpenFlow
-Controller? 
+Controller?
 
 What's the best way to expose parsing as a separate activity to reading data
 off the wire?  Specifically, I'd really like to reuse functions from
@@ -251,7 +251,7 @@ having parsers that return structured data and then wrapping up the packet
 structure as a nested type, e.g., `PCAP(pcaph, ETH(ethh, IPv4(iph, payload)))`
 or `...TCP(tcph, payload))))` worked well, permitting fairly natural pattern
 matching.  The depth to which the packet was deumltiplexed was controlled by a
-parameter to the entry-point parser. 
+parameter to the entry-point parser.
 
 The `Switch` design is almost certainly very inefficient, and needs working
 on.  This is waiting on implementation -- although sketched out, waiting on

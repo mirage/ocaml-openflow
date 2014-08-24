@@ -1,61 +1,45 @@
-.PHONY: all clean distclean setup build doc install test 
-all: build
-
-NAME=openflow
-J=4
-
-UNIX ?= $(shell if [ $(MIRAGE_OS) = "unix" ]; then echo --enable-unix; else echo --disable-unix; fi)
-DIRECT ?= $(shell if [ $(MIRAGE_NET) = "direct" ]; then echo --enable-direct; else echo --disable-direct; fi)
-XEN ?= $(shell if [ $(MIRAGE_OS) = "xen" ]; then echo --enable-xen; else echo --disable-xen; fi)
-caml_path ?= $(shell ocamlfind printconf path)
-
-# MIRAGE = --enable-mirage
-
 -include Makefile.config
 
-setup.ml: _oasis
-	oasis setup 
+# OASIS_START
+# DO NOT EDIT (digest: a3c674b4239234cbbe53afe090018954)
 
-setup.data: setup.ml
-	ocaml setup.ml -configure $(UNIX) $(XEN) $(DIRECT)
+SETUP = ocaml setup.ml
 
-clean: setup.data 
-	ocaml setup.ml -clean $(OFLAGS)
-	rm -f setup.data setup.log setup.ml
+build: setup.data
+	$(SETUP) -build $(BUILDFLAGS)
 
-distclean: setup.ml setup.data
-	ocaml setup.ml -distclean $(OFLAGS)
-	rm -f setup.data setup.log setup.ml
+doc: setup.data build
+	$(SETUP) -doc $(DOCFLAGS)
 
-setup: setup.data
+test: setup.data build
+	$(SETUP) -test $(TESTFLAGS)
 
-build: setup.data $(wildcard lib/*.ml)
-	ocaml setup.ml -build -cflags -bin-annot -j $(J) $(OFLAGS) $(DR)
-ifeq ($(MIRAGE_OS), xen)
-	ld -d -nostdlib -m elf_x86_64 -T $(caml_path)/mirage-xen/mirage-x86_64.lds \
-	  $(caml_path)/mirage-xen/x86_64.o _build/switch/xen_switch.nobj.o \
-	  $(caml_path)/mirage-xen/libocaml.a   $(caml_path)/mirage-xen/libxen.a \
-	  $(caml_path)/mirage-xen/libxencaml.a $(caml_path)/mirage-xen/libdiet.a \
-	  $(caml_path)/mirage-xen/libm.a       $(caml_path)/mirage-xen/longjmp.o \
-	  -o ofswitch.xen
+all:
+	$(SETUP) -all $(ALLFLAGS)
 
-	ld -d -nostdlib -m elf_x86_64 -T $(caml_path)/mirage-xen/mirage-x86_64.lds \
-	  $(caml_path)/mirage-xen/x86_64.o _build/controller/xen_controller.nobj.o \
-	  $(caml_path)/mirage-xen/libocaml.a   $(caml_path)/mirage-xen/libxen.a \
-	  $(caml_path)/mirage-xen/libxencaml.a $(caml_path)/mirage-xen/libdiet.a \
-	  $(caml_path)/mirage-xen/libm.a       $(caml_path)/mirage-xen/longjmp.o \
-	  -o ofcontroller.xen
+install: setup.data
+	$(SETUP) -install $(INSTALLFLAGS)
 
-endif 
+uninstall: setup.data
+	$(SETUP) -uninstall $(UNINSTALLFLAGS)
 
-doc: setup.data setup.ml
-	ocaml setup.ml -doc -j $(J) $(OFLAGS)
+reinstall: setup.data
+	$(SETUP) -reinstall $(REINSTALLFLAGS)
 
-install: 
-	ocamlfind remove $(NAME)
-	ocaml setup.ml -install $(OFLAGS)
+clean:
+	$(SETUP) -clean $(CLEANFLAGS)
 
-test: build
-	ocaml setup.ml -test
+distclean:
+	$(SETUP) -distclean $(DISTCLEANFLAGS)
 
+setup.data:
+	$(SETUP) -configure $(CONFIGUREFLAGS)
 
+configure:
+	$(SETUP) -configure $(CONFIGUREFLAGS)
+
+.PHONY: build doc test all install uninstall reinstall clean distclean configure
+
+# OASIS_STOP
+
+-include Makefile.local

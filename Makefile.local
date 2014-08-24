@@ -1,0 +1,23 @@
+.DEFAULT: build
+
+configure:
+	$(SETUP) -configure $(CONFIGUREFLAGS)
+	cd mirage && make configure
+
+depend:
+	cd mirage && make depend
+
+build:
+	$(SETUP) -build $(BUILDFLAGS)
+	cd mirage && make build
+
+run:
+	cd mirage && make run
+
+clean:
+	$(SETUP) -clean $(CLEANFLAGS)
+	cd mirage && make clean
+
+distclean:
+	$(SETUP) -distclean $(DISTCLEANFLAGS)
+	cd mirage && make distclean

@@ -14,7 +14,8 @@
  * ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF
  * OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
  *)
-open Printf
+
+open V1_LWT
 open Lwt
 open Int32
 
@@ -25,7 +26,6 @@ let ep = Printf.eprintf
 exception Unparsable of string * Cstruct.t 
 exception Unparsed of string * Cstruct.t 
 exception Unsupported of string 
-
     
 let (|>) x f = f x (* pipe *)
 let (>>) f g x = g (f x) (* functor pipe *)
@@ -34,7 +34,7 @@ let (||>) l f = List.map f l (* element-wise pipe *)
 (* XXX of dubious merit - but we don't do arithmetic so prefer the
    documentation benefits for now *)
 type uint8  = char
-type uint16 = int
+type uint16 = int (* XXX int for 32bit and 64bit machines have diff sizes *)
 type int16 = int
 type uint32 = int32
 type uint64 = int64
@@ -68,13 +68,16 @@ type datapath_id = uint64
 let int_of_bool = function
   | true -> 1
   | false -> 0
+
 let get_int32_bit f off = (Int32.logand f (shift_left 1l off)) > 0l
+
 let set_int32_bit f off v = 
   logor f (shift_left (Int32.of_int(int_of_bool v)) off)
 
 let get_int32_byte f off = 
   let ret = shift_left (f logand (shift_left 13l off)) off in 
     char_of_int (0x00ff land (Int32.to_int ret))
+
 let set_int32_byte f off v = 
   let value = Int32.of_int ((int_of_char v) lsl off) in
     logor f value
@@ -82,11 +85,13 @@ let set_int32_byte f off v =
 let get_int32_nw_mask f off = 
   let ret = shift_right (logand f (shift_left 0x3fl off)) off in 
     char_of_int (0x003f land (Int32.to_int ret))  
+
 let set_int32_nw_mask f off v = 
   let value = Int32.of_int ((0x3f land v) lsl off) in
     logor f value
 
 let get_int_bit f off = (f land (1 lsl off)) > 0
+
 let set_int_bit f off v = f lor ((int_of_bool v) lsl off)
 
 let marshal_and_sub fn bits =
@@ -105,7 +110,7 @@ module Header = struct
     uint32_t xid
   } as big_endian
 
-  cenum msg_code {
+  cenum msg_code { (* XXX do we need numbers? *)
     HELLO                 =  0;
     ERROR                 =  1;
     ECHO_REQ              =  2;
@@ -130,7 +135,7 @@ module Header = struct
     QUEUE_GET_CONFIG_RESP = 21
   } as uint8_t
 
-type h = {
+  type h = {
     ver: uint8;
     ty: msg_code;
     len: uint16;
@@ -144,11 +149,11 @@ type h = {
       (int_to_msg_code (get_ofp_header_typ bits))) with
       | (1, Some(ty)) -> 
           let ret = 
-            { ver=(char_of_int (get_ofp_header_version bits)); 
+            { ver=(char_of_int (get_ofp_header_version bits)); (* XXX why not just "1", or not simply int?*) 
              ty; 
              len=(get_ofp_header_length bits); 
              xid=(get_ofp_header_xid bits); } in 
-          let _ = Cstruct.shift bits sizeof_ofp_header in 
+          let _ = Cstruct.shift bits sizeof_ofp_header in (* XXX where does return value go? Is it required here? *)
           ret
       | (_, _) -> raise (Unparsable ("parse_h", bits))
 
@@ -590,7 +595,8 @@ module Switch = struct
     set_tp_src=(get_int32_bit bits 9); 
     set_tp_dst=(get_int32_bit bits 10); 
     enqueue=(get_int32_bit bits 11); 
-    vendor=(get_int32_bit bits 12);} 
+    vendor=(get_int32_bit bits 12);}
+
   let marshal_actions action = 
     let bits = 0l in
     let bits = set_int32_bit bits 0 action.output      in  
@@ -673,9 +679,8 @@ module Switch = struct
     miss_send_len: uint16;
   }
 
-  let init_switch_config = {drop=true;
-  reasm=true;miss_send_len=1000;}
-        
+  let init_switch_config miss_send_len = {drop=true;reasm=true;miss_send_len;}
+
   cstruct ofp_switch_config {
     uint16_t flags;           
     uint16_t miss_send_len 
@@ -696,9 +701,10 @@ module Switch = struct
     let miss_send_len = get_ofp_switch_config_miss_send_len bits in
     {drop=false; reasm=false; miss_send_len}
 
-end
+end (* end of Switch module *)
 
-module Wildcards = struct
+
+module Wildcards = struct (* XXX check it *)
   type t = {
     mutable in_port: bool; 
     mutable dl_vlan: bool;
@@ -1028,10 +1034,10 @@ module Match = struct
     if (flag) then
       ""
     else
-      sprintf "%s:%s," name value 
+      sp "%s:%s," name value 
 
   let match_to_string m =
-    sprintf 
+    sp 
       "%s%s%s%s%s%s%s%s%s%s%s%s"
       (print_field m.wildcards.Wildcards.in_port "in_port" (Port.string_of_port m.in_port))
       (print_field m.wildcards.Wildcards.dl_src "dl_src" (Macaddr.to_string m.dl_src))
@@ -1041,18 +1047,18 @@ module Match = struct
         (string_of_int (int_of_char m.dl_vlan_pcp) ))
       (print_field m.wildcards.Wildcards.dl_type "dl_type" (string_of_int m.dl_type))
      (print_field (m.wildcards.Wildcards.nw_src >= '\x20') "nw_src" 
-        (sprintf "%s/%d" (Ipaddr.V4.to_string m.nw_src) (int_of_char m.wildcards.Wildcards.nw_src) ))
+        (sp "%s/%d" (Ipaddr.V4.to_string m.nw_src) (int_of_char m.wildcards.Wildcards.nw_src) ))
       (print_field (m.wildcards.Wildcards.nw_dst >= '\x20') "nw_dst" 
-        (sprintf "%s/%d" (Ipaddr.V4.to_string m.nw_dst) (int_of_char m.wildcards.Wildcards.nw_dst) ))
+        (sp "%s/%d" (Ipaddr.V4.to_string m.nw_dst) (int_of_char m.wildcards.Wildcards.nw_dst) ))
       (print_field m.wildcards.Wildcards.nw_tos "nw_tos" (string_of_int (int_of_char m.nw_tos)))
       (print_field m.wildcards.Wildcards.nw_proto "nw_proto" (string_of_int (int_of_char m.nw_proto)))
       (print_field m.wildcards.Wildcards.tp_src "tp_src" (string_of_int m.tp_src))
       (print_field m.wildcards.Wildcards.tp_dst "tp_dst" (string_of_int m.tp_dst))
 
   let flow_match_compare flow flow_def wildcard =
-(*  Printf.printf "comparing flows %s \n%s\n%s \n%!" (Wildcards.wildcard_to_string wildcard) 
+(*  pp "comparing flows %s \n%s\n%s \n%!" (Wildcards.wildcard_to_string wildcard) 
       (match_to_string flow)  (match_to_string flow_def); 
-    Printf.printf "in_port:%s,dl_vlan:%s,dl_src:%s(%d %d),dl_dst:%s,dl_type:%s,\
+    pp "in_port:%s,dl_vlan:%s,dl_src:%s(%d %d),dl_dst:%s,dl_type:%s,\
         nw_proto:%s,tp_src:%s(%d %d),tp_dst:%s,nw_src:%s,nw_dst:%s,\
         dl_vlan_pcp:%s,nw_tos:%s\n%!" 
        (string_of_bool ((wildcard.Wildcards.in_port)|| (flow.in_port=flow_def.in_port)) )
@@ -1353,7 +1359,7 @@ module Flow = struct
       let (len_rest, actions) = parse_actions bits in 
         (len + len_rest, [action] @ actions)
     | _ -> 
-        printf "len of action cstruct %d\n%!" (Cstruct.len bits); 
+        pp "len of action cstruct %d\n%!" (Cstruct.len bits); 
         raise (Unparsable("parse_actions", bits))
 
   cenum reason {
@@ -2228,7 +2234,7 @@ module Stats = struct
     | Desc_resp(resp_hdr, desc) ->
       let len = (Header.sizeof_ofp_header + sizeof_ofp_stats_reply +
                   sizeof_ofp_desc_stats) in
-      let _ = Printf.printf "marshaling description response\n%!" in 
+      let _ = pp "marshaling description response\n%!" in 
       let of_header = Header.create ~xid Header.STATS_RESP len in 
       let (ofp_len, bits) = marshal_and_shift (Header.marshal_header of_header)
                               bits in
@@ -2240,7 +2246,7 @@ module Stats = struct
       let _ = set_ofp_desc_stats_sw_desc desc.sw_desc 0 bits in  
       let _ = set_ofp_desc_stats_serial_num desc.serial_num 0 bits in  
       let _ = set_ofp_desc_stats_dp_desc desc.dp_desc 0 bits in
-      let _ = Printf.printf "done marshaling description response\n%!" in 
+      let _ = pp "done marshaling description response\n%!" in 
         len        
     | Flow_resp(resp_h, flows) ->
       let flow_len = List.fold_right 
@@ -2273,7 +2279,7 @@ module Stats = struct
         len
 (*    | Table_resp(resp_hdr, tables)
       -> let tbl_bitstring = (List.map (fun tbl -> BITSTRING{ (int_of_table_id tbl.table_id):8; 0:24; 
-          (Printf.sprintf "%s%s" tbl.name (String.make (32-(String.length tbl.name)) (Char.chr 0))):32*8:string;
+          (sp "%s%s" tbl.name (String.make (32-(String.length tbl.name)) (Char.chr 0))):32*8:string;
             (Wildcards.wildcard_to_bitstring tbl.wildcards):32:bitstring; tbl.max_entries:32;
             tbl.active_count:32; tbl.lookup_count:64; tbl.matched_count:64}) tables) in 
       Bitstring.concat ([(BITSTRING{(int_of_stats_type
@@ -2528,7 +2534,6 @@ let to_string  = function
   | Barrier_resp (h)
   | Echo_req (h)
   | Echo_resp (h)
-  | Get_config_req (h)
   | Get_config_resp (h, _)
   | Set_config (h, _) 
   | Flow_removed (h, _) 
@@ -2552,7 +2557,6 @@ let marshal msg =
         | Barrier_resp (h)
         | Echo_req (h)
         | Echo_resp (h)
-        | Get_config_req (h)
         | Vendor(h, _)
         | Hello (h) -> Header.marshal_header h 
         | Flow_removed (h, frm) ->
@@ -2578,7 +2582,8 @@ let marshal msg =
             Flow_mod.marshal_flow_mod ~xid:h.Header.xid fm
         | _ -> failwith "Unsupported message" 
   in
-    marshal_and_sub marshal (OS.Io_page.to_cstruct (OS.Io_page.get 1))
+    marshal_and_sub marshal (Io_page.to_cstruct (Io_page.get 1))
+
 (*
   | Vendor of Header.h  * vendor * Cstruct.t
   | Port_mod of Header.h  * Port_mod.t

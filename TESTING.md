@@ -57,7 +57,7 @@ OSX Setup
     ```
 
 4. Create `/etc/bootptab`, eg.,
-    
+
     ```
     %%
     # machine entries have the following format:
@@ -66,11 +66,11 @@ OSX Setup
     greyjay-ubuntu-1  1       08:00:27:38:72:c6 172.16.0.11
     greyjay-ubuntu-2  1       08:00:27:11:dd:a0 172.16.0.12
     ```
-    
+
 VirtualBox setup
 ----------------
 
-1. Build two Ubuntu 10.04 LTS server (64 bit) image. 
+1. Build two Ubuntu 10.04 LTS server (64 bit) image.
 
 2. Set each VM to have two adaptors:
     + `eth0` bridged connected to `en1` (or `en0`)
@@ -89,13 +89,13 @@ Ubuntu setup
         autoconf libtool pkg-config libboost1.40-all-dev \
         libssl-dev swig
     ```
-    
+
 3. Pull and build Open vSwitch:
 
     ```
     git clone git://openvswitch.org/openvswitch
     cd openvswitch/
-    ./boot.sh 
+    ./boot.sh
     ./configure --with-linux=/lib/modules/`uname -r`/build
     make -j6
     make && sudo make install
@@ -110,7 +110,7 @@ Ubuntu setup
     ../configure
     make -j5
     ```
-    
+
 4. Install the kernel module: `sudo insmod ~/openvswitch/datapath/linux/openvswitch_mod.ko`
 
 5. Setup Open vSwitch:
@@ -125,9 +125,9 @@ Ubuntu setup
     sudo ovs-vsctl --db=unix:/var/run/ovsdb-server set-controller dp0 tcp:172.16.0.1:6633
     sudo ovs-vsctl --db=unix:/var/run/ovsdb-server add-port dp0 eth0
     ```
-    
+
 6. Set IP addresses on the interfaces:
-    
+
     ```
     sudo ifconfig eth0 0.0.0.0
     sudo ifconfig dp0 <whatever-eth0-was>
